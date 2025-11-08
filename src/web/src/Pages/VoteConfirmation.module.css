@@ -1,0 +1,181 @@
+/* Vote Confirmation Page Styles */
+.confirmation-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, var(--color-secondary-light) 0%, var(--color-tertiary) 50%, var(--color-secondary) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.confirmation-container {
+  width: 100%;
+  max-width: 800px;
+  text-align: center;
+  position: relative;
+  z-index: 10;
+}
+
+.confirmation-card {
+  background: var(--color-tertiary);
+  backdrop-filter: blur(20px);
+  border-radius: 2rem;
+  box-shadow: var(--shadow-xl);
+  padding: 4rem 3rem;
+  margin: 0 auto;
+  border: 1px solid var(--color-secondary);
+}
+
+.icon-container {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  margin: 0 auto 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-lg);
+  transition: all 0.3s ease;
+}
+
+.icon-container.positive {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+  color: var(--color-tertiary);
+}
+
+.icon-container.negative {
+  background: linear-gradient(135deg, #ef4444, #f87171);
+  color: var(--color-tertiary);
+}
+
+.confirmation-title {
+  font-size: clamp(1.5rem, 4vw, 2.5rem);
+  font-family: 'Georgia', serif;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 3rem;
+  line-height: 1.4;
+}
+
+.song-display {
+  margin: 3rem 0;
+  padding: 2rem;
+  background: var(--color-secondary-light);
+  border-radius: var(--radius-lg);
+}
+
+.song-label {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 500;
+}
+
+.song-name {
+  font-size: clamp(1.5rem, 4vw, 2.5rem);
+  color: var(--color-primary);
+  font-family: 'Georgia', serif;
+  font-style: italic;
+  font-weight: 400;
+}
+
+.back-button {
+  margin-top: 2rem;
+  padding: 1rem 2rem;
+  background: var(--color-primary);
+  color: var(--color-tertiary);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: var(--shadow-md);
+}
+
+.back-button:hover {
+  background: var(--color-primary-dark);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.back-button:active {
+  transform: translateY(0);
+}
+
+/* Background Blobs */
+.background-blobs {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  mix-blend-mode: multiply;
+  opacity: 0.2;
+}
+
+.blob-1 {
+  width: 400px;
+  height: 400px;
+  background: var(--color-secondary);
+  top: 5rem;
+  left: 2.5rem;
+  animation: blob 7s infinite;
+}
+
+.blob-2 {
+  width: 400px;
+  height: 400px;
+  background: var(--color-primary-light);
+  top: 10rem;
+  right: 2.5rem;
+  animation: blob 7s infinite 2s;
+}
+
+.blob-3 {
+  width: 400px;
+  height: 400px;
+  background: var(--color-secondary-dark);
+  bottom: -2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  animation: blob 7s infinite 4s;
+}
+
+@keyframes blob {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .confirmation-page {
+    padding: 1rem;
+  }
+  
+  .confirmation-card {
+    padding: 3rem 2rem;
+  }
+  
+  .icon-container {
+    width: 120px;
+    height: 120px;
+  }
+}
+

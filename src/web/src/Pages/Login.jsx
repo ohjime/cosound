@@ -46,11 +46,10 @@ export const Login = () => {
               Sound Guys
             </h1>
             <p className={styles['login-subtitle']}>
-              Rate songs and share your musical taste
+              Find your focus sound
             </p>
             <div className={styles['login-title-lines']}>
               <div className={`${styles['login-title-line']} ${styles['login-title-line-1']}`}></div>
-              <div className={`${styles['login-title-line']} ${styles['login-title-line-2']}`}></div>
             </div>
           </div>
 
@@ -107,13 +106,13 @@ export const Login = () => {
         </div>
 
         {/* Decorative Elements */}
-        <div className={styles['login-decorative-dots']}>
+        {/* <div className={styles['login-decorative-dots']}>
           <div className={styles['login-dots']}>
             <div className={`${styles['login-dot']} ${styles['login-dot-1']}`}></div>
             <div className={`${styles['login-dot']} ${styles['login-dot-2']}`}></div>
             <div className={`${styles['login-dot']} ${styles['login-dot-3']}`}></div>
           </div>
-        </div>
+        </div> */}
       </div>
     </div>
   );

@@ -1,35 +1,56 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { createBrowserRouter, RouterProvider, Outlet } from "react-router-dom";
+import { Login } from "./Pages/Login";
+import { AuthCallback } from "./Pages/AuthCallback";
+import Home from "./Pages/Home";
+import { Settings } from "./Pages/Settings";
+import { ProtectedRoute } from "./Components/ProtectedRoute";
+
+// Layout with permanent Sidebar for authenticated routes
+const Layout = () => {
+  return (
+    <div >
+
+          <Outlet />
+    </div>
+  );
+};
+
+const router = createBrowserRouter([
+  // Public routes
+  {
+    path: "/login",
+    element: <Login />,
+  },
+  {
+    path: "/auth/callback",
+    element: <AuthCallback />,
+  },
+
+  // Protected routes with Layout
+  {
+    path: "/",
+    element: (
+      <ProtectedRoute>
+        <Layout />
+      </ProtectedRoute>
+    ),
+    children: [
+      {
+        index: true,
+        element: <Home />,
+      },
+ 
+
+      {
+        path: "settings",
+        element: <Settings />,
+      },
+    ],
+  },
+]);
 
 function App() {
-  const [count, setCount] = useState(0)
-
-  return (
-    <>
-      <div className='underline'>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1 className='text-3xl font-bold underline'>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+  return <RouterProvider router={router} />;
 }
 
-export default App
+export default App;

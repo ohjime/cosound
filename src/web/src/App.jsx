@@ -3,6 +3,7 @@ import { Login } from "./Pages/Login";
 import { AuthCallback } from "./Pages/AuthCallback";
 import Home from "./Pages/Home";
 import { Settings } from "./Pages/Settings";
+import Preferences from "./Pages/Preferences";
 import { ProtectedRoute } from "./Components/ProtectedRoute";
 
 // Layout with permanent Sidebar for authenticated routes
@@ -39,8 +40,10 @@ const router = createBrowserRouter([
         index: true,
         element: <Home />,
       },
- 
-
+      {
+        path: "preferences",
+        element: <Preferences />,
+      },
       {
         path: "settings",
         element: <Settings />,

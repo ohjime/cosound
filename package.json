@@ -1,0 +1,20 @@
+{
+  "name": "soundguys",
+  "version": "1.0.0",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "test"
+  },
+  "workspaces": ["src/server", "src/web", "src/mobile"],
+  "scripts": {
+    "build": "npm run build:server && npm run build:web && npm run build:mobile",
+    "build:server": "npm run build -w src/server",
+    "build:web": "npm run build -w src/web",
+    "build:mobile": "npm run build -w src/mobile"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": ""
+}

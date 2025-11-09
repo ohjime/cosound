@@ -1,0 +1,11 @@
+[project]
+name = "model"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi[standard]>=0.121.1",
+    "librosa>=0.10.2",
+    "sounddevice>=0.5.1",
+]

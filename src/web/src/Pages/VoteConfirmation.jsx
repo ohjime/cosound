@@ -78,32 +78,87 @@ const VoteConfirmation = () => {
 
   return (
     <div className={styles['confirmation-page']}>
+      {/* Animated Background Particles */}
+      <div className={styles['particle-field']}>
+        {[...Array(20)].map((_, i) => (
+          <div key={i} className={styles['particle']} style={{
+            '--delay': `${i * 0.1}s`,
+            '--duration': `${3 + (i % 3)}s`,
+            '--x': `${Math.random() * 100}%`,
+            '--y': `${Math.random() * 100}%`,
+          }}></div>
+        ))}
+      </div>
+
+      {/* Morphing Background Blobs */}
       <div className={styles['background-blobs']}>
         <div className={`${styles.blob} ${styles['blob-1']}`}></div>
         <div className={`${styles.blob} ${styles['blob-2']}`}></div>
         <div className={`${styles.blob} ${styles['blob-3']}`}></div>
+        <div className={`${styles.blob} ${styles['blob-4']}`}></div>
+      </div>
+
+      {/* Sound Wave Ripples */}
+      <div className={styles['sound-waves']}>
+        <div className={styles['wave']}></div>
+        <div className={styles['wave']}></div>
+        <div className={styles['wave']}></div>
+        <div className={styles['wave']}></div>
+        <div className={styles['wave']}></div>
       </div>
 
       <div className={styles['confirmation-container']}>
         <div className={styles['confirmation-card']}>
-          {/* Icon */}
-          <div className={`${styles['icon-container']} ${isPositive ? styles.positive : styles.negative}`}>
-            {isPositive ? (
-              <ThumbsUp size={80} />
-            ) : (
-              <ThumbsDown size={80} />
-            )}
+          {/* Icon with Particle Burst */}
+          <div className={styles['icon-wrapper']}>
+            <div className={styles['particle-burst']}>
+              {[...Array(12)].map((_, i) => (
+                <div 
+                  key={i} 
+                  className={styles['burst-particle']}
+                  style={{
+                    '--delay': `${i * 0.05}s`,
+                  }}
+                ></div>
+              ))}
+            </div>
+            <div className={`${styles['icon-container']} ${isPositive ? styles.positive : styles.negative}`}>
+              {isPositive ? (
+                <ThumbsUp size={80} />
+              ) : (
+                <ThumbsDown size={80} />
+              )}
+            </div>
+            {/* Pulsing Rings */}
+            <div className={styles['pulse-ring']}></div>
+            <div className={styles['pulse-ring']}></div>
           </div>
 
-          {/* Message */}
+          {/* Message with Staggered Reveal */}
           <h1 className={styles['confirmation-title']}>
-            {isPositive 
-              ? "You voted positively for this sound" 
-              : "You voted negatively for this sound"}
+            <span className={styles['title-word']}>
+              {isPositive ? "You" : "You"}
+            </span>
+            <span className={styles['title-word']}>
+              {isPositive ? "voted" : "voted"}
+            </span>
+            <span className={styles['title-word']}>
+              {isPositive ? "positively" : "negatively"}
+            </span>
+            <span className={styles['title-word']}>
+              for
+            </span>
+            <span className={styles['title-word']}>
+              this
+            </span>
+            <span className={styles['title-word']}>
+              sound
+            </span>
           </h1>
 
-          {/* Song Display */}
+          {/* Song Display with Morphing Border */}
           <div className={styles['song-display']}>
+            <div className={styles['song-border-animation']}></div>
             <p className={styles['song-label']}>Song:</p>
             <p className={styles['song-name']}>{song}</p>
           </div>
@@ -125,7 +180,10 @@ const VoteConfirmation = () => {
               }}
               className={styles['back-button']}
             >
-              {isLoggedIn ? 'Back to Voting' : 'Sign up or login to see progress'}
+              <span className={styles['button-text']}>
+                {isLoggedIn ? 'Back to Voting' : 'Sign up or login to see progress'}
+              </span>
+              <div className={styles['button-shine']}></div>
             </button>
           )}
         </div>

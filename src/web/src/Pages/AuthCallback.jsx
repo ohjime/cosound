@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import styles from './AuthCallback.module.css';
 
 // Function to fetch user's top 5 genres from Spotify
 const fetchTopGenres = async (accessToken) => {
@@ -119,7 +120,11 @@ export const AuthCallback = () => {
             });
           }
           
-          navigate('/');
+          // Show loading screen for a moment before redirecting
+          setStatus('Welcome! Getting things ready for you');
+          setTimeout(() => {
+            navigate('/vote');
+          }, 1500);
         } else {
           navigate('/login');
         }
@@ -133,10 +138,54 @@ export const AuthCallback = () => {
   }, [navigate]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-        <p className="mt-4 text-gray-600">{status}</p>
+    <div className={styles['loading-page']}>
+      {/* Floating Particles */}
+      <div className={styles['particle-field']}>
+        {[...Array(15)].map((_, i) => (
+          <div key={i} className={styles['particle']} style={{
+            '--delay': `${i * 0.12}s`,
+            '--duration': `${3 + (i % 3)}s`,
+            '--x': `${Math.random() * 100}%`,
+            '--y': `${Math.random() * 100}%`,
+          }}></div>
+        ))}
+      </div>
+
+      {/* Background Blobs */}
+      <div className={styles['background-blobs']}>
+        <div className={`${styles.blob} ${styles['blob-1']}`}></div>
+        <div className={`${styles.blob} ${styles['blob-2']}`}></div>
+        <div className={`${styles.blob} ${styles['blob-3']}`}></div>
+      </div>
+
+      {/* Pulsing Rings */}
+      <div className={styles['pulse-rings']}>
+        <div className={styles['pulse-ring']}></div>
+        <div className={styles['pulse-ring']}></div>
+      </div>
+
+      <div className={styles['loading-container']}>
+        {/* Sound Wave Visualizer */}
+        <div className={styles['sound-visualizer']}>
+          <div className={styles['wave-bar']}></div>
+          <div className={styles['wave-bar']}></div>
+          <div className={styles['wave-bar']}></div>
+          <div className={styles['wave-bar']}></div>
+          <div className={styles['wave-bar']}></div>
+          <div className={styles['wave-bar']}></div>
+          <div className={styles['wave-bar']}></div>
+        </div>
+
+        {/* Music Notes */}
+        <div className={styles['music-notes']}>
+          <span className={styles['music-note']}>♪</span>
+          <span className={styles['music-note']}>♫</span>
+          <span className={styles['music-note']}>♪</span>
+          <span className={styles['music-note']}>♫</span>
+        </div>
+
+        {/* Status Text */}
+        <p className={styles['status-text']}>{status}</p>
       </div>
     </div>
   );

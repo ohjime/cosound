@@ -166,11 +166,33 @@ const Vote = () => {
 
   return (
     <div className={styles['voting-page']}>
-      {/* Decorative background elements */}
+      {/* Animated Background Particles */}
+      <div className={styles['particle-field']}>
+        {[...Array(25)].map((_, i) => (
+          <div key={i} className={styles['particle']} style={{
+            '--delay': `${i * 0.08}s`,
+            '--duration': `${4 + (i % 4)}s`,
+            '--x': `${Math.random() * 100}%`,
+            '--y': `${Math.random() * 100}%`,
+          }}></div>
+        ))}
+      </div>
+
+      {/* Morphing Background Blobs */}
       <div className={styles['background-blobs']}>
         <div className={`${styles.blob} ${styles['blob-1']}`}></div>
         <div className={`${styles.blob} ${styles['blob-2']}`}></div>
         <div className={`${styles.blob} ${styles['blob-3']}`}></div>
+        <div className={`${styles.blob} ${styles['blob-4']}`}></div>
+      </div>
+
+      {/* Sound Wave Ripples around Record Player */}
+      <div className={styles['sound-waves']}>
+        <div className={styles['wave']}></div>
+        <div className={styles['wave']}></div>
+        <div className={styles['wave']}></div>
+        <div className={styles['wave']}></div>
+        <div className={styles['wave']}></div>
       </div>
 
       <div className={styles['voting-container']}>
@@ -178,14 +200,18 @@ const Vote = () => {
         <div className={styles['voting-header']}>
           <div className={styles['voting-title-line']}></div>
           <h1 className={styles['voting-title']}>
-            Welcome to Sound Guys
+            <span className={styles['title-word']}>Welcome</span>
+            <span className={styles['title-word']}>to</span>
+            <span className={styles['title-word']}>Sound</span>
+            <span className={styles['title-word']}>Guys</span>
           </h1>
           <div className={styles['voting-title-line']}></div>
         </div>
 
-        {/* Currently Playing Card */}
+        {/* Currently Playing Card with Record Player */}
         <div className={styles['song-card-container']}>
           <div className={styles['song-card']}>
+            <div className={styles['card-glow']}></div>
             <div className={styles['song-label']}>
               <div className={styles['song-indicator']}></div>
               <p className={styles['song-label-text']}>
@@ -193,6 +219,36 @@ const Vote = () => {
               </p>
             </div>
             <div className={styles['song-divider']}></div>
+            
+            {/* 3D Record Player */}
+            <div className={styles['record-player-wrapper']}>
+              <div className={styles['record-player-base']}>
+                {/* Turntable platter */}
+                <div className={styles['turntable-platter']}>
+                  {/* Spinning vinyl record */}
+                  <div className={styles['vinyl-record']}>
+                    {/* Record grooves */}
+                    <div className={styles['record-grooves']}>
+                      <div className={styles['groove']}></div>
+                      <div className={styles['groove']}></div>
+                      <div className={styles['groove']}></div>
+                      <div className={styles['groove']}></div>
+                      <div className={styles['groove']}></div>
+                    </div>
+                    {/* Light reflections */}
+                    <div className={styles['record-reflection']}></div>
+                    <div className={styles['record-reflection-2']}></div>
+                    {/* Center label with spinning gradient */}
+                    <div className={styles['record-center']}>
+                      <div className={styles['record-center-gradient']}></div>
+                      <div className={styles['record-center-hole']}></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Song name below record player */}
             <p className={styles['song-name']}>
               {currentSong}
             </p>
@@ -204,7 +260,12 @@ const Vote = () => {
           <>
             <div className={styles['rating-section']}>
               <p className={styles['rating-prompt']}>
-                Rate the song that's playing now
+                <span className={styles['prompt-word']}>Rate</span>
+                <span className={styles['prompt-word']}>the</span>
+                <span className={styles['prompt-word']}>song</span>
+                <span className={styles['prompt-word']}>that's</span>
+                <span className={styles['prompt-word']}>playing</span>
+                <span className={styles['prompt-word']}>now</span>
               </p>
             </div>
 
@@ -219,7 +280,10 @@ const Vote = () => {
                   ${hasVoted ? styles['vote-button-disabled'] : ''}
                 `}
               >
-                <ThumbsDown size={48} />
+                <div className={styles['button-icon-wrapper']}>
+                  <ThumbsDown size={48} />
+                </div>
+                <div className={styles['button-shine']}></div>
               </button>
               
               <button
@@ -231,7 +295,10 @@ const Vote = () => {
                   ${hasVoted ? styles['vote-button-disabled'] : ''}
                 `}
               >
-                <ThumbsUp size={48} />
+                <div className={styles['button-icon-wrapper']}>
+                  <ThumbsUp size={48} />
+                </div>
+                <div className={styles['button-shine']}></div>
               </button>
             </div>
           </>

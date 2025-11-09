@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { ThumbsUp, ThumbsDown } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import styles from './VoteConfirmation.module.css';
 
 const VoteConfirmation = () => {
@@ -9,6 +10,8 @@ const VoteConfirmation = () => {
   const navigate = useNavigate();
   const [song, setSong] = useState('Frog Noises');
   const [isMobile, setIsMobile] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -17,6 +20,30 @@ const VoteConfirmation = () => {
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  useEffect(() => {
+    // Check if user is logged in
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setIsLoggedIn(!!session);
+      } catch (error) {
+        console.error('Error checking auth:', error);
+        setIsLoggedIn(false);
+      } finally {
+        setCheckingAuth(false);
+      }
+    };
+
+    checkAuth();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(!!session);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -81,19 +108,26 @@ const VoteConfirmation = () => {
             <p className={styles['song-name']}>{song}</p>
           </div>
 
-          {/* Back Button */}
-          <button 
-            onClick={() => {
-              // Clear the vote flag when going back
-              sessionStorage.removeItem('voteSubmitted');
-              sessionStorage.removeItem('voteValue');
-              sessionStorage.removeItem('voteSong');
-              navigate('/vote');
-            }}
-            className={styles['back-button']}
-          >
-            Back to Voting
-          </button>
+          {/* Back Button / Login Button */}
+          {!checkingAuth && (
+            <button 
+              onClick={() => {
+                if (isLoggedIn) {
+                  // Clear the vote flag when going back
+                  sessionStorage.removeItem('voteSubmitted');
+                  sessionStorage.removeItem('voteValue');
+                  sessionStorage.removeItem('voteSong');
+                  navigate('/vote');
+                } else {
+                  // Navigate to login page
+                  navigate('/login');
+                }
+              }}
+              className={styles['back-button']}
+            >
+              {isLoggedIn ? 'Back to Voting' : 'Sign up or login to see progress'}
+            </button>
+          )}
         </div>
       </div>
     </div>

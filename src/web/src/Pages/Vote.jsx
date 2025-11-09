@@ -18,13 +18,23 @@ const Vote = () => {
     '1234568': 0, // Thumbs down
   };
 
-  const [currentSong, setCurrentSong] = useState('Frog Noises');
+  // Initialize with default song immediately (no loading delay for dummy data)
+  const [currentSong, setCurrentSong] = useState(() => {
+    const randomSong = DUMMY_SONGS[Math.floor(Math.random() * DUMMY_SONGS.length)];
+    return randomSong.song;
+  });
   const [selectedVote, setSelectedVote] = useState(null);
   const [hasVoted, setHasVoted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [songId, setSongId] = useState(null);
-  const [songName, setSongName] = useState(null);
-  const [isLoadingSong, setIsLoadingSong] = useState(true);
+  const [songId, setSongId] = useState(() => {
+    const randomSong = DUMMY_SONGS[Math.floor(Math.random() * DUMMY_SONGS.length)];
+    return randomSong.id;
+  });
+  const [songName, setSongName] = useState(() => {
+    const randomSong = DUMMY_SONGS[Math.floor(Math.random() * DUMMY_SONGS.length)];
+    return randomSong.song;
+  });
+  const [isLoadingSong, setIsLoadingSong] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [nfcTagDetected, setNfcTagDetected] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -40,22 +50,6 @@ const Vote = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  useEffect(() => {
-    // Simulate loading song data with dummy data
-    const loadDummySong = () => {
-      setIsLoadingSong(true);
-      // Simulate a small delay
-      setTimeout(() => {
-        const randomSong = DUMMY_SONGS[Math.floor(Math.random() * DUMMY_SONGS.length)];
-        setSongId(randomSong.id);
-        setSongName(randomSong.song);
-        setCurrentSong(randomSong.song);
-        setIsLoadingSong(false);
-      }, 500);
-    };
-
-    loadDummySong();
-  }, []);
 
   // Simulate API call to POST /api/votes
   const simulateApiCall = async (voteData, nfctagid) => {
@@ -85,52 +79,57 @@ const Vote = () => {
     };
   };
 
-  const handleVoteFromNFC = async (voteValue, nfctagid) => {
-    if (hasVoted || isSubmitting || !songName) {
+  const handleVoteFromNFC = (voteValue, nfctagid) => {
+    // Prevent duplicate votes
+    if (hasVoted || isSubmitting) {
+      return;
+    }
+    
+    // Ensure we have a song name (should always be set from initial state)
+    const activeSong = songName || currentSong;
+    if (!activeSong) {
+      console.warn('No song available for voting');
       return;
     }
 
     setSelectedVote(voteValue);
     setIsSubmitting(true);
 
-    // Simulate API call delay with dummy data
-    setTimeout(async () => {
-      // Create dummy vote data
-      const dummyVoteData = {
-        id: `vote-${Date.now()}`,
-        user_id: 'dummy-user-id',
-        song: songName,
-        vote_value: voteValue, // 0 for thumbs down, 1 for thumbs up
-        vote_time: new Date().toISOString(),
-        nfctagid: nfctagid || null,
-      };
+    // Create dummy vote data immediately
+    const dummyVoteData = {
+      id: `vote-${Date.now()}`,
+      user_id: 'dummy-user-id',
+      song: activeSong,
+      vote_value: voteValue, // 0 for thumbs down, 1 for thumbs up
+      vote_time: new Date().toISOString(),
+      nfctagid: nfctagid || null,
+    };
 
-      // Simulate API call
-      await simulateApiCall(dummyVoteData, nfctagid);
+    // Simulate API call (non-blocking, just logs to console)
+    simulateApiCall(dummyVoteData, nfctagid);
 
-      // Store dummy vote in localStorage for testing
-      const existingVotes = JSON.parse(localStorage.getItem('dummyVotes') || '[]');
-      existingVotes.push(dummyVoteData);
-      localStorage.setItem('dummyVotes', JSON.stringify(existingVotes));
+    // Store dummy vote in localStorage for testing
+    const existingVotes = JSON.parse(localStorage.getItem('dummyVotes') || '[]');
+    existingVotes.push(dummyVoteData);
+    localStorage.setItem('dummyVotes', JSON.stringify(existingVotes));
 
-      console.log('Dummy vote submitted:', dummyVoteData);
+    console.log('Dummy vote submitted:', dummyVoteData);
 
-      setHasVoted(true);
-      setIsSubmitting(false);
+    setHasVoted(true);
+    setIsSubmitting(false);
 
-      // Set flag in sessionStorage to allow access to confirmation page
-      sessionStorage.setItem('voteSubmitted', 'true');
-      sessionStorage.setItem('voteValue', voteValue.toString());
-      sessionStorage.setItem('voteSong', currentSong);
-      
-      // Clear URL parameters
-      setSearchParams({});
-      
-      // Navigate to confirmation page
-      navigate(`/vote/${voteValue}`, { 
-        state: { song: currentSong, voteValue, nfctagid } 
-      });
-    }, 800); // Simulate 800ms API delay
+    // Set flag in sessionStorage to allow access to confirmation page
+    sessionStorage.setItem('voteSubmitted', 'true');
+    sessionStorage.setItem('voteValue', voteValue.toString());
+    sessionStorage.setItem('voteSong', activeSong);
+    
+    // Clear URL parameters immediately
+    setSearchParams({});
+    
+    // Navigate to confirmation page immediately (no delay)
+    navigate(`/vote/${voteValue}`, { 
+      state: { song: activeSong, voteValue, nfctagid } 
+    });
   };
 
   // Handle NFC tag scanning via URL parameters
@@ -144,8 +143,8 @@ const Vote = () => {
       console.log(`NFC Tag detected: ${nfctagid} → Vote Value: ${voteValue}`);
       setNfcTagDetected(nfctagid);
       
-      // Auto-submit vote when NFC tag is detected
-      if (!hasVoted && !isSubmitting && songName) {
+      // Auto-submit vote when NFC tag is detected (no need to wait for songName - it's already set)
+      if (!hasVoted && !isSubmitting) {
         handleVoteFromNFC(voteValue, nfctagid);
       }
     } 
@@ -154,15 +153,15 @@ const Vote = () => {
       const voteValue = parseInt(voteValueParam, 10);
       console.log(`Vote value from URL: ${voteValue}`);
       
-      if (!hasVoted && !isSubmitting && songName) {
+      if (!hasVoted && !isSubmitting) {
         handleVoteFromNFC(voteValue, nfctagid || 'direct-url');
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, songName, hasVoted, isSubmitting]);
+  }, [searchParams, hasVoted, isSubmitting]);
 
-  const handleVote = async (voteValue) => {
-    await handleVoteFromNFC(voteValue, null);
+  const handleVote = (voteValue) => {
+    handleVoteFromNFC(voteValue, null);
   };
 
   return (

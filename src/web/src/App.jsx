@@ -27,15 +27,10 @@ const router = createBrowserRouter([
     path: "/auth/callback",
     element: <AuthCallback />,
   },
-
-  // Protected routes with Layout
+  // Public voting routes (no authentication required)
   {
     path: "/",
-    element: (
-      <ProtectedRoute>
-        <Layout />
-      </ProtectedRoute>
-    ),
+    element: <Layout />,
     children: [
       {
         index: true,
@@ -49,9 +44,14 @@ const router = createBrowserRouter([
         path: "vote/:voteValue",
         element: <VoteConfirmation />,
       },
+      // Protected routes nested here but with protection
       {
         path: "settings",
-        element: <Settings />,
+        element: (
+          <ProtectedRoute>
+            <Settings />
+          </ProtectedRoute>
+        ),
       },
     ],
   },

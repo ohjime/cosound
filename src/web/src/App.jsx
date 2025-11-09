@@ -5,6 +5,7 @@ import Home from "./Pages/Home";
 import Vote from "./Pages/Vote";
 import VoteConfirmation from "./Pages/VoteConfirmation";
 import { Settings } from "./Pages/Settings";
+import Preferences from "./Pages/Preferences";
 import { ProtectedRoute } from "./Components/ProtectedRoute";
 
 // Layout with permanent Sidebar for authenticated routes

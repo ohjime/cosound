@@ -47,3 +47,31 @@ async def startup_event():
     stream.start()
     playing["stream"] = stream
 
+
+@app.get("/")
+def read_root():
+    audio_file = Path(__file__).parent / ".audio" / "gmulyk-edit__121968__nfsgit__quiet-forest.wav"
+    y2, sr2 = librosa.load(str(audio_file), sr=None)
+
+    buffer = playing["buffer"]
+    min_len = min(len(buffer), len(y2))
+
+    # Define fade length (in samples)
+    fade_len = int(sr2 * 1.0)  # 1 second fade
+    fade_len = min(fade_len, min_len)
+
+    # Create linear fade-in and fade-out arrays
+    fade_in = np.linspace(0, 1, fade_len)
+    fade_out = np.linspace(1, 0, fade_len)
+
+    # Gradually mix old buffer with new clip
+    merged = np.zeros(min_len)
+    merged[:fade_len] = buffer[:fade_len] * fade_out + y2[:fade_len] * fade_in
+    if min_len > fade_len:
+        merged[fade_len:] = y2[fade_len:]  # rest of new clip
+
+    # Write merged clip back into buffer
+    playing["buffer"][:min_len] = merged
+    playing["pos"] = 0  # reset read position to start
+
+    return {"Hello": "World"}

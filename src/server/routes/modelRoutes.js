@@ -3,14 +3,14 @@ const router = express.Router();
 const { createClient } = require('@supabase/supabase-js');
 const authenticateApiKey = require('../middleware/authenticateApiKey');
 
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
+// // Initialize Supabase client
+// const supabase = createClient(
+//   process.env.SUPABASE_URL,
+//   process.env.SUPABASE_ANON_KEY
+// );
 
 // All routes protected by API key authentication
-router.use(authenticateApiKey);
+// router.use(authenticateApiKey);
 
 // ============================================
 // MODEL DATA ENDPOINTS
@@ -22,7 +22,7 @@ router.use(authenticateApiKey);
  */
 router.get('/users', async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await req.supabase
       .from('profiles')
       .select('*');
 
@@ -293,6 +293,182 @@ router.get('/votes/song/:songName', async (req, res) => {
   } catch (err) {
     console.error('Get song votes error:', err);
     res.status(500).json({ error: 'Failed to fetch song votes' });
+  }
+});
+
+
+
+
+function parsePgvectorString(s) {
+  return String(s)
+    .trim()
+    .replace(/^[\[\(]\s*/, "")   // drop leading [ or (
+    .replace(/[\]\)]\s*$/, "")   // drop trailing ] or )
+    .split(",")
+    .map(t => Number(t.trim()))
+    .filter(Number.isFinite);
+}
+
+/**
+ * GET /api/model/recommend?limit=5
+ * Uses active sessions' users; if none, uses all users in preferences.
+ */
+router.get("/recommend", async (req, res) => {
+  try {
+    // const limit = Number(req.query.limit) || 5;
+
+    // 1) Active users from sessions
+    const { data: activeSessions, error: sessErr } = await req.supabase
+      .from("sessions")
+      .select("user_id")
+      .eq("status", "active");
+
+    if (sessErr) {
+      console.error("sessions query error:", sessErr);
+      return res.status(500).json({ error: "Failed to read active users" });
+    }
+
+    let userIds = (activeSessions || []).map(r => r.user_id).filter(Boolean);
+    console.log("Active user IDs from sessions:", userIds);
+
+    // 2) Fallback: all users who have a preference
+    if (userIds.length === 0) {
+      const { data: allPrefs, error: allErr } = await req.supabase
+        .from("preferences")
+        .select("user_id");
+
+      if (allErr) {
+        console.error("preferences fallback error:", allErr);
+        return res.status(500).json({ error: "Failed to read preferences" });
+      }
+
+      userIds = (allPrefs || []).map(r => r.user_id).filter(Boolean);
+    }
+
+    // dedupe & guard
+    userIds = [...new Set(userIds)];
+    if (userIds.length === 0) {
+      return res.status(404).json({ error: "No users available to compute group preference" });
+    }
+
+    console.log("Using user IDs for recommendation:", userIds);
+
+    // 3) Fetch their preference vectors (pgvector)
+    const { data: prefs, error: prefErr } = await req.supabase
+      .from("preferences")
+      .select("user_id, preference")
+      .in("user_id", userIds);
+
+    if (prefErr) {
+      console.error("preferences query error:", prefErr);
+      return res.status(500).json({ error: "Failed to fetch user preferences" });
+    }
+    if (!prefs?.length) {
+      return res.status(404).json({ error: "No preferences found for selected users" });
+    }
+
+    console.log(prefs);
+    // 4) Parse vectors and compute mean (then normalize for cosine)
+    const vectors = prefs
+      .map(r => parsePgvectorString(r.preference))
+      .filter(v => v.length > 0);
+
+    if (!vectors.length) return res.status(422).json({ error: "No valid vectors in preferences" });
+
+    console.log(vectors);
+
+    const d = vectors[0].length;
+    const sum = Array(d).fill(0);
+    for (const v of vectors) for (let i = 0; i < d; i++) sum[i] += v[i];
+    const mean = sum.map(x => x / vectors.length);
+
+    const norm = Math.hypot(...mean);
+    const meanUnit = norm ? mean.map(x => x / norm) : mean;
+
+    // 5) Cosine similarity search against songs (simple & reliable)
+    const vecText = `[${meanUnit.join(",")}]`;
+
+    const { data: recs, error: rpcErr } = await req.supabase.rpc(
+      "recommend_with_penalty",
+      { p_vec: vecText, p_limit: 1 }
+    );
+    if (rpcErr) return res.status(500).json({ error: "Failed to fetch recommendations" });
+
+    res.status(200).json({
+      success: true,
+      user_count: userIds.length,
+      users_used: userIds,
+      mean_vector: meanUnit,
+      recommendations: recs,
+    });
+    
+  } catch (err) {
+    console.error('Recommendation error:', err);
+    res.status(500).json({ error: 'Failed to generate recommendations' });
+  }
+});
+
+
+router.post("/currentSong", async (req, res) => {
+  try {
+    const { song_title } = req.body;
+
+    // Validate input
+    if (!song_title) {
+      return res.status(400).json({ error: "song_title is required" });
+    }
+
+    // Insert into songs_playing
+    const { data, error } = await req.supabase
+      .from("songs_playing")
+      .insert([{ song_title }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error inserting song_playing:", error);
+      return res.status(500).json({ error: "Failed to log current song" });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: "Current song logged successfully",
+      data,
+    });
+  } catch (err) {
+    console.error("currentSong error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+
+router.get("/currentSong", async (req, res) => {
+  try {
+    // Fetch the most recent song from songs_playing
+    const { data, error } = await req.supabase
+      .from("songs_playing")
+      .select("song_title, played_at")
+      .order("played_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error) {
+      console.error("Error fetching current song:", error);
+      return res.status(500).json({ error: "Failed to fetch current song" });
+    }
+
+    if (!data) {
+      return res.status(404).json({ error: "No songs have been played yet" });
+    }
+
+    res.status(200).json({
+      success: true,
+      current_song: data.song_title,
+      played_at: data.played_at,
+    });
+  } catch (err) {
+    console.error("currentSong (GET) error:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

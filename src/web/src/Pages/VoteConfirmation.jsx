@@ -1,17 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { ThumbsUp, ThumbsDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { apiClient } from '../lib/apt';
 import styles from './VoteConfirmation.module.css';
 
 const VoteConfirmation = () => {
   const { voteValue } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const [song, setSong] = useState('Frog Noises');
+  const [song, setSong] = useState('');
   const [isMobile, setIsMobile] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [isFetchingSong, setIsFetchingSong] = useState(false);
+  const [songError, setSongError] = useState(null);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -20,6 +23,28 @@ const VoteConfirmation = () => {
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  const fetchCurrentSong = useCallback(async () => {
+    setIsFetchingSong(true);
+    setSongError(null);
+    try {
+      const response = await apiClient('/api/model/currentSong');
+      if (response?.current_song) {
+        setSong(response.current_song);
+      } else {
+        setSongError('No song information available.');
+      }
+    } catch (error) {
+      if (error.status === 404) {
+        setSongError('No song is currently playing.');
+      } else {
+        setSongError(error.message || 'Failed to fetch current song.');
+      }
+      console.error('Failed to fetch current song:', error);
+    } finally {
+      setIsFetchingSong(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -63,16 +88,15 @@ const VoteConfirmation = () => {
       return;
     }
 
-    // Get song from location state or sessionStorage (dummy data)
-    if (location.state?.song) {
-      setSong(location.state.song);
-    } else if (sessionStorage.getItem('voteSong')) {
-      setSong(sessionStorage.getItem('voteSong'));
-    } else {
-      // Fallback to dummy song if nothing is available
-      setSong('Frog Noises');
+    // Get song from location state or sessionStorage if available
+    const storedSong = location.state?.song || sessionStorage.getItem('voteSong');
+
+    if (storedSong) {
+      setSong(storedSong);
+    } else if (!song && !isFetchingSong) {
+      fetchCurrentSong();
     }
-  }, [location.state, voteValue, navigate]);
+  }, [location.state, voteValue, navigate, fetchCurrentSong, isFetchingSong, song]);
 
   const isPositive = voteValue === '1';
 
@@ -156,7 +180,9 @@ const VoteConfirmation = () => {
           <div className={styles['song-display']}>
             <div className={styles['song-border-animation']}></div>
             <p className={styles['song-label']}>Song:</p>
-            <p className={styles['song-name']}>{song}</p>
+            <p className={styles['song-name']}>
+              {song || (isFetchingSong ? 'Loading current song...' : songError || 'Unknown song')}
+            </p>
           </div>
 
           {/* Back Button / Login Button */}

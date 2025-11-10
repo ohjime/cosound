@@ -1,46 +1,36 @@
 import { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { useAuth } from '../hooks/useAuth';
+import { clearAuthData } from '../lib/auth';
 import styles from './Login.module.css';
 
 export const Login = () => {
+  const { signInWithSpotify } = useAuth();
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-
-  // OLD GOOGLE OAUTH CODE (COMMENTED OUT)
-  // const handleGoogleLogin = async () => {
-  //   setIsLoading(true);
-  //   setError(null);
-  //   try {
-  //     const { error } = await supabase.auth.signInWithOAuth({
-  //       provider: 'google',
-  //       options: {
-  //         redirectTo: `${window.location.origin}/auth/callback`,
-  //       },
-  //     });
-  //     if (error) throw error;
-  //   } catch (error) {
-  //     setError(error.message);
-  //     setIsLoading(false);
-  //   }
-  // };
+  const [isClearing, setIsClearing] = useState(false);
 
   const handleSpotifyLogin = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'spotify',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          scopes: 'user-top-read user-read-email', // Request top artists/genres and email
-          // Note: The Supabase callback URL (https://bjieozmcptbxgbvzpfyc.supabase.co/auth/v1/callback)
-          // should be configured in your Supabase dashboard under Authentication > URL Configuration
-        },
-      });
-      if (error) throw error;
+      await signInWithSpotify();
+      // OAuth redirect happens automatically
     } catch (error) {
       setError(error.message);
       setIsLoading(false);
+    }
+  };
+
+  const handleClearCache = async () => {
+    setIsClearing(true);
+    try {
+      await clearAuthData();
+      alert('✅ Cache cleared! All session data removed.');
+    } catch (err) {
+      console.error('Failed to clear cache:', err);
+      alert('❌ Failed to clear cache. Check console for details.');
+    } finally {
+      setIsClearing(false);
     }
   };
 
@@ -145,6 +135,36 @@ export const Login = () => {
           <p className={styles['login-footer']}>
             By signing in, you agree to our terms of service
           </p>
+
+          {/* Clear Cache Button */}
+          <button
+            onClick={handleClearCache}
+            disabled={isClearing}
+            style={{
+              marginTop: '12px',
+              padding: '8px 16px',
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: '8px',
+              color: 'rgba(255, 255, 255, 0.6)',
+              fontSize: '12px',
+              cursor: isClearing ? 'not-allowed' : 'pointer',
+              opacity: isClearing ? 0.5 : 1,
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e) => {
+              if (!isClearing) {
+                e.target.style.background = 'rgba(255, 255, 255, 0.08)';
+                e.target.style.color = 'rgba(255, 255, 255, 0.9)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = 'rgba(255, 255, 255, 0.05)';
+              e.target.style.color = 'rgba(255, 255, 255, 0.6)';
+            }}
+          >
+            {isClearing ? '🔄 Clearing...' : '🗑️ Clear Cache & Session'}
+          </button>
         </div>
 
         {/* Decorative Elements */}

@@ -23,13 +23,20 @@ async def request_sound() -> Optional[str]:
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{BACKEND_URL}/api/model/currentSong",
+                f"{BACKEND_URL}/api/model/recommend",
                 timeout=5.0
             )
             if response.status_code == 200:
                 data = response.json()
+                await client.post(
+                    f"{BACKEND_URL}/api/model/currentSong",
+                    json={"song_title": data.get("recommendations", {})[0].get("title")}
+                )
                 # Extract sound title from the recommendations object
-                sound = data.get("recommendations", {}).get("title")
+                sound = data.get("recommendations", {})[0].get("title") + ".wav"
+                print()
+                print(f"Sound from backend: {sound}")
+                print()
                 logger.debug(f"Received sound from backend: {sound}")
                 return sound
             else:
@@ -57,16 +64,22 @@ async def poll_sound(player_module):
     logger.info("Starting sound update polling...")
     while True:
         try:
+            # Skip polling if a transition is currently in progress
+            if player_module.is_transitioning():
+                logger.debug("Transition in progress, skipping poll")
+                await asyncio.sleep(POLL_INTERVAL)
+                continue
+            
             # Get the sound that should be playing from backend
             new_sound = await request_sound()
             if new_sound:
                 playing_sound = player_module.get_playing()
-                # Only transition if the sound has changed
+                # Always transition, even if it's the same song (crossfade with itself)
                 if new_sound != playing_sound:
                     logger.info(f"sound change detected: {playing_sound} -> {new_sound}")
-                    player_module.transition(new_sound)
                 else:
-                    logger.debug(f"sound unchanged: {playing_sound}")
+                    logger.info(f"crossfading {playing_sound} with itself")
+                player_module.transition(new_sound)
             # Wait before polling again
             await asyncio.sleep(POLL_INTERVAL)
         except Exception as e:

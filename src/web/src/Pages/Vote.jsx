@@ -4,6 +4,20 @@ import { User, LogOut } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { apiClient } from '../lib/apt';
 
+function toSnakeCase(songTitle) {
+  return songTitle
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_');
+}
+
+function formatSongName(songKey) {
+  return songKey
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 const Vote = () => {
   const { signOut } = useAuth();
   const [currentSong, setCurrentSong] = useState('');

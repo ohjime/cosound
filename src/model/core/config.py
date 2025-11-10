@@ -9,4 +9,4 @@ POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "30"))  # seconds
 
 # Audio configuration
 BUFFER_SIZE = 44100 * 120  # 120 seconds buffer
-DEFAULT_FADE_DURATION = 2.0  # seconds
+DEFAULT_FADE_DURATION = 30.0  # seconds - smooth 30s crossfade as requested

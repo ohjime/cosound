@@ -18,8 +18,10 @@ async def lifespan(app: FastAPI):
     """Handle startup and shutdown events."""
     # Startup
     logger.info("Starting audio player...")
-    player.play()  # Start with default/random sound
-    
+    # request_sound
+    new_sound = await update.request_sound()
+    if new_sound:
+        player.play(new_sound, fade_in=True)
     # Start background polling task
     logger.info("Starting background sound polling...")
     polling_task = asyncio.create_task(update.poll_sound(player))

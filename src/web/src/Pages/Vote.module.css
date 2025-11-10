@@ -486,12 +486,11 @@
   height: 100%;
   border-radius: 50%;
   background: radial-gradient(
-    ellipse 80% 30% at 30% 20%,
+    ellipse 80% 30% at 75% 25%,
     rgba(255, 255, 255, 0.15) 0%,
     rgba(255, 255, 255, 0.08) 30%,
     transparent 60%
   );
-  animation: spinRecord 8s linear infinite;
   pointer-events: none;
   z-index: 1;
 }
@@ -504,12 +503,11 @@
   height: 100%;
   border-radius: 50%;
   background: radial-gradient(
-    ellipse 60% 25% at 70% 60%,
+    ellipse 60% 25% at 25% 75%,
     rgba(255, 255, 255, 0.12) 0%,
     rgba(255, 255, 255, 0.06) 25%,
     transparent 50%
   );
-  animation: spinRecord 8s linear infinite reverse;
   pointer-events: none;
   z-index: 1;
 }
@@ -902,6 +900,234 @@
   }
   to {
     transform: rotateX(5deg) rotateZ(360deg);
+  }
+}
+
+/* Easter Egg Overlay */
+.easter-egg-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.easter-egg-backdrop {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(61, 79, 181, 0.4), rgba(2, 17, 27, 0.92));
+  backdrop-filter: blur(18px);
+  opacity: 0;
+  animation: easterBackdrop 0.6s ease forwards;
+}
+
+.easter-egg-orbital {
+  position: relative;
+  width: min(68vw, 520px);
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-style: preserve-3d;
+  opacity: 0;
+  animation: easterOrbit 0.85s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+.easter-egg-rings {
+  position: absolute;
+  inset: -14%;
+  pointer-events: none;
+}
+
+.easter-egg-rings span {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(82, 153, 227, 0.35);
+  box-shadow: 0 0 40px rgba(82, 153, 227, 0.3);
+  animation: easterRing 3.8s ease-in-out infinite;
+}
+
+.easter-egg-rings span:nth-child(2) {
+  transform: rotate(28deg);
+  animation-delay: 0.6s;
+  border-color: rgba(199, 225, 247, 0.3);
+  box-shadow: 0 0 50px rgba(199, 225, 247, 0.25);
+}
+
+.easter-egg-rings span:nth-child(3) {
+  transform: rotate(-24deg);
+  animation-delay: 1.2s;
+  border-color: rgba(63, 64, 69, 0.4);
+  box-shadow: 0 0 30px rgba(63, 64, 69, 0.2);
+}
+
+.easter-egg-image {
+  width: 78%;
+  height: 78%;
+  object-fit: cover;
+  border-radius: 28px;
+  box-shadow:
+    0 32px 90px rgba(1, 7, 15, 0.85),
+    0 0 0 2px rgba(199, 225, 247, 0.25);
+  transform: translateZ(20px);
+  animation: easterPulse 2.4s ease-in-out infinite 0.6s;
+}
+
+.easter-egg-shine {
+  position: absolute;
+  inset: 12%;
+  border-radius: 28px;
+  background: linear-gradient(135deg, rgba(199, 225, 247, 0.35), rgba(63, 64, 69, 0));
+  opacity: 0.6;
+  mix-blend-mode: screen;
+  filter: blur(12px);
+  animation: easterShine 2.8s linear infinite;
+}
+
+.easter-egg-sparkles {
+  position: absolute;
+  inset: -8%;
+  pointer-events: none;
+}
+
+.easter-egg-sparkles span {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(199, 225, 247, 0.8) 0%, rgba(199, 225, 247, 0) 70%);
+  animation: easterSpark 2.2s ease-in-out infinite;
+}
+
+.easter-egg-sparkles span:nth-child(1) {
+  top: 6%;
+  left: 35%;
+  animation-delay: 0s;
+}
+
+.easter-egg-sparkles span:nth-child(2) {
+  top: 18%;
+  right: 18%;
+  animation-delay: 0.35s;
+}
+
+.easter-egg-sparkles span:nth-child(3) {
+  bottom: 12%;
+  left: 22%;
+  animation-delay: 0.7s;
+}
+
+.easter-egg-sparkles span:nth-child(4) {
+  bottom: 28%;
+  right: 8%;
+  animation-delay: 1.05s;
+}
+
+.easter-egg-sparkles span:nth-child(5) {
+  top: 36%;
+  left: 6%;
+  animation-delay: 1.4s;
+}
+
+.easter-egg-sparkles span:nth-child(6) {
+  bottom: 4%;
+  right: 32%;
+  animation-delay: 1.75s;
+}
+
+.easter-egg-sparkles span:nth-child(7) {
+  top: 52%;
+  left: 48%;
+  animation-delay: 2.1s;
+}
+
+.easter-egg-sparkles span:nth-child(8) {
+  bottom: 40%;
+  right: 42%;
+  animation-delay: 2.45s;
+}
+
+@keyframes easterBackdrop {
+  from {
+    opacity: 0;
+    transform: scale(1.05);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes easterOrbit {
+  0% {
+    opacity: 0;
+    transform: scale(0.35) rotateX(40deg) rotateZ(-30deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.08) rotateX(6deg) rotateZ(10deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotateX(0deg) rotateZ(0deg);
+  }
+}
+
+@keyframes easterRing {
+  0% {
+    transform: scale(0.82) rotate(0deg);
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.65;
+  }
+  100% {
+    transform: scale(1.12) rotate(200deg);
+    opacity: 0.25;
+  }
+}
+
+@keyframes easterPulse {
+  0%, 100% {
+    transform: translateZ(20px) scale(0.98);
+  }
+  50% {
+    transform: translateZ(20px) scale(1.03);
+  }
+}
+
+@keyframes easterShine {
+  0% {
+    transform: rotate(0deg);
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.75;
+  }
+  100% {
+    transform: rotate(360deg);
+    opacity: 0.4;
+  }
+}
+
+@keyframes easterSpark {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(0.6);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  60% {
+    transform: translate3d(22px, -28px, 0) scale(1.1);
+    opacity: 0.5;
+  }
+  80% {
+    opacity: 0.2;
   }
 }
 

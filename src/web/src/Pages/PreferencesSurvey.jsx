@@ -4,32 +4,39 @@ import { Pause, Play } from 'lucide-react';
 import FullScreenLoader from '../Components/FullScreenLoader';
 import styles from './Preferences.module.css';
 
+import rainSound from '../assets/rain_sounds.wav';
+import waveSound from '../assets/wave_sounds.wav';
+import thunderSound from '../assets/thunder_sound.wav';
+import windSound from '../assets/wind_sound.wav';
+import fireSound from '../assets/fire_sound.flac';
+
 const TOTAL_SURVEYS = 5;
+const VISUALIZER_BARS = 24;
 const AUDIO_TRACKS = [
   {
     title: 'Rain',
     description: 'Gentle rainfall tapping softly across a midnight window.',
-    src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+    src: rainSound,
   },
   {
     title: 'Sea Wave',
     description: 'Rolling tides breathing in and out of a quiet shoreline.',
-    src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
+    src: waveSound,
   },
   {
     title: 'Thunderstorm',
     description: 'Brooding clouds with distant rumbles of thunderous energy.',
-    src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
+    src: thunderSound,
   },
   {
     title: 'Wind',
     description: 'Cool night breezes weaving calm currents through tall grass.',
-    src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3',
+    src: windSound,
   },
   {
     title: 'Fire Crackling',
     description: 'Cozy embers and soft pops from a glowing fireside.',
-    src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3',
+    src: fireSound,
   },
 ];
 
@@ -39,9 +46,17 @@ const PreferencesSurvey = () => {
   const { step: stepParam } = useParams();
   const navigate = useNavigate();
   const audioRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const analyserRef = useRef(null);
+  const dataArrayRef = useRef(null);
+  const sourceRef = useRef(null);
+  const animationRef = useRef(null);
   const [selectedRating, setSelectedRating] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [visualizerValues, setVisualizerValues] = useState(() =>
+    Array.from({ length: VISUALIZER_BARS }, () => 0)
+  );
 
   const stepIndex = useMemo(() => {
     const parsed = Number(stepParam);
@@ -79,7 +94,14 @@ const PreferencesSurvey = () => {
     }
 
     const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
+    const handlePause = () => {
+      setIsPlaying(false);
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+      setVisualizerValues((prev) => prev.map(() => 0));
+    };
 
     audio.addEventListener('play', handlePlay);
     audio.addEventListener('pause', handlePause);
@@ -96,11 +118,38 @@ const PreferencesSurvey = () => {
     };
   }, [stepIndex]);
 
-  const togglePlayback = () => {
+  const togglePlayback = async () => {
     const audio = audioRef.current;
     if (!audio) return;
 
     if (audio.paused) {
+      try {
+        if (!audioContextRef.current) {
+          const Context = window.AudioContext || window.webkitAudioContext;
+          audioContextRef.current = new Context();
+        }
+        const audioContext = audioContextRef.current;
+        if (audioContext?.state === 'suspended') {
+          await audioContext.resume();
+        }
+
+        if (!sourceRef.current) {
+          const analyser = audioContext.createAnalyser();
+          analyser.fftSize = 512;
+          analyser.smoothingTimeConstant = 0.85;
+
+          const source = audioContext.createMediaElementSource(audio);
+          source.connect(analyser);
+          analyser.connect(audioContext.destination);
+
+          sourceRef.current = source;
+          analyserRef.current = analyser;
+          dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount);
+        }
+      } catch (error) {
+        console.warn('Audio context setup failed', error);
+      }
+
       audio
         .play()
         .catch((error) => console.warn('Unable to play audio sample', error));
@@ -112,6 +161,69 @@ const PreferencesSurvey = () => {
   const handleRatingSelect = (value) => {
     setSelectedRating(value);
   };
+
+  useEffect(() => {
+    if (!isPlaying) {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+      setVisualizerValues((prev) => prev.map(() => 0));
+      return;
+    }
+
+    const analyser = analyserRef.current;
+    const dataArray = dataArrayRef.current;
+
+    if (!analyser || !dataArray) {
+      return;
+    }
+
+    const bufferLength = analyser.frequencyBinCount;
+    const barChunkSize = Math.floor(bufferLength / VISUALIZER_BARS);
+
+    const animate = () => {
+      analyser.getByteFrequencyData(dataArray);
+
+      const nextValues = Array.from({ length: VISUALIZER_BARS }, (_, index) => {
+        const start = index * barChunkSize;
+        let sum = 0;
+        for (let i = 0; i < barChunkSize; i += 1) {
+          sum += dataArray[start + i] || 0;
+        }
+        const average = sum / barChunkSize;
+        return Number((average / 255).toFixed(3));
+      });
+
+      setVisualizerValues(nextValues);
+      animationRef.current = requestAnimationFrame(animate);
+    };
+
+    animationRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+    };
+  }, [isPlaying]);
+
+  useEffect(() => {
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close().catch(() => {});
+      }
+      animationRef.current = null;
+      dataArrayRef.current = null;
+      analyserRef.current = null;
+      sourceRef.current = null;
+      audioContextRef.current = null;
+    };
+  }, []);
 
   const handleAdvance = () => {
     if (!selectedRating) {
@@ -194,8 +306,12 @@ const PreferencesSurvey = () => {
 
         <div className={styles['survey-audio']}>
           <div className={`${styles['audio-visualizer']} ${isPlaying ? styles['visualizer-active'] : ''}`}>
-            {Array.from({ length: 24 }).map((_, index) => (
-              <span key={index} className={styles['visualizer-bar']} style={{ '--bar-delay': `${index * 0.05}s` }}></span>
+            {visualizerValues.map((value, index) => (
+              <span
+                key={index}
+                className={styles['visualizer-bar']}
+                style={{ height: `${Math.max(value, 0.05) * 100}%` }}
+              ></span>
             ))}
           </div>
 

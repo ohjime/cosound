@@ -332,8 +332,8 @@
   height: 120px;
   width: 80%;
   margin: 0 auto;
-  opacity: 0.4;
-  transition: opacity 0.4s ease;
+  opacity: 0.35;
+  transition: opacity 0.35s ease;
 }
 
 .audio-visualizer.visualizer-active {
@@ -342,23 +342,18 @@
 
 .visualizer-bar {
   width: 8px;
-  height: 35%;
+  height: 8%;
+  min-height: 6%;
   border-radius: 999px;
   background: linear-gradient(to top, rgba(61, 79, 181, 0.9), rgba(61, 79, 181, 0.55));
-  animation: visualizerPulse 1.1s ease-in-out infinite;
-  animation-delay: var(--bar-delay, 0s);
+  opacity: 0.55;
   transform-origin: center bottom;
+  transition: height 0.12s ease, opacity 0.2s ease;
+  will-change: height;
 }
 
-@keyframes visualizerPulse {
-  0%, 100% {
-    transform: scaleY(0.3);
-    opacity: 0.5;
-  }
-  50% {
-    transform: scaleY(1);
-    opacity: 1;
-  }
+.audio-visualizer.visualizer-active .visualizer-bar {
+  opacity: 0.9;
 }
 
 .audio-controls {

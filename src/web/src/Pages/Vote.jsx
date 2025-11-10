@@ -1,8 +1,26 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ThumbsUp, ThumbsDown, User, LogOut } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import styles from './Vote.module.css';
+import easterEggImage from '../assets/67.jpeg';
+import easterEggAudio from '../assets/67.wav';
+
+const KONAMI_SEQUENCE = [
+  'ArrowUp',
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowLeft',
+  'ArrowRight',
+  'b',
+  'a',
+  'Enter',
+];
+
+const normalizeKey = (key) => (key.length === 1 ? key.toLowerCase() : key);
 
 const Vote = () => {
   // Dummy data for testing
@@ -42,6 +60,15 @@ const Vote = () => {
   const navigate = useNavigate();
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const accountMenuRef = useRef(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isEasterEggActive, setIsEasterEggActive] = useState(false);
+  const konamiIndexRef = useRef(0);
+  const eggAudioRef = useRef(null);
+  const authSubscriptionRef = useRef(null);
+  const normalizedSequence = useMemo(
+    () => KONAMI_SEQUENCE.map((key) => normalizeKey(key)),
+    []
+  );
 
   useEffect(() => {
     // Check if mobile
@@ -52,6 +79,120 @@ const Vote = () => {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const initialiseAuth = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (isMounted) {
+          setIsLoggedIn(Boolean(data?.session));
+        }
+      } catch (error) {
+        console.warn('Unable to determine auth session', error);
+      }
+    };
+
+    initialiseAuth();
+
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(Boolean(session));
+    });
+
+    authSubscriptionRef.current = subscription;
+
+    return () => {
+      isMounted = false;
+      const sub = authSubscriptionRef.current?.subscription ?? authSubscriptionRef.current;
+      if (sub && typeof sub.unsubscribe === 'function') {
+        sub.unsubscribe();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const audio = new Audio(easterEggAudio);
+    audio.preload = 'auto';
+    const handleEnded = () => {
+      setIsEasterEggActive(false);
+    };
+
+    audio.addEventListener('ended', handleEnded);
+    eggAudioRef.current = audio;
+
+    return () => {
+      audio.removeEventListener('ended', handleEnded);
+      audio.pause();
+      eggAudioRef.current = null;
+    };
+  }, []);
+
+  const triggerEasterEgg = useCallback(() => {
+    if (!isLoggedIn) {
+      return;
+    }
+
+    const audio = eggAudioRef.current;
+    if (!audio) {
+      return;
+    }
+
+    try {
+      audio.pause();
+      audio.currentTime = 0;
+    } catch (error) {
+      console.warn('Unable to reset easter egg audio', error);
+    }
+
+    setIsEasterEggActive(true);
+    audio
+      .play()
+      .catch((error) => {
+        console.warn('Easter egg audio failed to play', error);
+        setIsEasterEggActive(false);
+      });
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      konamiIndexRef.current = 0;
+      return undefined;
+    }
+
+    const handleKeyDown = (event) => {
+      const key = normalizeKey(event.key);
+      const expected = normalizedSequence[konamiIndexRef.current];
+
+      if (key === expected) {
+        konamiIndexRef.current += 1;
+        if (konamiIndexRef.current === normalizedSequence.length) {
+          konamiIndexRef.current = 0;
+          triggerEasterEgg();
+        }
+      } else {
+        const firstKey = normalizedSequence[0];
+        konamiIndexRef.current = key === firstKey ? 1 : 0;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isLoggedIn, normalizedSequence, triggerEasterEgg]);
+
+  useEffect(() => {
+    if (!isLoggedIn && isEasterEggActive) {
+      setIsEasterEggActive(false);
+      if (eggAudioRef.current) {
+        try {
+          eggAudioRef.current.pause();
+          eggAudioRef.current.currentTime = 0;
+        } catch (error) {
+          console.warn('Unable to stop easter egg audio', error);
+        }
+      }
+    }
+  }, [isLoggedIn, isEasterEggActive]);
 
 
   // Simulate API call to POST /api/votes
@@ -82,7 +223,7 @@ const Vote = () => {
     };
   };
 
-  const handleVoteFromNFC = (voteValue, nfctagid) => {
+  const handleVoteFromNFC = async (voteValue, nfctagid) => {
     // Prevent duplicate votes
     if (hasVoted || isSubmitting) {
       return;
@@ -98,14 +239,27 @@ const Vote = () => {
     setSelectedVote(voteValue);
     setIsSubmitting(true);
 
+    // Get user UUID from Supabase session, or null if not logged in
+    let userId = null;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      userId = session?.user?.id || null;
+    } catch (error) {
+      console.warn('Unable to get user session for vote', error);
+      userId = null;
+    }
+
+    const backendVoteValue = voteValue === 0 ? -1 : 1;
+
     // Create dummy vote data immediately
     const dummyVoteData = {
       id: `vote-${Date.now()}`,
-      user_id: 'dummy-user-id',
+      user_id: userId,
       song: activeSong,
-      vote_value: voteValue, // 0 for thumbs down, 1 for thumbs up
+      vote_value: backendVoteValue, // -1 for thumbs down, 1 for thumbs up
       vote_time: new Date().toISOString(),
       nfctagid: nfctagid || null,
+      //client_vote_value: voteValue,
     };
 
     // Simulate API call (non-blocking, just logs to console)
@@ -205,6 +359,26 @@ const Vote = () => {
 
   return (
     <div className={styles['voting-page']}>
+      {isEasterEggActive && (
+        <div className={styles['easter-egg-overlay']}>
+          <div className={styles['easter-egg-backdrop']}></div>
+          <div className={styles['easter-egg-orbital']}>
+            <div className={styles['easter-egg-rings']}>
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <img src={easterEggImage} alt="Hidden sound guy" className={styles['easter-egg-image']} />
+            <div className={styles['easter-egg-shine']}></div>
+            <div className={styles['easter-egg-sparkles']}>
+              {Array.from({ length: 8 }).map((_, index) => (
+                <span key={index}></span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Animated Background Particles */}
       <div className={styles['particle-field']}>
         {[...Array(15)].map((_, i) => (
@@ -258,9 +432,9 @@ const Vote = () => {
         <div className={styles['voting-header']}>
           <div className={styles['voting-title-line']}></div>
           <h1 className={styles['voting-title']}>
-            <span className={styles['title-word']}>Welcome</span>
-            <span className={styles['title-word']}>to</span>
-            <span className={styles['title-word']}>Sound</span>
+            <span className={styles['title-word']}>Welcome </span>
+            <span className={styles['title-word']}>to </span>
+            <span className={styles['title-word']}>Sound </span>
             <span className={styles['title-word']}>Guys</span>
           </h1>
           <div className={styles['voting-title-line']}></div>
@@ -296,6 +470,7 @@ const Vote = () => {
                     {/* Light reflections */}
                     <div className={styles['record-reflection']}></div>
                     <div className={styles['record-reflection-2']}></div>
+
                     {/* Center label with spinning gradient */}
                     <div className={styles['record-center']}>
                       <div className={styles['record-center-gradient']}></div>

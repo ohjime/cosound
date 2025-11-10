@@ -23,6 +23,20 @@ const KONAMI_SEQUENCE = [
 
 const normalizeKey = (key) => (key.length === 1 ? key.toLowerCase() : key);
 
+function toSnakeCase(songTitle) {
+  return songTitle
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_');
+}
+
+function formatSongName(songKey) {
+  return songKey
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 const Vote = () => {
   // NFC Tag mapping: tagId -> voteValue
   const NFC_TAG_MAPPING = {
@@ -59,7 +73,7 @@ const Vote = () => {
     try {
       const response = await apiClient('/api/model/currentSong');
       if (response?.current_song) {
-        setCurrentSong(response.current_song);
+        setCurrentSong(formatSongName(response.current_song));
       } else {
         setCurrentSong(null);
         setSongError('No current song available.');
@@ -260,7 +274,7 @@ const Vote = () => {
 
     if (userId) {
       try {
-        await submitVoteToBackend(activeSong, backendVoteValue);
+        await submitVoteToBackend(toSnakeCase(activeSong), backendVoteValue);
       } catch (error) {
         console.error('Failed to submit vote to backend:', error);
         setSubmissionError('We could not submit your vote right now. Please try again.');
@@ -276,7 +290,7 @@ const Vote = () => {
     const voteRecord = {
       id: `vote-${Date.now()}`,
       user_id: userId,
-      song: activeSong,
+      song: toSnakeCase(activeSong),
       vote_value: backendVoteValue, // -1 for thumbs down, 1 for thumbs up
       vote_time: new Date().toISOString(),
       nfctagid: nfctagid || null,

@@ -102,6 +102,64 @@ router.get('/preferences', async (req, res) => {
 });
 
 /**
+ * GET /api/model/active-users
+ * Get all currently active users (with unexpired sessions)
+ * Returns user preferences for music selection algorithm
+ */
+router.get('/active-users', async (req, res) => {
+  try {
+    const now = new Date().toISOString();
+    
+    // Get all active, unexpired sessions
+    const { data: sessions, error } = await supabase
+      .from('sessions')
+      .select(`
+        user_id,
+        checked_in_at,
+        expires_at,
+        profiles!inner(display_name, name)
+      `)
+      .eq('status', 'active')
+      .gt('expires_at', now); // Only non-expired sessions
+    
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+    
+    // Get preferences for each active user
+    const activeUsers = await Promise.all(
+      sessions.map(async (session) => {
+        const { data: prefs } = await supabase
+          .from('preferences')
+          .select('preference')
+          .eq('user_id', session.user_id)
+          .single();
+        
+        return {
+          user_id: session.user_id,
+          display_name: session.profiles.display_name || 
+                       session.profiles.name?.split(' ')[0] || 
+                       'Anonymous',
+          checked_in_at: session.checked_in_at,
+          expires_at: session.expires_at,
+          preferences: prefs ? JSON.parse(prefs.preference) : [0, 0, 0, 0, 0]
+        };
+      })
+    );
+    
+    res.json({
+      success: true,
+      count: activeUsers.length,
+      timestamp: now,
+      data: activeUsers
+    });
+  } catch (err) {
+    console.error('Get active users error:', err);
+    res.status(500).json({ error: 'Failed to get active users' });
+  }
+});
+
+/**
  * GET /api/model/votes
  * Get all votes
  */

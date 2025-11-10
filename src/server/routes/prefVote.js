@@ -10,8 +10,7 @@ const { authenticateToken } = require('../middleware/auth');
  * GET /api/preferences
  * Get user's preferences
  */
-// GET /api/preferences
-router.get('/preferences', async (req, res) => {
+router.get('/preferences', authenticateToken, async (req, res) => {
   try {
     const { data, error } = await req.supabase
       .from('preferences')
@@ -56,6 +55,10 @@ router.get('/preferences', async (req, res) => {
 router.post('/preferences', authenticateToken, async (req, res) => {
   try {
     const { preferences } = req.body
+    console.log('📥 Received body:', req.body);
+    console.log('📊 Preferences value:', preferences);
+    console.log('🔍 Is array?', Array.isArray(preferences));
+    console.log('📏 Length:', preferences?.length);
     
     // Validate array
     if (!Array.isArray(preferences) || preferences.length !== 5) {
@@ -75,17 +78,42 @@ router.post('/preferences', authenticateToken, async (req, res) => {
       });
     }
     
-    // Upsert (insert or update)
-    const { data, error } = await req.supabase
+    // Check if preferences already exist
+    const { data: existing } = await req.supabase
       .from('preferences')
-      .upsert({
-        user_id: req.user.id,
-        preference: JSON.stringify(preferences) // Store as JSON string
-      }, {
-        onConflict: 'user_id'
-      })
-      .select()
+      .select('*')
+      .eq('user_id', req.user.id)
       .single();
+    
+    let data, error;
+    
+    if (existing) {
+      // Update existing preferences
+      const result = await req.supabase
+        .from('preferences')
+        .update({
+          preference: JSON.stringify(preferences)
+        })
+        .eq('user_id', req.user.id)
+        .select()
+        .single();
+      
+      data = result.data;
+      error = result.error;
+    } else {
+      // Insert new preferences
+      const result = await req.supabase
+        .from('preferences')
+        .insert({
+          user_id: req.user.id,
+          preference: JSON.stringify(preferences)
+        })
+        .select()
+        .single();
+      
+      data = result.data;
+      error = result.error;
+    }
     
     if (error) {
       return res.status(400).json({ error: error.message });

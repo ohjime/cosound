@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ThumbsUp, ThumbsDown, User, LogOut } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { apiClient } from '../lib/apt';
 import styles from './Vote.module.css';
 import easterEggImage from '../assets/67.jpeg';
 import easterEggAudio from '../assets/67.wav';
@@ -23,37 +24,18 @@ const KONAMI_SEQUENCE = [
 const normalizeKey = (key) => (key.length === 1 ? key.toLowerCase() : key);
 
 const Vote = () => {
-  // Dummy data for testing
-  const DUMMY_SONGS = [
-    { id: '1', song: 'Frog Noises' },
-    { id: '2', song: 'Ocean Waves' },
-    { id: '3', song: 'Rain Sounds' },
-    { id: '4', song: 'Forest Ambience' },
-  ];
-
   // NFC Tag mapping: tagId -> voteValue
   const NFC_TAG_MAPPING = {
     '1234567': 1, // Thumbs up
     '1234568': 0, // Thumbs down
   };
 
-  // Initialize with default song immediately (no loading delay for dummy data)
-  const [currentSong, setCurrentSong] = useState(() => {
-    const randomSong = DUMMY_SONGS[Math.floor(Math.random() * DUMMY_SONGS.length)];
-    return randomSong.song;
-  });
+  const [currentSong, setCurrentSong] = useState(null);
   const [selectedVote, setSelectedVote] = useState(null);
   const [hasVoted, setHasVoted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [songId, setSongId] = useState(() => {
-    const randomSong = DUMMY_SONGS[Math.floor(Math.random() * DUMMY_SONGS.length)];
-    return randomSong.id;
-  });
-  const [songName, setSongName] = useState(() => {
-    const randomSong = DUMMY_SONGS[Math.floor(Math.random() * DUMMY_SONGS.length)];
-    return randomSong.song;
-  });
-  const [isLoadingSong, setIsLoadingSong] = useState(false);
+  const [isLoadingSong, setIsLoadingSong] = useState(true);
+  const [songError, setSongError] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
   const [nfcTagDetected, setNfcTagDetected] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -69,6 +51,49 @@ const Vote = () => {
     () => KONAMI_SEQUENCE.map((key) => normalizeKey(key)),
     []
   );
+  const [submissionError, setSubmissionError] = useState(null);
+
+  const fetchCurrentSong = useCallback(async () => {
+    setIsLoadingSong(true);
+    setSongError(null);
+    try {
+      const response = await apiClient('/api/model/currentSong');
+      if (response?.current_song) {
+        setCurrentSong(response.current_song);
+      } else {
+        setCurrentSong(null);
+        setSongError('No current song available.');
+      }
+    } catch (error) {
+      if (error.status === 404) {
+        setSongError('No song is currently playing.');
+      } else {
+        setSongError(error.message || 'Failed to fetch current song.');
+      }
+      setCurrentSong(null);
+      console.error('Failed to fetch current song:', error);
+    } finally {
+      setIsLoadingSong(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCurrentSong();
+    const intervalId = setInterval(fetchCurrentSong, 60 * 1000);
+    return () => clearInterval(intervalId);
+  }, [fetchCurrentSong]);
+
+  useEffect(() => {
+    if (currentSong) {
+      setSubmissionError(null);
+    }
+  }, [currentSong]);
+
+  useEffect(() => {
+    if (!isLoggedIn && isAccountMenuOpen) {
+      setIsAccountMenuOpen(false);
+    }
+  }, [isLoggedIn, isAccountMenuOpen]);
 
   useEffect(() => {
     // Check if mobile
@@ -193,51 +218,33 @@ const Vote = () => {
       }
     }
   }, [isLoggedIn, isEasterEggActive]);
-
-
-  // Simulate API call to POST /api/votes
-  const simulateApiCall = async (voteData, nfctagid) => {
-    const apiEndpoint = 'http://localhost:3000/api/votes';
-    const requestBody = {
-      song: voteData.song,
-      vote_value: voteData.vote_value,
-      nfctagid: nfctagid || null, // Include NFC tag ID if present
-    };
-
-    // Log API call to console
-    console.log('=== API CALL SIMULATION ===');
-    console.log('Endpoint:', apiEndpoint);
-    console.log('Method: POST');
-    console.log('Headers:', {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer dummy-token',
+  const submitVoteToBackend = useCallback(async (song, backendVoteValue) => {
+    return apiClient('/api/votes', {
+      method: 'POST',
+      body: JSON.stringify({
+        song,
+        vote_value: backendVoteValue,
+      }),
     });
-    console.log('Request Body:', JSON.stringify(requestBody, null, 2));
-    console.log('==========================');
-
-    // Simulate API response
-    return {
-      success: true,
-      message: 'Vote recorded successfully',
-      data: voteData,
-    };
-  };
+  }, []);
 
   const handleVoteFromNFC = async (voteValue, nfctagid) => {
     // Prevent duplicate votes
     if (hasVoted || isSubmitting) {
       return;
     }
-    
+
     // Ensure we have a song name (should always be set from initial state)
-    const activeSong = songName || currentSong;
+    const activeSong = currentSong;
     if (!activeSong) {
       console.warn('No song available for voting');
+      setSubmissionError('No song is currently available for voting. Please try again shortly.');
       return;
     }
 
     setSelectedVote(voteValue);
     setIsSubmitting(true);
+    setSubmissionError(null);
 
     // Get user UUID from Supabase session, or null if not logged in
     let userId = null;
@@ -251,8 +258,22 @@ const Vote = () => {
 
     const backendVoteValue = voteValue === 0 ? -1 : 1;
 
-    // Create dummy vote data immediately
-    const dummyVoteData = {
+    if (userId) {
+      try {
+        await submitVoteToBackend(activeSong, backendVoteValue);
+      } catch (error) {
+        console.error('Failed to submit vote to backend:', error);
+        setSubmissionError('We could not submit your vote right now. Please try again.');
+        setIsSubmitting(false);
+        setSelectedVote(null);
+        return;
+      }
+    } else {
+      console.info('Guest vote submitted locally; backend submission skipped.');
+    }
+
+    // Create vote record for local history/debugging
+    const voteRecord = {
       id: `vote-${Date.now()}`,
       user_id: userId,
       song: activeSong,
@@ -262,15 +283,12 @@ const Vote = () => {
       //client_vote_value: voteValue,
     };
 
-    // Simulate API call (non-blocking, just logs to console)
-    simulateApiCall(dummyVoteData, nfctagid);
+    // Store locally for debugging purposes
+    const existingVotes = JSON.parse(localStorage.getItem('voteHistory') || '[]');
+    existingVotes.push(voteRecord);
+    localStorage.setItem('voteHistory', JSON.stringify(existingVotes));
 
-    // Store dummy vote in localStorage for testing
-    const existingVotes = JSON.parse(localStorage.getItem('dummyVotes') || '[]');
-    existingVotes.push(dummyVoteData);
-    localStorage.setItem('dummyVotes', JSON.stringify(existingVotes));
-
-    console.log('Dummy vote submitted:', dummyVoteData);
+    console.log('Vote submitted:', voteRecord);
 
     setHasVoted(true);
     setIsSubmitting(false);
@@ -291,6 +309,10 @@ const Vote = () => {
 
   // Handle NFC tag scanning via URL parameters
   useEffect(() => {
+    if (isLoadingSong || !currentSong) {
+      return;
+    }
+
     const voteValueParam = searchParams.get('voteValue');
     const nfctagid = searchParams.get('nfctagid');
 
@@ -300,9 +322,9 @@ const Vote = () => {
       console.log(`NFC Tag detected: ${nfctagid} → Vote Value: ${voteValue}`);
       setNfcTagDetected(nfctagid);
       
-      // Auto-submit vote when NFC tag is detected (no need to wait for songName - it's already set)
+      // Auto-submit vote when NFC tag is detected (no need to wait for song load - it's already set)
       if (!hasVoted && !isSubmitting) {
-        handleVoteFromNFC(voteValue, nfctagid);
+        void handleVoteFromNFC(voteValue, nfctagid);
       }
     } 
     // If voteValue is provided directly in URL
@@ -311,14 +333,14 @@ const Vote = () => {
       console.log(`Vote value from URL: ${voteValue}`);
       
       if (!hasVoted && !isSubmitting) {
-        handleVoteFromNFC(voteValue, nfctagid || 'direct-url');
+        void handleVoteFromNFC(voteValue, nfctagid || 'direct-url');
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, hasVoted, isSubmitting]);
+  }, [searchParams, hasVoted, isSubmitting, isLoadingSong, currentSong]);
 
   const handleVote = (voteValue) => {
-    handleVoteFromNFC(voteValue, null);
+    void handleVoteFromNFC(voteValue, null);
   };
 
   useEffect(() => {
@@ -407,25 +429,27 @@ const Vote = () => {
       <div className={styles['voting-container']}>
         <div className={styles['header-row']}>
           <div className={styles['header-spacer']}></div>
-          <div className={styles['account-wrapper']} ref={accountMenuRef}>
-            <button
-              type="button"
-              className={styles['account-button']}
-              onClick={() => setIsAccountMenuOpen((prev) => !prev)}
-              aria-expanded={isAccountMenuOpen}
-              aria-label="User menu"
-            >
-              <User size={22} />
-            </button>
-            {isAccountMenuOpen && (
-              <div className={styles['account-dropdown']}>
-                <button type="button" onClick={handleSignOut} className={styles['account-action']}>
-                  <LogOut size={18} />
-                  <span>Sign out</span>
-                </button>
-              </div>
-            )}
-          </div>
+          {isLoggedIn && (
+            <div className={styles['account-wrapper']} ref={accountMenuRef}>
+              <button
+                type="button"
+                className={styles['account-button']}
+                onClick={() => setIsAccountMenuOpen((prev) => !prev)}
+                aria-expanded={isAccountMenuOpen}
+                aria-label="User menu"
+              >
+                <User size={22} />
+              </button>
+              {isAccountMenuOpen && (
+                <div className={styles['account-dropdown']}>
+                  <button type="button" onClick={handleSignOut} className={styles['account-action']}>
+                    <LogOut size={18} />
+                    <span>Sign out</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Header */}
@@ -483,7 +507,9 @@ const Vote = () => {
             
             {/* Song name below record player */}
             <p className={styles['song-name']}>
-              {currentSong}
+              {isLoadingSong
+                ? 'Loading current track...'
+                : currentSong || songError || 'No track available'}
             </p>
           </div>
         </div>
@@ -506,7 +532,7 @@ const Vote = () => {
             <div className={styles['vote-buttons-container']}>
               <button
                 onClick={() => handleVote(0)}
-                disabled={hasVoted || isSubmitting}
+                disabled={hasVoted || isSubmitting || isLoadingSong || !currentSong}
                 className={`
                   ${styles['thumbs-button']} ${styles['thumbs-down']}
                   ${selectedVote === 0 ? styles.selected : ''}
@@ -521,7 +547,7 @@ const Vote = () => {
               
               <button
                 onClick={() => handleVote(1)}
-                disabled={hasVoted || isSubmitting}
+                disabled={hasVoted || isSubmitting || isLoadingSong || !currentSong}
                 className={`
                   ${styles['thumbs-button']} ${styles['thumbs-up']}
                   ${selectedVote === 1 ? styles.selected : ''}
@@ -572,6 +598,26 @@ const Vote = () => {
               <p className={styles['status-loading-text']}>
                 Loading song information...
               </p>
+            </div>
+          </div>
+        )}
+
+        {songError && !isLoadingSong && (
+          <div className={styles['status-container']}>
+            <div className={styles['status-loading']} style={{ color: '#9ca3af' }}>
+              <p className={styles['status-loading-text']}>{songError}</p>
+            </div>
+          </div>
+        )}
+
+        {submissionError && (
+          <div className={styles['status-container']}>
+            <div className={styles['status-loading']} style={{ color: '#f87171' }}>
+              <div
+                className={styles['status-spinner']}
+                style={{ borderTopColor: '#f87171', borderRightColor: 'transparent' }}
+              ></div>
+              <p className={styles['status-loading-text']}>{submissionError}</p>
             </div>
           </div>
         )}

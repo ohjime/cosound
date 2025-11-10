@@ -95,26 +95,26 @@ export const AuthCallback = () => {
           if (spotifyToken) {
             topGenres = await fetchTopGenres(spotifyToken);
 
-            if (topGenres.length > 0) {
-              console.log('=== USER TOP 5 SPOTIFY GENRES ===');
-              topGenres.forEach((genre, index) => {
-                console.log(`${index + 1}. ${genre}`);
-              });
-              console.log('===================================');
-            } else {
-              console.log('No genres found. User may not have enough listening history.');
-            }
-          } else {
-            console.log('⚠️ Spotify access token not available.');
-            console.log('This might be because:');
-            console.log('1. Spotify OAuth provider is not configured in Supabase dashboard');
-            console.log('2. Supabase does not expose provider tokens client-side');
-            console.log('3. You may need to use Supabase Edge Functions to access provider tokens');
-            console.log('Session data:', {
-              hasProviderToken: !!session.provider_token,
-              hasUserMetadata: !!session.user?.app_metadata,
-              sessionKeys: Object.keys(session),
-            });
+          //   if (topGenres.length > 0) {
+          //     console.log('=== USER TOP 5 SPOTIFY GENRES ===');
+          //     topGenres.forEach((genre, index) => {
+          //       console.log(`${index + 1}. ${genre}`);
+          //     });
+          //     console.log('===================================');
+          //   } else {
+          //     console.log('No genres found. User may not have enough listening history.');
+          //   }
+          // } else {
+          //   console.log('⚠️ Spotify access token not available.');
+          //   console.log('This might be because:');
+          //   console.log('1. Spotify OAuth provider is not configured in Supabase dashboard');
+          //   console.log('2. Supabase does not expose provider tokens client-side');
+          //   console.log('3. You may need to use Supabase Edge Functions to access provider tokens');
+          //   console.log('Session data:', {
+          //     hasProviderToken: !!session.provider_token,
+          //     hasUserMetadata: !!session.user?.app_metadata,
+          //     sessionKeys: Object.keys(session),
+          //   });
           }
 
           sessionStorage.setItem('topGenres', JSON.stringify(topGenres || []));

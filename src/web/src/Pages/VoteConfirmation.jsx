@@ -5,16 +5,22 @@ import { supabase } from '../lib/supabase';
 import { apiClient } from '../lib/apt';
 import styles from './VoteConfirmation.module.css';
 
+const formatSongTitle = (title = '') =>
+  title
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
 const VoteConfirmation = () => {
   const { voteValue } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
   const [song, setSong] = useState('');
+  const [canonicalSong, setCanonicalSong] = useState('');
   const [isMobile, setIsMobile] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const voteSubmitRef = useRef(false);
-  const songChangeRef = useRef(false);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -56,6 +62,15 @@ const VoteConfirmation = () => {
       return;
     }
 
+    const displayStored = location.state?.song || sessionStorage.getItem('voteSong');
+    if (displayStored) {
+      setSong(displayStored);
+    }
+    const canonicalStored = location.state?.canonicalSong || sessionStorage.getItem('voteCanonicalSong');
+    if (canonicalStored) {
+      setCanonicalSong(canonicalStored);
+    }
+
     // Check if vote already submitted
     if (voteSubmitRef.current) {
       return;
@@ -72,20 +87,27 @@ const VoteConfirmation = () => {
           await apiClient('/api/checkin', { method: 'POST' });
         }
 
-        // Get current song from location state, sessionStorage, or API
-        let songToVote = location.state?.song || sessionStorage.getItem('voteSong');
+        // Get current song from state/storage or API
+        let songToVote =
+          location.state?.canonicalSong ||
+          sessionStorage.getItem('voteCanonicalSong') ||
+          location.state?.song ||
+          sessionStorage.getItem('voteSong');
 
         if (!songToVote) {
           try {
-            const songResponse = await apiClient('/api/current-song');
-            songToVote = songResponse?.data?.song || 'Unknown track';
+            const songResponse = await apiClient('/api/model/currentSong');
+            songToVote = songResponse?.current_song || 'Unknown track';
           } catch (err) {
             console.warn('Could not fetch current song, using fallback');
             songToVote = 'Unknown track';
           }
         }
 
-        setSong(songToVote);
+        const formatted = formatSongTitle(songToVote) || 'Unknown track';
+        setSong(formatted);
+        setCanonicalSong(songToVote);
+        sessionStorage.setItem('voteCanonicalSong', songToVote);
 
         // Submit vote
         const numericVote = voteValue === '0' ? -1 : 1;
@@ -203,6 +225,7 @@ const VoteConfirmation = () => {
                   sessionStorage.removeItem('voteSubmitted');
                   sessionStorage.removeItem('voteValue');
                   sessionStorage.removeItem('voteSong');
+                  sessionStorage.removeItem('voteCanonicalSong');
                   navigate('/vote');
                 } else {
                   // Navigate to login page

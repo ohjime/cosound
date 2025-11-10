@@ -4,19 +4,11 @@ import { User, LogOut } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { apiClient } from '../lib/apt';
 
-function toSnakeCase(songTitle) {
-  return songTitle
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '_');
-}
-
-function formatSongName(songKey) {
-  return songKey
-    .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
+const formatSongTitle = (title = '') =>
+  title
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 
 const Vote = () => {
   const { signOut } = useAuth();
@@ -35,7 +27,6 @@ const Vote = () => {
   const [sessionInfo, setSessionInfo] = useState(null);
   const [timerSeconds, setTimerSeconds] = useState(null);
   const [sessionDurationSeconds, setSessionDurationSeconds] = useState(null);
-  const [isChangingSong, setIsChangingSong] = useState(false);
 
   const fetchCurrentSong = useCallback(async (showSpinner = false) => {
     if (showSpinner) setIsLoadingSong(true);
@@ -47,11 +38,13 @@ const Vote = () => {
       if (songValue) {
         setCurrentSong(songValue);
         setSongName(songValue);
-        console.log('✅ Current song loaded:', songValue);
+        setCanonicalSong(songValue);
+        console.log('Current song loaded:', songValue);
       } else {
         setCurrentSong('');
         setSongName('No song playing');
-        console.log('⚠️ No current song available');
+        setCanonicalSong('');
+        console.log('No current song available');
       }
 
       // Background: Ping model endpoint to sync recommendation system
@@ -60,16 +53,18 @@ const Vote = () => {
           if (modelResult?.current_song) {
             setLiveSongTitle(modelResult.current_song);
             setLiveSongUpdatedAt(modelResult.played_at || null);
+            setCanonicalSong(modelResult.current_song);
           }
         })
         .catch(err => {
-          console.log('ℹ️ Model endpoint not available:', err.status);
+          console.log('Model endpoint not available:', err.status);
         });
 
     } catch (err) {
       console.error('Error loading current song:', err);
       setCurrentSong('');
       setSongName('Error loading song');
+      setCanonicalSong('');
     } finally {
       if (showSpinner) setIsLoadingSong(false);
     }
@@ -227,7 +222,8 @@ const Vote = () => {
     if (!activeSong) {
       activeSong = 'Unknown track';
     }
-    const backendSong = activeSong || 'Unknown track';
+    const backendSong = canonicalSong || activeSong || 'Unknown track';
+    const presentationTitle = formatSongTitle(backendSong) || 'Unknown track';
 
     setSelectedVote(uiVoteValue);
     setIsSubmitting(true);
@@ -243,8 +239,11 @@ const Vote = () => {
       });
       sessionStorage.setItem('voteSubmitted', 'true');
       sessionStorage.setItem('voteValue', uiVoteValue.toString());
-      sessionStorage.setItem('voteSong', activeSong);
-      navigate(`/vote/${uiVoteValue}`, { state: { song: activeSong, voteValue: uiVoteValue, nfctagid } });
+      sessionStorage.setItem('voteSong', presentationTitle);
+      sessionStorage.setItem('voteCanonicalSong', backendSong);
+      navigate(`/vote/${uiVoteValue}`, {
+        state: { song: presentationTitle, canonicalSong: backendSong, voteValue: uiVoteValue, nfctagid },
+      });
     } catch (error) {
       console.error('Vote failed:', error);
       setSelectedVote(null);
@@ -288,10 +287,7 @@ const Vote = () => {
   };
 
   const trackLabel = (liveSongTitle || songName || currentSong || '').trim() || 'Loading track';
-  const displaySongTitle = useMemo(() => {
-    const formatted = trackLabel.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
-    return formatted || 'Loading track';
-  }, [trackLabel]);
+  const displaySongTitle = useMemo(() => formatSongTitle(trackLabel) || 'Loading track', [trackLabel]);
   const liveSongTimestamp = useMemo(() => {
     if (!liveSongUpdatedAt) return null;
     try {

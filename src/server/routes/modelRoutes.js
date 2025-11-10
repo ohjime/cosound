@@ -317,33 +317,44 @@ router.get("/recommend", async (req, res) => {
   try {
     // const limit = Number(req.query.limit) || 5;
 
-    // 1) Active users from sessions
-    const { data: activeSessions, error: sessErr } = await req.supabase
-      .from("sessions")
-      .select("user_id")
-      .eq("status", "active");
+    // // 1) Active users from sessions
+    // const { data: activeSessions, error: sessErr } = await req.supabase
+    //   .from("sessions")
+    //   .select("user_id")
+    //   .eq("status", "active");
 
-    if (sessErr) {
-      console.error("sessions query error:", sessErr);
-      return res.status(500).json({ error: "Failed to read active users" });
+    // if (sessErr) {
+    //   console.error("sessions query error:", sessErr);
+    //   return res.status(500).json({ error: "Failed to read active users" });
+    // }
+
+    // let userIds = (activeSessions || []).map(r => r.user_id).filter(Boolean);
+    // console.log("Active user IDs from sessions:", userIds);
+
+    // // 2) Fallback: all users who have a preference
+    // if (userIds.length === 0) {
+    //   const { data: allPrefs, error: allErr } = await req.supabase
+    //     .from("preferences")
+    //     .select("user_id");
+
+    //   if (allErr) {
+    //     console.error("preferences fallback error:", allErr);
+    //     return res.status(500).json({ error: "Failed to read preferences" });
+    //   }
+
+    //   userIds = (allPrefs || []).map(r => r.user_id).filter(Boolean);
+    // }
+
+    const { data: allPrefs, error: allErr } = await req.supabase
+      .from("preferences")
+      .select("user_id");
+
+    if (allErr) {
+      console.error("preferences fallback error:", allErr);
+      return res.status(500).json({ error: "Failed to read preferences" });
     }
 
-    let userIds = (activeSessions || []).map(r => r.user_id).filter(Boolean);
-    console.log("Active user IDs from sessions:", userIds);
-
-    // 2) Fallback: all users who have a preference
-    if (userIds.length === 0) {
-      const { data: allPrefs, error: allErr } = await req.supabase
-        .from("preferences")
-        .select("user_id");
-
-      if (allErr) {
-        console.error("preferences fallback error:", allErr);
-        return res.status(500).json({ error: "Failed to read preferences" });
-      }
-
-      userIds = (allPrefs || []).map(r => r.user_id).filter(Boolean);
-    }
+    userIds = (allPrefs || []).map(r => r.user_id).filter(Boolean);    
 
     // dedupe & guard
     userIds = [...new Set(userIds)];

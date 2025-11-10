@@ -169,6 +169,129 @@ router.get('/votes', authenticateToken, async (req, res) => {
   }
 });
 
+
+// ---------- helpers ----------
+function parsePgVector(s) {
+  return String(s)
+    .trim()
+    .replace(/^[\[\(]\s*/, "")
+    .replace(/[\]\)]\s*$/, "")
+    .split(",")
+    .map(t => Number(t.trim()))
+    .filter(Number.isFinite);
+}
+const dot = (a, b) => a.reduce((acc, x, i) => acc + x * b[i], 0);
+const norm = v => Math.hypot(...v);
+const normalize = v => {
+  const n = norm(v);
+  return n > 0 ? v.map(x => x / n) : v;
+};
+const toPgVector = v => `[${v.join(",")}]`;
+
+
+
+// /**
+//  * POST /api/votes/apply
+//  * Body: { song_title: string, vote_value: 1 | -1, user_id?: uuid }
+//  * If you have auth middleware, prefer req.user.id over body.user_id.
+//  */
+// router.post("/votes/apply", async (req, res) => {
+//   try {
+//     const userId = req.user?.id || req.body.user_id;
+//     const { song_title, vote_value } = req.body;
+
+//     if (!userId) return res.status(400).json({ error: "user_id required" });
+//     if (!song_title) return res.status(400).json({ error: "song_title required" });
+//     if (![1, -1].includes(vote_value)) {
+//       return res.status(400).json({ error: "vote_value must be 1 or -1" });
+//     }
+
+//     // 1) Fetch song embedding (vector(5))
+//     const { data: song, error: songErr } = await req.supabase
+//       .from("songs")
+//       .select("embedding")
+//       .eq("title", song_title)
+//       .single();
+//     if (songErr || !song) return res.status(404).json({ error: "Song not found" });
+
+//     console.log("Song embedding:", parsePgVector(song.embedding));
+//     let s = normalize(parsePgVector(song.embedding));
+//     if (s.length !== 5) return res.status(422).json({ error: "Song vector not 5D" });
+
+//     // 2) Fetch current user preference (vector(5)) or cold start
+//     const { data: prefRow, error: prefErr } = await req.supabase
+//       .from("preferences")
+//       .select("preference")
+//       .eq("user_id", userId)
+//       .single();
+
+//     let u;
+//     if (prefErr && prefErr.code !== "PGRST116") {
+//       return res.status(500).json({ error: "Failed to load user preference" });
+//     }
+//     if (!prefRow) {
+//       // Cold start: on like, start at song; on dislike, use a neutral prior
+//       u = vote_value === 1 ? s.slice() : normalize([1, 0, 0, 0, 0]);
+//     } else {
+//       u = normalize(parsePgVector(prefRow.preference));
+//       if (u.length !== 5) return res.status(422).json({ error: "User vector not 5D" });
+//     }
+//     console.log("PrefRow:", prefRow);
+//     console.log("User vector (u):", u);
+//     console.log("Song vector (s):", s);
+//     // 3) Compute similarity and choose params
+//     const sim = dot(u, s); // cosine in [-1,1]
+//     const alpha = 0.12;    // learning rate
+//     const beta = 0.7;      // dislike softness
+
+//     // 4) Apply update
+//     let uPrime;
+//     if (vote_value === 1) {
+//       // Like: u' = normalize( (1-α)u + α s )
+//       uPrime = normalize(u.map((ui, i) => (1 - alpha) * ui + alpha * s[i]));
+//     } else {
+//       // Dislike: u' = normalize( u - α β (u·s) s )
+//       uPrime = normalize(u.map((ui, i) => ui - alpha * beta * sim * s[i]));
+//     }
+
+//     console.log("Updated user vector (u'):", uPrime);
+//     console.log("PG vector format:", toPgVector(uPrime));
+
+//     // 5) Save updated preference
+//     const { data: savedPref, error: upErr } = await req.supabase
+//       .from("preferences")
+//       .upsert(
+//         {
+//           user_id: userId,
+//           preference: toPgVector(uPrime),
+//           updated_at: new Date().toISOString()
+//         },
+//         { onConflict: "user_id" }
+//       )
+//       .select()
+//       .single();
+//     if (upErr) return res.status(500).json({ error: "Failed to save updated preference", details: upErr.message });
+
+//     // 6) (Optional) Record the vote event
+//     // await req.supabase.from("vote").insert({ user_id: userId, song: song_title, vote_value });
+
+//     return res.status(200).json({
+//       success: true,
+//       params_used: { alpha, beta },
+//       similarity_before: sim,
+//       preference_before: u,
+//       preference_after: uPrime,
+//       saved: savedPref
+//     });
+//   } catch (e) {
+//     console.error("apply vote error:", e);
+//     return res.status(500).json({ error: "Internal server error" });
+//   }
+// });
+
+
+
+
 /**
  * POST /api/votes
  * Create a new vote
@@ -176,18 +299,96 @@ router.get('/votes', authenticateToken, async (req, res) => {
  */
 router.post('/votes', authenticateToken, async (req, res) => {
   try {
-    const { song, vote_value } = req.body;
+    const userId = req.user?.id || req.body.user_id;
+    const song_title = req.body.song;
+    const vote_value = req.body.vote_value;
 
     // Validate required fields
-    if (!song || vote_value === undefined) {
+    if (!song_title || vote_value === undefined) {
       return res.status(400).json({ 
         error: 'Song and vote_value are required' 
       });
     }
 
+    if (!userId) return res.status(400).json({ error: "user_id required" });
+    if (!song_title) return res.status(400).json({ error: "song_title required" });
+    if (![1, -1].includes(vote_value)) {
+      return res.status(400).json({ error: "vote_value must be 1 or -1" });
+    }
+
+    // 1) Fetch song embedding (vector(5))
+    const { data: song, error: songErr } = await req.supabase
+      .from("songs")
+      .select("embedding")
+      .eq("title", song_title)
+      .single();
+    if (songErr || !song) return res.status(404).json({ error: "Song not found" });
+
+    console.log("Song embedding:", parsePgVector(song.embedding));
+    let s = normalize(parsePgVector(song.embedding));
+    if (s.length !== 5) return res.status(422).json({ error: "Song vector not 5D" });
+
+    // 2) Fetch current user preference (vector(5)) or cold start
+    const { data: prefRow, error: prefErr } = await req.supabase
+      .from("preferences")
+      .select("preference")
+      .eq("user_id", userId)
+      .single();
+
+    let u;
+    if (prefErr && prefErr.code !== "PGRST116") {
+      return res.status(500).json({ error: "Failed to load user preference" });
+    }
+    if (!prefRow) {
+      // Cold start: on like, start at song; on dislike, use a neutral prior
+      u = vote_value === 1 ? s.slice() : normalize([1, 0, 0, 0, 0]);
+    } else {
+      u = normalize(parsePgVector(prefRow.preference));
+      if (u.length !== 5) return res.status(422).json({ error: "User vector not 5D" });
+    }
+    console.log("PrefRow:", prefRow);
+    console.log("User vector (u):", u);
+    console.log("Song vector (s):", s);
+    // 3) Compute similarity and choose params
+    const sim = dot(u, s); // cosine in [-1,1]
+    const alpha = 0.12;    // learning rate
+    const beta = 0.7;      // dislike softness
+
+    // 4) Apply update
+    let uPrime;
+    if (vote_value === 1) {
+      // Like: u' = normalize( (1-α)u + α s )
+      uPrime = normalize(u.map((ui, i) => (1 - alpha) * ui + alpha * s[i]));
+    } else {
+      // Dislike: u' = normalize( u - α β (u·s) s )
+      uPrime = normalize(u.map((ui, i) => ui - alpha * beta * sim * s[i]));
+    }
+
+    console.log("Updated user vector (u'):", uPrime);
+    console.log("PG vector format:", toPgVector(uPrime));
+
+    // 5) Save updated preference
+    const { data: savedPref, error: upErr } = await req.supabase
+      .from("preferences")
+      .upsert(
+        {
+          user_id: userId,
+          preference: toPgVector(uPrime),
+          updated_at: new Date().toISOString()
+        },
+        { onConflict: "user_id" }
+      )
+      .select()
+      .single();
+    if (upErr) return res.status(500).json({ error: "Failed to save updated preference", details: upErr.message });
+    
+
+
+    
+
     const voteData = {
-      user_id: req.user.id,
-      song: song,
+      user_id: userId,
+      song: song_title,
       vote_value: parseInt(vote_value, 10), // Convert to integer
       vote_time: new Date().toISOString(),
     };

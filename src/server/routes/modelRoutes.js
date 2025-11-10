@@ -430,10 +430,23 @@ router.post("/currentSong", async (req, res) => {
       return res.status(500).json({ error: "Failed to log current song" });
     }
 
+        // 2) Update last_played on the matching song
+    const { data: song, error: updateErr } = await req.supabase
+      .from("songs")
+      .update({ last_played: new Date().toISOString() })
+      .eq("title", song_title)
+      .select("id,title,last_played")
+      .single(); // use .single() if title is unique
+
+    if (updateErr) {
+      console.error("Error updating last_played:", updateErr);
+      return res.status(500).json({ error: "Logged play, but failed to update last_played" });
+    }
+
     res.status(201).json({
       success: true,
-      message: "Current song logged successfully",
-      data,
+      message: "Current song logged and last_played updated",
+      data: { playing: data, song },
     });
   } catch (err) {
     console.error("currentSong error:", err);

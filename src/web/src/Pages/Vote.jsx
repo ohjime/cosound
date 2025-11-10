@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ThumbsUp, ThumbsDown } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, User, LogOut } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import styles from './Vote.module.css';
 
 const Vote = () => {
@@ -39,6 +40,8 @@ const Vote = () => {
   const [nfcTagDetected, setNfcTagDetected] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef(null);
 
   useEffect(() => {
     // Check if mobile
@@ -164,11 +167,47 @@ const Vote = () => {
     handleVoteFromNFC(voteValue, null);
   };
 
+  useEffect(() => {
+    if (!isAccountMenuOpen) {
+      return undefined;
+    }
+
+    const handleClickOutside = (event) => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target)) {
+        setIsAccountMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setIsAccountMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isAccountMenuOpen]);
+
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error('Error signing out:', error);
+    } finally {
+      setIsAccountMenuOpen(false);
+      navigate('/login');
+    }
+  };
+
   return (
     <div className={styles['voting-page']}>
       {/* Animated Background Particles */}
       <div className={styles['particle-field']}>
-        {[...Array(25)].map((_, i) => (
+        {[...Array(15)].map((_, i) => (
           <div key={i} className={styles['particle']} style={{
             '--delay': `${i * 0.08}s`,
             '--duration': `${4 + (i % 4)}s`,
@@ -182,8 +221,6 @@ const Vote = () => {
       <div className={styles['background-blobs']}>
         <div className={`${styles.blob} ${styles['blob-1']}`}></div>
         <div className={`${styles.blob} ${styles['blob-2']}`}></div>
-        <div className={`${styles.blob} ${styles['blob-3']}`}></div>
-        <div className={`${styles.blob} ${styles['blob-4']}`}></div>
       </div>
 
       {/* Sound Wave Ripples around Record Player */}
@@ -191,11 +228,32 @@ const Vote = () => {
         <div className={styles['wave']}></div>
         <div className={styles['wave']}></div>
         <div className={styles['wave']}></div>
-        <div className={styles['wave']}></div>
-        <div className={styles['wave']}></div>
       </div>
 
       <div className={styles['voting-container']}>
+        <div className={styles['header-row']}>
+          <div className={styles['header-spacer']}></div>
+          <div className={styles['account-wrapper']} ref={accountMenuRef}>
+            <button
+              type="button"
+              className={styles['account-button']}
+              onClick={() => setIsAccountMenuOpen((prev) => !prev)}
+              aria-expanded={isAccountMenuOpen}
+              aria-label="User menu"
+            >
+              <User size={22} />
+            </button>
+            {isAccountMenuOpen && (
+              <div className={styles['account-dropdown']}>
+                <button type="button" onClick={handleSignOut} className={styles['account-action']}>
+                  <LogOut size={18} />
+                  <span>Sign out</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Header */}
         <div className={styles['voting-header']}>
           <div className={styles['voting-title-line']}></div>

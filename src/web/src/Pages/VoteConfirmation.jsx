@@ -80,7 +80,7 @@ const VoteConfirmation = () => {
     <div className={styles['confirmation-page']}>
       {/* Animated Background Particles */}
       <div className={styles['particle-field']}>
-        {[...Array(20)].map((_, i) => (
+        {[...Array(12)].map((_, i) => (
           <div key={i} className={styles['particle']} style={{
             '--delay': `${i * 0.1}s`,
             '--duration': `${3 + (i % 3)}s`,
@@ -94,14 +94,10 @@ const VoteConfirmation = () => {
       <div className={styles['background-blobs']}>
         <div className={`${styles.blob} ${styles['blob-1']}`}></div>
         <div className={`${styles.blob} ${styles['blob-2']}`}></div>
-        <div className={`${styles.blob} ${styles['blob-3']}`}></div>
-        <div className={`${styles.blob} ${styles['blob-4']}`}></div>
       </div>
 
       {/* Sound Wave Ripples */}
       <div className={styles['sound-waves']}>
-        <div className={styles['wave']}></div>
-        <div className={styles['wave']}></div>
         <div className={styles['wave']}></div>
         <div className={styles['wave']}></div>
         <div className={styles['wave']}></div>

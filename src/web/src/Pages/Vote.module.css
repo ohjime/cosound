@@ -1,7 +1,10 @@
 /* Vote Page Styles */
 .voting-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, var(--color-secondary-light) 0%, var(--color-tertiary) 50%, var(--color-secondary) 100%);
+  background:
+    radial-gradient(circle at 15% 20%, rgba(61, 79, 181, 0.22), transparent 55%),
+    radial-gradient(circle at 85% 10%, rgba(61, 79, 181, 0.18), transparent 45%),
+    linear-gradient(160deg, #01070f 0%, var(--color-primary) 45%, #0a1723 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -23,14 +26,14 @@
   position: absolute;
   width: 5px;
   height: 5px;
-  background: var(--color-primary);
+  background: var(--color-secondary-light);
   border-radius: 50%;
   opacity: 0;
   left: var(--x);
   top: var(--y);
   animation: floatParticle var(--duration) ease-in-out infinite;
   animation-delay: var(--delay);
-  box-shadow: 0 0 10px var(--color-primary);
+  box-shadow: 0 0 12px rgba(61, 79, 181, 0.4);
 }
 
 @keyframes floatParticle {
@@ -71,17 +74,15 @@
   transform: translate(-50%, -50%);
   width: 100%;
   height: 100%;
-  border: 2px solid var(--color-primary);
+  border: 2px solid rgba(61, 79, 181, 0.35);
   border-radius: 50%;
   opacity: 0;
   animation: ripple 2.5s ease-out infinite;
 }
 
 .wave:nth-child(1) { animation-delay: 0s; }
-.wave:nth-child(2) { animation-delay: 0.5s; }
-.wave:nth-child(3) { animation-delay: 1s; }
-.wave:nth-child(4) { animation-delay: 1.5s; }
-.wave:nth-child(5) { animation-delay: 2s; }
+.wave:nth-child(2) { animation-delay: 0.6s; }
+.wave:nth-child(3) { animation-delay: 1.2s; }
 
 @keyframes ripple {
   0% {
@@ -100,6 +101,91 @@
   text-align: center;
   position: relative;
   z-index: 10;
+}
+
+.header-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.header-spacer {
+  flex: 1;
+}
+
+.account-wrapper {
+  position: relative;
+}
+
+.account-button {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid rgba(61, 79, 181, 0.4);
+  background: radial-gradient(circle at 30% 30%, rgba(61, 79, 181, 0.7), rgba(61, 79, 181, 0.4));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  box-shadow: 0 18px 40px rgba(1, 7, 15, 0.55);
+}
+
+.account-button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 24px 55px rgba(1, 7, 15, 0.65);
+}
+
+.account-dropdown {
+  position: absolute;
+  top: 56px;
+  right: 0;
+  min-width: 180px;
+  border-radius: 1rem;
+  background: linear-gradient(145deg, rgba(63, 64, 69, 0.95), rgba(35, 36, 40, 0.95));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 25px 60px rgba(1, 7, 15, 0.65);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  animation: dropdownFade 0.25s ease-out;
+  z-index: 20;
+}
+
+@keyframes dropdownFade {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.account-action {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: 0.85rem;
+  border: none;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  transition: background 0.25s ease, transform 0.25s ease;
+}
+
+.account-action:hover {
+  background: rgba(61, 79, 181, 0.2);
+  transform: translateX(4px);
 }
 
 /* Header Styles */
@@ -187,15 +273,15 @@
 }
 
 .song-card {
-  background: var(--color-tertiary);
+  background: linear-gradient(145deg, rgba(63, 64, 69, 0.95), rgba(32, 33, 37, 0.92));
   backdrop-filter: blur(20px);
   border-radius: 2rem;
-  box-shadow: var(--shadow-xl);
+  box-shadow: 0 45px 85px rgba(1, 7, 15, 0.7);
   padding: 3rem 2rem;
   max-width: 800px;
   margin: 0 auto;
   transition: all 0.3s ease;
-  border: 1px solid var(--color-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   position: relative;
   overflow: hidden;
   animation: cardEntrance 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s both;
@@ -221,9 +307,9 @@
   background: conic-gradient(
     from 0deg,
     transparent 0deg,
-    rgba(82, 153, 227, 0.08) 90deg,
+    rgba(61, 79, 181, 0.12) 90deg,
     transparent 180deg,
-    rgba(82, 153, 227, 0.08) 270deg,
+    rgba(61, 79, 181, 0.12) 270deg,
     transparent 360deg
   );
   animation: rotateGlow 6s linear infinite;
@@ -246,7 +332,7 @@
 }
 
 .song-card:hover {
-  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 55px 95px rgba(1, 7, 15, 0.8);
   transform: translateY(-2px);
 }
 
@@ -266,7 +352,7 @@
 
 .song-name {
   font-size: clamp(2.5rem, 6vw, 4rem);
-  color: var(--color-primary);
+  color: var(--text-primary);
   font-family: 'Georgia', serif;
   font-style: italic;
   font-weight: 300;
@@ -495,14 +581,12 @@
   border-radius: 50%;
   background: conic-gradient(
     from 0deg at 50% 50%,
-    #ffffff 0deg,
-    #a8d5ff 30deg,
-    var(--color-primary-light) 60deg,
-    var(--color-primary) 120deg,
-    var(--color-primary-dark) 180deg,
-    #1a4a7a 240deg,
-    #0a2a4a 300deg,
-    #ffffff 360deg
+    rgba(61, 79, 181, 0.95) 0deg,
+    rgba(61, 79, 181, 0.65) 90deg,
+    rgba(4, 20, 33, 0.9) 160deg,
+    rgba(61, 79, 181, 0.55) 220deg,
+    rgba(4, 20, 33, 0.95) 300deg,
+    rgba(61, 79, 181, 0.95) 360deg
   );
   animation: spinRecord 8s linear infinite;
   transform-origin: center center;
@@ -610,13 +694,13 @@
   transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   transform: translateY(0);
   cursor: pointer;
-  border: 3px solid var(--color-secondary);
-  background: var(--color-tertiary);
+  border: 1px solid rgba(61, 79, 181, 0.55);
+  background: linear-gradient(135deg, rgba(63, 64, 69, 0.95), rgba(35, 36, 40, 0.92));
   color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 22px 45px rgba(1, 7, 15, 0.65);
   position: relative;
   overflow: hidden;
 }
@@ -645,8 +729,8 @@
 
 .thumbs-button:hover:not(:disabled) {
   transform: scale(1.15);
-  box-shadow: var(--shadow-xl);
-  border-color: var(--color-primary);
+  box-shadow: 0 30px 60px rgba(1, 7, 15, 0.75);
+  border-color: rgba(61, 79, 181, 0.8);
 }
 
 .thumbs-button:hover:not(:disabled) .button-icon-wrapper {
@@ -666,32 +750,32 @@
 }
 
 .thumbs-up.selected {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
-  color: var(--color-tertiary);
-  border-color: var(--color-primary-dark);
-  box-shadow: 0 20px 40px rgba(82, 153, 227, 0.4);
+  background: linear-gradient(135deg, rgba(61, 79, 181, 0.95), rgba(61, 79, 181, 0.7));
+  color: var(--text-primary);
+  border-color: rgba(61, 79, 181, 0.8);
+  box-shadow: 0 28px 65px rgba(1, 7, 15, 0.8);
 }
 
 .thumbs-down.selected {
-  background: linear-gradient(135deg, #ef4444, #f87171);
-  color: var(--color-tertiary);
-  border-color: #dc2626;
-  box-shadow: 0 20px 40px rgba(239, 68, 68, 0.4);
+  background: linear-gradient(135deg, rgba(139, 31, 45, 0.95), rgba(217, 66, 89, 0.75));
+  color: var(--text-primary);
+  border-color: rgba(217, 66, 89, 0.75);
+  box-shadow: 0 28px 65px rgba(73, 5, 16, 0.7);
 }
 
 .thumbs-button:disabled,
 .vote-button-disabled {
-  background: var(--color-secondary) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
   color: var(--text-light) !important;
   cursor: not-allowed !important;
   opacity: 0.6 !important;
   transform: scale(1) !important;
-  border-color: var(--color-secondary-dark) !important;
+  border-color: rgba(61, 79, 181, 0.3) !important;
 }
 
 .thumbs-button:focus {
   outline: none;
-  box-shadow: 0 0 0 4px rgba(82, 153, 227, 0.3);
+  box-shadow: 0 0 0 4px rgba(61, 79, 181, 0.35);
 }
 
 /* Mobile Message */
@@ -710,14 +794,14 @@
 .nfc-status {
   margin-top: 1rem;
   padding: 1rem;
-  background: var(--color-secondary-light);
+  background: rgba(61, 79, 181, 0.18);
   border-radius: var(--radius-md);
-  border: 2px solid var(--color-primary);
+  border: 1px solid rgba(61, 79, 181, 0.45);
 }
 
 .nfc-status-text {
   font-size: 1rem;
-  color: var(--color-primary);
+  color: var(--text-primary);
   font-family: 'Georgia', serif;
   font-weight: 600;
   text-align: center;
@@ -738,8 +822,8 @@
 .status-spinner {
   width: 20px;
   height: 20px;
-  border: 2px solid var(--color-secondary-dark);
-  border-top-color: var(--color-primary);
+  border: 2px solid rgba(61, 79, 181, 0.25);
+  border-top-color: rgba(61, 79, 181, 0.65);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -767,60 +851,21 @@
 }
 
 .blob-1 {
-  width: 400px;
-  height: 400px;
-  background: var(--color-secondary);
-  top: 5rem;
-  left: 2.5rem;
-  animation: blob 7s infinite;
+  width: 380px;
+  height: 380px;
+  background: rgba(61, 79, 181, 0.4);
+  top: 4rem;
+  left: 3rem;
+  animation: blob 8s infinite;
 }
 
 .blob-2 {
-  width: 400px;
-  height: 400px;
-  background: var(--color-primary-light);
-  top: 10rem;
-  right: 2.5rem;
-  animation: blob 7s infinite 2s;
-}
-
-.blob-3 {
-  width: 400px;
-  height: 400px;
-  background: var(--color-secondary-dark);
-  bottom: -2rem;
-  left: 50%;
-  transform: translateX(-50%);
-  animation: blob 7s infinite 4s;
-}
-
-.blob-4 {
-  width: 350px;
-  height: 350px;
-  background: var(--color-primary);
-  top: 60%;
-  left: 5%;
-  animation: blobMorph 9s infinite 1.5s;
-  border-radius: 40% 60% 60% 40% / 60% 30% 70% 40%;
-}
-
-@keyframes blobMorph {
-  0%, 100% {
-    border-radius: 40% 60% 60% 40% / 60% 30% 70% 40%;
-    transform: translate(0, 0) scale(1);
-  }
-  25% {
-    border-radius: 60% 40% 40% 60% / 30% 60% 40% 70%;
-    transform: translate(25px, -25px) scale(1.15);
-  }
-  50% {
-    border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
-    transform: translate(-15px, 15px) scale(0.85);
-  }
-  75% {
-    border-radius: 30% 70% 70% 30% / 70% 40% 60% 30%;
-    transform: translate(20px, 20px) scale(1.1);
-  }
+  width: 360px;
+  height: 360px;
+  background: rgba(61, 79, 181, 0.28);
+  bottom: -3rem;
+  right: 6rem;
+  animation: blob 8s infinite 2.5s;
 }
 
 /* Animations */
@@ -864,6 +909,15 @@
 @media (max-width: 768px) {
   .voting-page {
     padding: 1rem;
+  }
+
+  .header-row {
+    margin-bottom: 1rem;
+  }
+
+  .account-button {
+    width: 44px;
+    height: 44px;
   }
   
   .vote-buttons-container {

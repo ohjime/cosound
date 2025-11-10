@@ -1,19 +1,23 @@
 /* Global CSS Variables */
 :root {
-  --color-primary: #5299E3;
-  --color-secondary: #C7E1F7;
-  --color-tertiary: #FFFFFF;
+  --color-primary: #02111B;
+  --color-secondary: #28398B;
+  --color-tertiary: #3F4045;
   
   /* Additional derived colors */
-  --color-primary-dark: #3a7bc8;
-  --color-primary-light: #6fb0f0;
-  --color-secondary-dark: #a8c9e5;
-  --color-secondary-light: #e0f0ff;
+  --color-primary-dark: #01070F;
+  --color-primary-light: #0A2E46;
+  --color-secondary-dark: #1F2D6A;
+  --color-secondary-light: #3D4FB5;
+  --color-tertiary-light: #56575C;
+  --color-glow: rgba(40, 57, 139, 0.35);
+  --surface-card: #4D4E54;
+  --surface-elevated: #55565C;
   
   /* Text colors */
-  --text-primary: #1a1a1a;
-  --text-secondary: #4b5563;
-  --text-light: #6b7280;
+  --text-primary: rgba(242, 246, 250, 0.9);
+  --text-secondary: rgba(203, 210, 224, 0.9);
+  --text-light: rgba(159, 168, 184, 0.9);
   
   /* Spacing */
   --spacing-xs: 0.25rem;
@@ -48,6 +52,8 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: var(--color-primary);
+  color: var(--text-primary);
 }
 
 /* Utility classes */

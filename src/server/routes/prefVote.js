@@ -17,66 +17,114 @@ router.get('/preferences', authenticateToken, async (req, res) => {
       .select('*')
       .eq('user_id', req.user.id)
       .single();
-
+    
     if (error && error.code !== 'PGRST116') {
-      // PGRST116 = row not found
       return res.status(400).json({ error: error.message });
     }
-
-    // Parse the preference string back to JSON object
-    let responseData = null;
-    if (data) {
-      responseData = {
-        ...data,
-        preference: JSON.parse(data.preference),
-      };
+    
+    if (!data) {
+      // No preferences yet, return defaults
+      return res.json({
+        success: true,
+        data: {
+          user_id: req.user.id,
+          preference: [0, 0, 0, 0, 0] // Default: all 0
+        }
+      });
     }
-
-    res.status(200).json({
+    
+    res.json({
       success: true,
-      data: responseData,
+      data: {
+        ...data,
+        preference: JSON.parse(data.preference) // Parse JSON string to array
+      }
     });
   } catch (err) {
     console.error('Get preferences error:', err);
-    res.status(500).json({ error: 'Failed to fetch preferences' });
+    res.status(500).json({ error: 'Failed to get preferences' });
   }
 });
 
 /**
  * POST /api/preferences
  * Create or update user's preferences
- * Body: JSON object with preference data
+ * Body: JSON object as Array [0.5, 0.8, 0.2, 1.0, 0.0]
  */
+// POST /api/preferences
 router.post('/preferences', authenticateToken, async (req, res) => {
   try {
-    const preferenceData = {
-      user_id: req.user.id,
-      preference: JSON.stringify(req.body), // Convert JSON to string for text field
-      updated_at: new Date().toISOString(),
-    };
-
-    const { data, error } = await req.supabase
+    const { preferences } = req.body
+    console.log('📥 Received body:', req.body);
+    console.log('📊 Preferences value:', preferences);
+    console.log('🔍 Is array?', Array.isArray(preferences));
+    console.log('📏 Length:', preferences?.length);
+    
+    // Validate array
+    if (!Array.isArray(preferences) || preferences.length !== 5) {
+      return res.status(400).json({ 
+        error: 'Preferences must be an array of 5 numbers' 
+      });
+    }
+    
+    // Validate each value is 0-1
+    const allValid = preferences.every(v => 
+      typeof v === 'number' && v >= 0 && v <= 1
+    );
+    
+    if (!allValid) {
+      return res.status(400).json({ 
+        error: 'Each preference must be a number between 0 and 1' 
+      });
+    }
+    
+    // Check if preferences already exist
+    const { data: existing } = await req.supabase
       .from('preferences')
-      .upsert(preferenceData, {
-        onConflict: 'user_id',
-      })
-      .select()
+      .select('*')
+      .eq('user_id', req.user.id)
       .single();
-
+    
+    let data, error;
+    
+    if (existing) {
+      // Update existing preferences
+      const result = await req.supabase
+        .from('preferences')
+        .update({
+          preference: JSON.stringify(preferences)
+        })
+        .eq('user_id', req.user.id)
+        .select()
+        .single();
+      
+      data = result.data;
+      error = result.error;
+    } else {
+      // Insert new preferences
+      const result = await req.supabase
+        .from('preferences')
+        .insert({
+          user_id: req.user.id,
+          preference: JSON.stringify(preferences)
+        })
+        .select()
+        .single();
+      
+      data = result.data;
+      error = result.error;
+    }
+    
     if (error) {
       return res.status(400).json({ error: error.message });
     }
-
-    // Parse the preference back to JSON for response
-    const responseData = {
-      ...data,
-      preference: JSON.parse(data.preference),
-    };
-
-    res.status(200).json({
+    
+    res.json({
       success: true,
-      message: 'Preferences saved successfully',
-      data: responseData,
+      data: {
+        ...data,
+        preference: JSON.parse(data.preference) // Return as array
+      }
     });
   } catch (err) {
     console.error('Save preferences error:', err);

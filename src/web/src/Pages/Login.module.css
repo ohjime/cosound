@@ -18,12 +18,12 @@
 }
 
 .login-card {
-  background: var(--color-tertiary);
-  backdrop-filter: blur(20px);
+  background: linear-gradient(145deg, rgba(77, 78, 84, 0.85), rgba(58, 59, 64, 0.82));
+  backdrop-filter: blur(24px);
   border-radius: 1.5rem;
-  box-shadow: var(--shadow-xl), 0 0 0 1px rgba(255, 255, 255, 0.5);
+  box-shadow: 0 25px 60px rgba(1, 7, 15, 0.5);
   padding: 2.5rem;
-  border: 1px solid var(--color-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   transition: all 0.5s ease;
   position: relative;
   overflow: hidden;
@@ -50,9 +50,9 @@
   background: conic-gradient(
     from 0deg,
     transparent 0deg,
-    rgba(82, 153, 227, 0.1) 90deg,
+    rgba(40, 57, 139, 0.08) 90deg,
     transparent 180deg,
-    rgba(82, 153, 227, 0.1) 270deg,
+    rgba(40, 57, 139, 0.08) 270deg,
     transparent 360deg
   );
   animation: rotateGlow 5s linear infinite;
@@ -76,7 +76,7 @@
 
 .login-card:hover {
   transform: scale(1.02);
-  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 32px 80px rgba(1, 7, 15, 0.6);
 }
 
 .login-header {
@@ -139,9 +139,9 @@
   justify-content: center;
   width: 7rem;
   height: 7rem;
-  background: linear-gradient(to bottom right, var(--color-primary), var(--color-primary-light));
+  background: linear-gradient(to bottom right, rgba(61, 79, 181, 0.95), rgba(61, 79, 181, 0.7));
   border-radius: 1.5rem;
-  box-shadow: 0 10px 30px rgba(82, 153, 227, 0.4);
+  box-shadow: 0 18px 42px rgba(46, 63, 130, 0.45);
   transition: all 0.5s ease;
   position: relative;
   z-index: 2;
@@ -186,7 +186,7 @@
 .title-word {
   display: inline-block;
   opacity: 0;
-  background: linear-gradient(to right, var(--color-primary), var(--color-primary-light));
+  background: linear-gradient(to right, rgba(61, 79, 181, 0.95), rgba(61, 79, 181, 0.7));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -303,10 +303,10 @@
   justify-content: center;
   gap: 1rem;
   padding: 1.25rem 1.5rem;
-  background: var(--color-tertiary);
-  border: 2px solid var(--color-secondary);
+  background: linear-gradient(to right, rgba(61, 79, 181, 0.85), rgba(61, 79, 181, 0.6));
+  border: 1px solid rgba(61, 79, 181, 0.5);
   border-radius: 1rem;
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 15px 35px rgba(2, 17, 27, 0.5);
   font-size: 1rem;
   font-weight: 600;
   color: var(--text-primary);
@@ -356,9 +356,9 @@
 }
 
 .login-button:hover:not(:disabled) {
-  background: linear-gradient(to right, var(--color-secondary-light), var(--color-tertiary));
-  border-color: var(--color-primary);
-  box-shadow: var(--shadow-lg);
+  background: linear-gradient(to right, rgba(61, 79, 181, 0.9), rgba(61, 79, 181, 0.75));
+  border-color: var(--color-secondary-light);
+  box-shadow: 0 18px 40px rgba(2, 17, 27, 0.5);
   transform: scale(1.02);
 }
 

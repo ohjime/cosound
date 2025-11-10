@@ -138,9 +138,9 @@
 
 .music-note {
   font-size: 3rem;
-  color: var(--color-primary);
+  color: var(--color-secondary-light);
   animation: noteBounce 1.5s ease-in-out infinite;
-  filter: drop-shadow(0 4px 8px rgba(82, 153, 227, 0.3));
+  filter: drop-shadow(0 4px 12px rgba(40, 57, 139, 0.35));
 }
 
 .music-note:nth-child(1) {
@@ -186,10 +186,10 @@
 
 .wave-bar {
   width: 8px;
-  background: linear-gradient(to top, var(--color-primary), var(--color-primary-light));
+  background: linear-gradient(to top, var(--color-secondary), var(--color-secondary-light));
   border-radius: 4px 4px 0 0;
   animation: wavePulse 1.2s ease-in-out infinite;
-  box-shadow: 0 2px 8px rgba(82, 153, 227, 0.4);
+  box-shadow: 0 2px 12px rgba(40, 57, 139, 0.4);
 }
 
 .wave-bar:nth-child(1) {
@@ -278,7 +278,7 @@
     #1a1a1a 35%,
     #1a1a1a 100%
   );
-  box-shadow: 0 0 20px rgba(82, 153, 227, 0.3);
+  box-shadow: 0 0 25px rgba(40, 57, 139, 0.35);
 }
 
 .record-loader::after {

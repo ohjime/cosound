@@ -1,7 +1,10 @@
 /* Vote Confirmation Page Styles */
 .confirmation-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, var(--color-secondary-light) 0%, var(--color-tertiary) 50%, var(--color-secondary) 100%);
+  background:
+    radial-gradient(circle at 20% 20%, rgba(61, 79, 181, 0.22), transparent 55%),
+    radial-gradient(circle at 80% 10%, rgba(61, 79, 181, 0.18), transparent 45%),
+    linear-gradient(170deg, #01070f 0%, var(--color-primary) 45%, #091621 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -22,7 +25,7 @@
   position: absolute;
   width: 4px;
   height: 4px;
-  background: var(--color-primary);
+  background: var(--color-secondary-light);
   border-radius: 50%;
   opacity: 0;
   left: var(--x);
@@ -69,7 +72,7 @@
   transform: translate(-50%, -50%);
   width: 100%;
   height: 100%;
-  border: 2px solid var(--color-primary);
+  border: 2px solid rgba(61, 79, 181, 0.35);
   border-radius: 50%;
   opacity: 0;
   animation: ripple 2s ease-out infinite;
@@ -85,14 +88,6 @@
 
 .wave:nth-child(3) {
   animation-delay: 0.8s;
-}
-
-.wave:nth-child(4) {
-  animation-delay: 1.2s;
-}
-
-.wave:nth-child(5) {
-  animation-delay: 1.6s;
 }
 
 @keyframes ripple {
@@ -115,13 +110,13 @@
 }
 
 .confirmation-card {
-  background: var(--color-tertiary);
+  background: linear-gradient(145deg, rgba(63, 64, 69, 0.95), rgba(32, 33, 37, 0.92));
   backdrop-filter: blur(20px);
   border-radius: 2rem;
-  box-shadow: var(--shadow-xl);
+  box-shadow: 0 45px 95px rgba(1, 7, 15, 0.78);
   padding: 4rem 3rem;
   margin: 0 auto;
-  border: 1px solid var(--color-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   position: relative;
   overflow: hidden;
   animation: cardEntrance 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -137,9 +132,9 @@
   background: conic-gradient(
     from 0deg,
     transparent 0deg,
-    rgba(82, 153, 227, 0.1) 90deg,
+    rgba(61, 79, 181, 0.12) 90deg,
     transparent 180deg,
-    rgba(82, 153, 227, 0.1) 270deg,
+    rgba(61, 79, 181, 0.12) 270deg,
     transparent 360deg
   );
   animation: rotateBorder 4s linear infinite;
@@ -338,7 +333,7 @@
   transform: translate(-50%, -50%);
   width: 150px;
   height: 150px;
-  border: 2px solid var(--color-primary);
+  border: 2px solid rgba(61, 79, 181, 0.35);
   border-radius: 50%;
   opacity: 0;
   animation: pulseRing 2s ease-out infinite;
@@ -364,13 +359,13 @@
 }
 
 .icon-container.positive {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
-  color: var(--color-tertiary);
+  background: linear-gradient(135deg, rgba(61, 79, 181, 0.95), rgba(61, 79, 181, 0.72));
+  color: var(--text-primary);
 }
 
 .icon-container.negative {
-  background: linear-gradient(135deg, #ef4444, #f87171);
-  color: var(--color-tertiary);
+  background: linear-gradient(135deg, rgba(139, 31, 45, 0.95), rgba(217, 66, 89, 0.75));
+  color: var(--text-primary);
 }
 
 .confirmation-title {
@@ -413,7 +408,7 @@
 .song-display {
   margin: 3rem 0;
   padding: 2rem;
-  background: var(--color-secondary-light);
+  background: rgba(61, 79, 181, 0.18);
   border-radius: var(--radius-lg);
   position: relative;
   overflow: hidden;
@@ -438,11 +433,11 @@
   padding: 2px;
   background: linear-gradient(
     45deg,
-    var(--color-primary),
-    var(--color-primary-light),
-    var(--color-secondary),
-    var(--color-primary-dark),
-    var(--color-primary)
+    rgba(61, 79, 181, 0.9),
+    rgba(61, 79, 181, 0.65),
+    rgba(139, 31, 45, 0.85),
+    rgba(61, 79, 181, 0.6),
+    rgba(61, 79, 181, 0.9)
   );
   background-size: 300% 300%;
   animation: borderFlow 3s ease infinite;
@@ -485,15 +480,15 @@
 .back-button {
   margin-top: 2rem;
   padding: 1rem 2rem;
-  background: var(--color-primary);
-  color: var(--color-tertiary);
-  border: none;
+  background: linear-gradient(135deg, rgba(61, 79, 181, 0.9), rgba(61, 79, 181, 0.65));
+  color: var(--text-primary);
+  border: 1px solid rgba(61, 79, 181, 0.55);
   border-radius: var(--radius-md);
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 24px 55px rgba(1, 7, 15, 0.65);
   position: relative;
   overflow: hidden;
   animation: buttonEntrance 0.6s ease-out 1.2s both;
@@ -531,9 +526,9 @@
 }
 
 .back-button:hover {
-  background: var(--color-primary-dark);
+  background: linear-gradient(135deg, rgba(61, 79, 181, 0.95), rgba(61, 79, 181, 0.7));
   transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 30px 70px rgba(1, 7, 15, 0.75);
 }
 
 .back-button:hover .button-shine {
@@ -561,60 +556,21 @@
 }
 
 .blob-1 {
-  width: 400px;
-  height: 400px;
-  background: var(--color-secondary);
-  top: 5rem;
-  left: 2.5rem;
-  animation: blob 7s infinite;
+  width: 360px;
+  height: 360px;
+  background: rgba(61, 79, 181, 0.32);
+  top: 6rem;
+  left: 3rem;
+  animation: blob 8s infinite;
 }
 
 .blob-2 {
-  width: 400px;
-  height: 400px;
-  background: var(--color-primary-light);
-  top: 10rem;
-  right: 2.5rem;
-  animation: blob 7s infinite 2s;
-}
-
-.blob-3 {
-  width: 400px;
-  height: 400px;
-  background: var(--color-secondary-dark);
-  bottom: -2rem;
-  left: 50%;
-  transform: translateX(-50%);
-  animation: blob 7s infinite 4s;
-}
-
-.blob-4 {
-  width: 300px;
-  height: 300px;
-  background: var(--color-primary);
-  top: 50%;
-  right: 10%;
-  animation: blobMorph 8s infinite 1s;
-  border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
-}
-
-@keyframes blobMorph {
-  0%, 100% {
-    border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
-    transform: translate(0, 0) scale(1);
-  }
-  25% {
-    border-radius: 70% 30% 30% 70% / 70% 70% 30% 30%;
-    transform: translate(20px, -20px) scale(1.1);
-  }
-  50% {
-    border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
-    transform: translate(-10px, 10px) scale(0.9);
-  }
-  75% {
-    border-radius: 30% 70% 70% 30% / 70% 30% 30% 70%;
-    transform: translate(15px, 15px) scale(1.05);
-  }
+  width: 340px;
+  height: 340px;
+  background: rgba(61, 79, 181, 0.24);
+  bottom: -3rem;
+  right: 6rem;
+  animation: blob 8s infinite 2.5s;
 }
 
 @keyframes blob {

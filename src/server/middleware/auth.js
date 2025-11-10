@@ -33,10 +33,10 @@ const authenticateToken = async (req, res, next) => {
       return res.status(401).json({ error: "Invalid or expired token" });
     }
 
-    // Get user's profile from profiles table (id, email, name)
+    // Get user's profile from profiles table (id, email, name, display_name)
     const { data: profile, error: profileError } = await userClient
       .from("profiles")
-      .select("name")
+      .select("name, display_name")
       .eq("id", user.id)
       .single();
 
@@ -47,6 +47,7 @@ const authenticateToken = async (req, res, next) => {
         id: user.id,
         email: user.email,
         name: null,
+        display_name: null,
       };
     } else {
       // Attach user info and client to request
@@ -54,6 +55,7 @@ const authenticateToken = async (req, res, next) => {
         id: user.id,
         email: user.email,
         name: profile.name,
+        display_name: profile.display_name,
       };
     }
 

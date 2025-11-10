@@ -4,8 +4,9 @@ import { AuthCallback } from "./Pages/AuthCallback";
 import Home from "./Pages/Home";
 import Vote from "./Pages/Vote";
 import VoteConfirmation from "./Pages/VoteConfirmation";
-import { Settings } from "./Pages/Settings";
 import Preferences from "./Pages/Preferences";
+import PreferencesSurvey from "./Pages/PreferencesSurvey";
+import { Settings } from "./Pages/Settings";
 import { ProtectedRoute } from "./Components/ProtectedRoute";
 
 // Layout with permanent Sidebar for authenticated routes
@@ -27,6 +28,14 @@ const router = createBrowserRouter([
   {
     path: "/auth/callback",
     element: <AuthCallback />,
+  },
+  {
+    path: "/preferences",
+    element: <Preferences />,
+  },
+  {
+    path: "/preferences/:step",
+    element: <PreferencesSurvey />,
   },
   // Public voting routes (no authentication required)
   {

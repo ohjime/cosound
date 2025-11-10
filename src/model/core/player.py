@@ -1,109 +1,58 @@
 """
-Audio player module for handling playback and transitions.
-Simplified: single OutputStream mixes up to two tracks to do a real 30s crossfade.
+Audio player module for handling playback and transitions using pygame.mixer.
+Uses pygame's Channel system to crossfade between tracks.
 """
 import threading
-import numpy as np
-import librosa
-import sounddevice as sd
+import pygame
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional
 import logging
 
-from .config import BUFFER_SIZE, DEFAULT_FADE_DURATION
+from .config import DEFAULT_FADE_DURATION
 
 logger = logging.getLogger(__name__)
 
 
 class Player:
     """
-    Minimal player that keeps a single OutputStream and mixes up to two tracks:
-    - track A: current playing (can fade out)
-    - track B: next track (fades in)
+    Audio player using pygame.mixer to handle crossfades between tracks.
+    Maintains two channels:
+    - channel 0: current playing track
+    - channel 1: next track during crossfade
     """
 
     def __init__(self, sr: int = 44100):
         self.sr = sr
-        self.stream: Optional[sd.OutputStream] = None
-        # Each track: {buffer, pos, fade_total, fade_prog, direction, name}
-        self._tracks: List[Dict] = []
         self._lock = threading.RLock()
         self._playing: Optional[str] = None
+        self._initialized = False
+        self._current_channel = 0
+        self._next_channel = 1
+        self._is_transitioning = False
+        self._transition_duration = 0.0
 
-    def _ensure_stream(self):
-        if self.stream is None:
-            self.stream = sd.OutputStream(
-                samplerate=self.sr,
-                channels=1,
-                callback=self._callback,
-                blocksize=BUFFER_SIZE,
-            )
-            self.stream.start()
-            logger.info("Audio stream started")
+    def _ensure_mixer(self):
+        """Initialize pygame mixer if not already initialized."""
+        if not self._initialized:
+            try:
+                pygame.mixer.init(frequency=self.sr, channels=1, buffer=512)
+                # Reserve 2 channels for crossfading
+                pygame.mixer.set_num_channels(2)
+                self._initialized = True
+                logger.info(f"Pygame mixer initialized at {self.sr}Hz")
+            except pygame.error as e:
+                logger.error(f"Failed to initialize pygame mixer: {e}")
+                raise
 
-    def _callback(self, outdata, frames, time, status):
-        with self._lock:
-            if not self._tracks:
-                outdata.fill(0)
-                return
-
-            mix = np.zeros(frames, dtype=np.float32)
-
-            finished_idx = []
-            for i, tr in enumerate(self._tracks):
-                buf = tr["buffer"]
-                pos = tr["pos"]
-                if pos >= len(buf):
-                    finished_idx.append(i)
-                    continue
-
-                n = min(frames, len(buf) - pos)
-                seg = buf[pos:pos + n].astype(np.float32)
-
-                # Envelope
-                if tr["direction"] == "in" and tr["fade_total"] > 0:
-                    start_g = min(1.0, tr["fade_prog"] / tr["fade_total"])
-                    end_g = min(1.0, (tr["fade_prog"] + n) / tr["fade_total"])
-                    env = np.linspace(start_g, end_g, n, endpoint=False, dtype=np.float32)
-                elif tr["direction"] == "out" and tr["fade_total"] > 0:
-                    start_g = max(0.0, 1.0 - tr["fade_prog"] / tr["fade_total"])
-                    end_g = max(0.0, 1.0 - (tr["fade_prog"] + n) / tr["fade_total"])
-                    env = np.linspace(start_g, end_g, n, endpoint=False, dtype=np.float32)
-                else:
-                    env = np.ones(n, dtype=np.float32)
-
-                mix[:n] += seg * env
-
-                tr["pos"] = pos + n
-                tr["fade_prog"] += n
-
-                # Transition completion checks
-                if tr["direction"] == "in" and tr["fade_prog"] >= tr["fade_total"]:
-                    tr["direction"] = "none"
-                if tr["direction"] == "out" and tr["fade_prog"] >= tr["fade_total"]:
-                    finished_idx.append(i)
-
-            # Remove finished tracks (from end to start)
-            for idx in reversed(finished_idx):
-                # If we remove the first (old) and second remains, mark as playing
-                removed = self._tracks.pop(idx)
-                if removed.get("name") == self._playing and self._tracks:
-                    # Make sure playing reflects the newest track if any
-                    self._playing = self._tracks[-1].get("name")
-
-            # Output mono audio
-            outdata[:, 0] = 0.0
-            outdata[:len(mix), 0] = mix
-
-    def _load_audio(self, sound: str) -> np.ndarray:
+    def _get_audio_path(self, sound: str) -> Path:
+        """Get the full path to an audio file."""
         audio_path = Path(__file__).parent.parent / ".audio" / sound
         if not audio_path.exists():
             raise FileNotFoundError(f"Sound file not found: {audio_path}")
-        # Always load/resample to player SR to avoid stream restarts
-        y, sr = librosa.load(str(audio_path), sr=self.sr, mono=True)
-        return y.astype(np.float32)
+        return audio_path
 
-    def play(self, sound: Optional[str] = None) -> None:
+    def play(self, sound: Optional[str] = None, fade_in: bool = True, fade_duration: float = 30.0) -> None:
+        """Play a sound, optionally with fade-in, stopping any current playback."""
         # Choose random file if not provided
         if sound is None:
             import random
@@ -122,83 +71,143 @@ class Player:
             sound = random.choice(files).name
 
         try:
-            y = self._load_audio(sound)
+            self._ensure_mixer()
+            audio_path = self._get_audio_path(sound)
+            
             with self._lock:
-                # Replace any existing tracks with the new one immediately
-                self._tracks = [{
-                    "buffer": y,
-                    "pos": 0,
-                    "fade_total": 0,
-                    "fade_prog": 0,
-                    "direction": "none",
-                    "name": sound,
-                }]
+                # Stop all channels
+                pygame.mixer.stop()
+                
+                # Load and play on current channel with infinite looping
+                pygame_sound = pygame.mixer.Sound(str(audio_path))
+                channel = pygame.mixer.Channel(self._current_channel)
+                
+                # Start playing with infinite loop
+                channel.play(pygame_sound, loops=-1)
+                
+                if fade_in:
+                    # Manual fade in using volume control
+                    def fade_in_volume():
+                        import time
+                        steps = 100
+                        step_duration = fade_duration / steps
+                        for i in range(steps + 1):
+                            volume = i / steps
+                            channel.set_volume(volume)
+                            time.sleep(step_duration)
+                    
+                    threading.Thread(target=fade_in_volume, daemon=True).start()
+                    logger.info(f"Now playing (fading in over {fade_duration:.1f}s): {sound} ({pygame_sound.get_length():.2f}s) [looping]")
+                else:
+                    channel.set_volume(1.0)
+                    logger.info(f"Now playing: {sound} ({pygame_sound.get_length():.2f}s) [looping]")
+                
                 self._playing = sound
-                logger.info(f"Now playing: {sound} ({len(y)/self.sr:.2f}s)")
-            self._ensure_stream()
+                
         except Exception as e:
             logger.error(f"Error loading sound {sound}: {e}")
 
-    def transition(self, sound: str, duration: float = 30.0) -> None:
-        """Crossfade to a new sound over `duration` seconds without stopping the stream."""
+    def transition(self, sound: str, duration: float = 30.0, force: bool = False) -> None:
+        """Crossfade to a new sound over `duration` seconds (in milliseconds for pygame)."""
         try:
-            y_new = self._load_audio(sound)
-            fade_samples = int(max(0.0, duration) * self.sr)
+            self._ensure_mixer()
+            audio_path = self._get_audio_path(sound)
+            
             with self._lock:
-                # Mark existing first track (if any) to fade out
-                if self._tracks:
-                    # Only the oldest (index 0) needs to fade out; allow newest to remain
-                    # Keep at most 1 old + 1 new
-                    old = self._tracks[-1]
-                    old["direction"] = "out"
-                    old["fade_total"] = fade_samples
-                    old["fade_prog"] = 0
-
-                # Add new track fading in
-                self._tracks.append({
-                    "buffer": y_new,
-                    "pos": 0,
-                    "fade_total": fade_samples,
-                    "fade_prog": 0,
-                    "direction": "in",
-                    "name": sound,
-                })
-
-                # Only keep last two tracks to keep mixer simple
-                if len(self._tracks) > 2:
-                    self._tracks = self._tracks[-2:]
-
-                # Set the new one as "playing" title
+                # If it's the same sound and not forced, just let it continue playing
+                if sound == self._playing and not force:
+                    logger.info(f"Same sound already playing: {sound}, continuing seamlessly")
+                    return
+                
+                # Prevent overlapping transitions
+                if self._is_transitioning:
+                    logger.warning(f"Transition already in progress, skipping request for {sound}")
+                    return
+                
+                # Load the new sound
+                new_sound = pygame.mixer.Sound(str(audio_path))
+                
+                # Get the current and next channels
+                current_channel = pygame.mixer.Channel(self._current_channel)
+                next_channel = pygame.mixer.Channel(self._next_channel)
+                
+                # Convert duration to seconds for volume control
+                fade_duration_sec = duration
+                
+                # Mark as transitioning
+                self._is_transitioning = True
+                self._transition_duration = duration
+                
+                # Start the new sound on the next channel with infinite looping at volume 0
+                next_channel.play(new_sound, loops=-1)
+                next_channel.set_volume(0.0)
+                
+                # Manual crossfade using volume control
+                def crossfade():
+                    import time
+                    steps = 100
+                    step_duration = fade_duration_sec / steps
+                    
+                    for i in range(steps + 1):
+                        progress = i / steps
+                        # Fade out current channel
+                        if current_channel.get_busy():
+                            current_channel.set_volume(1.0 - progress)
+                        # Fade in next channel
+                        next_channel.set_volume(progress)
+                        time.sleep(step_duration)
+                    
+                    # Ensure volumes are set correctly at the end
+                    current_channel.set_volume(0.0)
+                    next_channel.set_volume(1.0)
+                    
+                    with self._lock:
+                        self._is_transitioning = False
+                        logger.debug("Crossfade completed, ready for next transition")
+                
+                threading.Thread(target=crossfade, daemon=True).start()
+                
+                # Swap channels for next transition
+                self._current_channel, self._next_channel = self._next_channel, self._current_channel
+                
                 self._playing = sound
-
-            self._ensure_stream()
-            logger.info(f"Crossfading to: {sound} over {duration:.1f}s")
+                logger.info(f"Crossfading to: {sound} over {duration:.1f}s")
+                
         except Exception as e:
             logger.error(f"Error during transition to {sound}: {e}")
+            with self._lock:
+                self._is_transitioning = False
 
     def get_playing(self) -> Optional[str]:
+        """Get the name of the currently playing sound."""
         with self._lock:
             return self._playing
 
-    def stop(self) -> None:
+    def is_transitioning(self) -> bool:
+        """Check if a transition is currently in progress."""
         with self._lock:
-            self._tracks.clear()
+            return self._is_transitioning
+
+    def stop(self) -> None:
+        """Stop all playback and quit the mixer."""
+        with self._lock:
             self._playing = None
-        if self.stream is not None:
-            try:
-                self.stream.stop()
-                self.stream.close()
-            finally:
-                self.stream = None
-        logger.info("Audio stream stopped")
+            if self._initialized:
+                try:
+                    pygame.mixer.stop()
+                    pygame.mixer.quit()
+                    self._initialized = False
+                    logger.info("Pygame mixer stopped")
+                except Exception as e:
+                    logger.error(f"Error stopping mixer: {e}")
 
 
 # Singleton instance and module-level API for backward compatibility
 _PLAYER = Player()
 
 
-def play(sound: Optional[str] = None) -> None:
-    _PLAYER.play(sound)
+def play(sound: Optional[str] = None, fade_in: bool = True) -> None:
+    _PLAYER.play(sound, fade_in=fade_in, fade_duration=30.0)
 
 
 def transition(sound: str) -> None:
@@ -208,6 +217,10 @@ def transition(sound: str) -> None:
 
 def get_playing() -> Optional[str]:
     return _PLAYER.get_playing()
+
+
+def is_transitioning() -> bool:
+    return _PLAYER.is_transitioning()
 
 
 def stop() -> None:

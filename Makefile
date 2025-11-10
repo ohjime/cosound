@@ -1,14 +1,12 @@
 server:
 	@cd src/server \
 	 && npm install \
-	 && npm run dev -- --host \
-	 && npm start \
+	 && npm run dev -- --host
 
 web:
 	@cd src/web \
 	 && npm install \
-	 && npm run dev -- --host \
-	 && npm start \
+	 && npm run dev -- --host
 
 model:
 	@cd src/model \

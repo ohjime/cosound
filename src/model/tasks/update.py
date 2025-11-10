@@ -23,13 +23,20 @@ async def request_sound() -> Optional[str]:
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{BACKEND_URL}/api/model/currentSong",
+                f"{BACKEND_URL}/api/model/recommend",
                 timeout=5.0
             )
             if response.status_code == 200:
                 data = response.json()
+                await client.post(
+                    f"{BACKEND_URL}/api/model/currentSong",
+                    json={"song_title": data.get("recommendations", {})[0].get("title")}
+                )
                 # Extract sound title from the recommendations object
-                sound = data.get("recommendations", {}).get("title")
+                sound = data.get("recommendations", {})[0].get("title") + ".wav"
+                print()
+                print(f"Sound from backend: {sound}")
+                print()
                 logger.debug(f"Received sound from backend: {sound}")
                 return sound
             else:

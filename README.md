@@ -37,15 +37,9 @@ The project consists of three main components:
 
 #### What It Does
 
-The ML model classifies audio into 5 environmental sound categories:
+The ML model classifies audio into various environmental sound categories:
 
-1. **Rain** 🌧️
-2. **Sea Waves** 🌊
-3. **Thunderstorm** ⛈️
-4. **Wind** 💨
-5. **Crackling Fire** 🔥
-
-User preferences are collected for these 5 categories (values 0-1), which the system uses to recommend songs with matching ambient characteristics.
+User preferences are collected for these categories (values 0-1), which the system uses to recommend songs with matching ambient characteristics.
 
 #### How It Works
 

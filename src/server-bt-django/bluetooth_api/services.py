@@ -265,19 +265,30 @@ class SupabaseService:
             action = 'updated'
             create_new_session = False
 
-            if current_status == 'grace_period':
-                # Device returned during grace period - restore connection
+            # Check if user has tapped (tap = true means NFC was scanned)
+            tap_enabled = device.get('tap', False)
+
+            if current_status == 'grace_period' and tap_enabled:
+                # Device returned during grace period AND user tapped - restore connection
                 update_data['status'] = 'connected'
                 update_data['grace_period_ends_at'] = None
+                update_data['tap'] = False  # Consume the tap
                 action = 'restored'
-                logger.info(f"Device {device_mac} restored from grace period")
+                create_new_session = True
+                logger.info(f"Device {device_mac} restored from grace period (user tapped)")
 
-            elif current_status == 'disconnected':
-                # Device came back in range - reconnect and create new session
+            elif current_status == 'disconnected' and tap_enabled:
+                # Device came back in range AND user tapped - reconnect and create new session
                 update_data['status'] = 'connected'
+                update_data['tap'] = False  # Consume the tap
                 action = 'connected'
                 create_new_session = True
-                logger.info(f"Device {device_mac} reconnected")
+                logger.info(f"Device {device_mac} reconnected (user tapped)")
+            
+            elif not tap_enabled and current_status in ['disconnected', 'grace_period']:
+                # Device detected but user hasn't tapped - ignore
+                logger.debug(f"Device {device_mac} detected but tap=false, ignoring connection")
+                return {'action': 'ignored', 'reason': 'no_tap', 'device': device}
 
             # Apply update
             self.client.table('test_bt_devices')\
@@ -418,6 +429,48 @@ class SupabaseService:
             logger.error(f"Error in grace period cleanup: {e}")
 
 
+    def get_all_devices(self):
+        """
+        Get all devices from database.
+        Used for analytics calculations.
+        
+        Returns:
+            Postgrest response with all device records
+        """
+        try:
+            result = self.client.table('test_bt_devices')\
+                .select('*')\
+                .execute()
+            return result
+        except Exception as e:
+            logger.error(f"Error fetching all devices: {e}")
+            raise
+
+    def get_sessions_in_range(self, start_date: datetime, end_date: datetime):
+        """
+        Get sessions within a date range.
+        Used for analytics calculations.
+        
+        Args:
+            start_date: Start of date range
+            end_date: End of date range
+            
+        Returns:
+            Postgrest response with session records
+        """
+        try:
+            result = self.client.table('test_bt_sessions')\
+                .select('*')\
+                .gte('connected_at', start_date.isoformat())\
+                .lte('connected_at', end_date.isoformat())\
+                .order('connected_at', desc=True)\
+                .execute()
+            return result
+        except Exception as e:
+            logger.error(f"Error fetching sessions in range: {e}")
+            raise
+
+
 # Singleton instance
 _supabase_service = None
 
@@ -428,3 +481,14 @@ def get_supabase_service():
     if _supabase_service is None:
         _supabase_service = SupabaseService()
     return _supabase_service
+
+
+# Helper functions for analytics module
+def get_all_devices():
+    """Get all devices - wrapper for analytics."""
+    return get_supabase_service().get_all_devices()
+
+
+def get_sessions_in_range(start_date: datetime, end_date: datetime):
+    """Get sessions in date range - wrapper for analytics."""
+    return get_supabase_service().get_sessions_in_range(start_date, end_date)

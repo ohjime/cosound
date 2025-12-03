@@ -8,6 +8,7 @@ import VoteConfirmation from "./Pages/VoteConfirmation";
 import Preferences from "./Pages/Preferences";
 import PreferencesSurvey from "./Pages/PreferencesSurvey";
 import { Settings } from "./Pages/Settings";
+import AdminDashboard from "./Pages/AdminDashboard";
 import { ProtectedRoute } from "./Components/ProtectedRoute";
 import { useSessionValidator } from "./hooks/useSessionValidator";
 
@@ -70,6 +71,10 @@ const router = createBrowserRouter([
             <Settings />
           </ProtectedRoute>
         ),
+      },
+      {
+        path: "admin",
+        element: <AdminDashboard />,
       },
     ],
   },

@@ -10,6 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .middleware import jwt_required, scanner_api_key_required
 from .services import get_supabase_service
+from . import analytics
 
 logger = logging.getLogger(__name__)
 
@@ -231,6 +232,81 @@ def device_detected(request):
         }, status=500)
 
 
+@csrf_exempt
+@require_http_methods(["POST"])
+def nfc_tap(request):
+    """
+    Called when user taps NFC tag and browser loads.
+    Sets tap = true in device record to enable next session creation.
+
+    Body:
+        {
+            "user_id": "uuid"
+        }
+
+    Returns:
+        {
+            "success": true,
+            "message": "Tap registered, ready to detect device"
+        }
+    """
+    try:
+        body = json.loads(request.body)
+        user_id = body.get('user_id')
+
+        if not user_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'user_id is required'
+            }, status=400)
+
+        service = get_supabase_service()
+        
+        # Find user's device
+        device_result = service.client.table('test_bt_devices')\
+            .select('*')\
+            .eq('user_id', user_id)\
+            .execute()
+
+        if not device_result.data:
+            return JsonResponse({
+                'success': False,
+                'error': 'Device not registered for this user'
+            }, status=404)
+
+        device = device_result.data[0]
+
+        # Set tap = true
+        from datetime import datetime
+        service.client.table('test_bt_devices')\
+            .update({
+                'tap': True,
+                'updated_at': datetime.utcnow().isoformat()
+            })\
+            .eq('id', device['id'])\
+            .execute()
+
+        logger.info(f"NFC tap registered for user {user_id}, device {device['device_mac']}")
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Tap registered, ready to detect device',
+            'device_mac': device['device_mac']
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON in request body'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error in nfc_tap: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
 @require_http_methods(["GET"])
 def my_status(request):
     """
@@ -250,7 +326,8 @@ def my_status(request):
             "device_name": "My Laptop",
             "status": "connected|grace_period|disconnected",
             "last_seen": "2025-12-03T10:30:00Z",
-            "grace_period_ends_at": "2025-12-03T10:45:00Z" (if in grace period)
+            "grace_period_ends_at": "2025-12-03T10:45:00Z" (if in grace period),
+            "tap": false
         }
     """
     try:
@@ -273,6 +350,140 @@ def my_status(request):
 
     except Exception as e:
         logger.error(f"Error in my_status: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': 'Internal server error',
+            'message': str(e)
+        }, status=500)
+
+
+@require_http_methods(["GET"])
+def analytics_stats(request):
+    """
+    Get device and session statistics using numpy calculations.
+    
+    Returns:
+        {
+            "success": true,
+            "stats": {
+                "total_devices": 5,
+                "connected_count": 2,
+                "disconnected_count": 1,
+                "grace_period_count": 2,
+                "average_rssi": -65.5,
+                "rssi_std": 12.3,
+                "rssi_min": -85,
+                "rssi_max": -45,
+                "status_distribution": {...}
+            }
+        }
+    """
+    try:
+        stats = analytics.calculate_device_statistics()
+        
+        return JsonResponse({
+            'success': True,
+            'stats': stats
+        })
+    
+    except Exception as e:
+        logger.error(f"Error in analytics_stats: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': 'Internal server error',
+            'message': str(e)
+        }, status=500)
+
+
+@require_http_methods(["GET"])
+def analytics_charts(request):
+    """
+    Generate all analytics charts using matplotlib.
+    Returns base64-encoded PNG images.
+    
+    Query Params:
+        days: Number of days for weekly chart (default: 7)
+        session_limit: Number of sessions for duration chart (default: 20)
+    
+    Returns:
+        {
+            "success": true,
+            "charts": {
+                "weekly_sessions": "data:image/png;base64,...",
+                "rssi_distribution": "data:image/png;base64,...",
+                "session_durations": "data:image/png;base64,...",
+                "status_pie": "data:image/png;base64,..."
+            }
+        }
+    """
+    try:
+        days = int(request.GET.get('days', 7))
+        session_limit = int(request.GET.get('session_limit', 20))
+        
+        charts = {
+            'weekly_sessions': analytics.generate_weekly_session_chart(days=days),
+            'rssi_distribution': analytics.generate_rssi_distribution_chart(),
+            'session_durations': analytics.generate_session_duration_chart(limit=session_limit),
+            'status_pie': analytics.generate_status_pie_chart()
+        }
+        
+        return JsonResponse({
+            'success': True,
+            'charts': charts
+        })
+    
+    except Exception as e:
+        logger.error(f"Error in analytics_charts: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': 'Internal server error',
+            'message': str(e)
+        }, status=500)
+
+
+@require_http_methods(["GET"])
+def analytics_chart(request, chart_type):
+    """
+    Generate a single analytics chart using matplotlib.
+    
+    Path Params:
+        chart_type: weekly|rssi|duration|status
+        
+    Query Params:
+        days: For weekly chart (default: 7)
+        limit: For duration chart (default: 20)
+    
+    Returns:
+        {
+            "success": true,
+            "chart": "data:image/png;base64,..."
+        }
+    """
+    try:
+        if chart_type == 'weekly':
+            days = int(request.GET.get('days', 7))
+            chart = analytics.generate_weekly_session_chart(days=days)
+        elif chart_type == 'rssi':
+            chart = analytics.generate_rssi_distribution_chart()
+        elif chart_type == 'duration':
+            limit = int(request.GET.get('limit', 20))
+            chart = analytics.generate_session_duration_chart(limit=limit)
+        elif chart_type == 'status':
+            chart = analytics.generate_status_pie_chart()
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': f'Unknown chart type: {chart_type}. Valid types: weekly, rssi, duration, status'
+            }, status=400)
+        
+        return JsonResponse({
+            'success': True,
+            'chart': chart,
+            'type': chart_type
+        })
+    
+    except Exception as e:
+        logger.error(f"Error in analytics_chart: {e}")
         return JsonResponse({
             'success': False,
             'error': 'Internal server error',

@@ -6,27 +6,41 @@ Handles all database operations with test_bt_devices and test_bt_sessions tables
 import logging
 from datetime import datetime, timedelta
 from django.conf import settings
-from supabase import create_client, Client
+from postgrest import SyncPostgrestClient
+import os
 
 logger = logging.getLogger(__name__)
-
 
 class SupabaseService:
     """Service class for Supabase database operations."""
 
     def __init__(self):
-        """Initialize Supabase client with service role key."""
+        """Initialize Postgrest client directly without websockets."""
         if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_KEY:
             raise ValueError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be set")
 
-        self.client: Client = create_client(
-            settings.SUPABASE_URL,
-            settings.SUPABASE_SERVICE_KEY  # Service role for admin access
-        )
+        try:
+            # Use Postgrest directly - no realtime/websockets needed
+            base_url = settings.SUPABASE_URL.rstrip('/')
+            rest_url = f"{base_url}/rest/v1"
+            
+            self.client = SyncPostgrestClient(
+                base_url=rest_url,
+                headers={
+                    "apikey": settings.SUPABASE_SERVICE_KEY,
+                    "Authorization": f"Bearer {settings.SUPABASE_SERVICE_KEY}"
+                }
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize Postgrest client: {e}")
+            raiser.error(f"Failed to initialize Supabase client: {e}")
+            raise
 
     def register_device(self, user_id: str, device_mac: str, device_name: str = None):
         """
-        Register a new device for a user.
+        Register or update a device for a user.
+        If user already has a device, updates the MAC and name.
+        If new user, creates new device record.
 
         Args:
             user_id: Supabase user ID
@@ -34,10 +48,10 @@ class SupabaseService:
             device_name: Optional device name
 
         Returns:
-            dict: Device record with device_id and session_id
+            dict: Device record with device_id, session_id, and action taken
 
         Raises:
-            Exception: If device already registered or database error
+            Exception: If database error
         """
         try:
             # Check if user already has a device registered
@@ -47,39 +61,60 @@ class SupabaseService:
                 .execute()
 
             if existing.data:
-                logger.warning(f"User {user_id} already has device registered")
-                raise ValueError("Device already registered for this user")
+                # User already has device - UPDATE it with new MAC/name
+                device = existing.data[0]
+                logger.info(f"User {user_id} already has device - updating MAC to {device_mac}")
+                
+                update_data = {
+                    'device_mac': device_mac,
+                    'device_name': device_name or device.get('device_name') or 'Unknown Device',
+                    'status': 'connected',
+                    'last_seen': datetime.utcnow().isoformat(),
+                    'grace_period_ends_at': None,
+                    'updated_at': datetime.utcnow().isoformat()
+                }
 
-            # Check if MAC address is already used by another user
-            mac_check = self.client.table('test_bt_devices')\
-                .select('*')\
-                .eq('device_mac', device_mac)\
-                .execute()
+                device_result = self.client.table('test_bt_devices')\
+                    .update(update_data)\
+                    .eq('id', device['id'])\
+                    .execute()
 
-            if mac_check.data:
-                logger.warning(f"MAC {device_mac} already registered to another user")
-                raise ValueError("This device MAC is already registered")
+                device_id = device['id']
+                action = 'updated'
+                logger.info(f"Device updated: {device_id} with new MAC {device_mac}")
 
-            # Create device record
-            device_data = {
-                'user_id': user_id,
-                'device_mac': device_mac,
-                'device_name': device_name or 'Unknown Device',
-                'status': 'connected',
-                'last_seen': datetime.utcnow().isoformat(),
-                'grace_period_ends_at': None,
-                'rssi': None
-            }
+            else:
+                # Check if MAC address is already used by another user
+                mac_check = self.client.table('test_bt_devices')\
+                    .select('*')\
+                    .eq('device_mac', device_mac)\
+                    .execute()
 
-            device_result = self.client.table('test_bt_devices')\
-                .insert(device_data)\
-                .execute()
+                if mac_check.data:
+                    logger.warning(f"MAC {device_mac} already registered to another user")
+                    raise ValueError("This device MAC is already registered to another user")
 
-            if not device_result.data:
-                raise Exception("Failed to create device record")
+                # Create NEW device record
+                device_data = {
+                    'user_id': user_id,
+                    'device_mac': device_mac,
+                    'device_name': device_name or 'Unknown Device',
+                    'status': 'connected',
+                    'last_seen': datetime.utcnow().isoformat(),
+                    'grace_period_ends_at': None,
+                    'rssi': None
+                }
 
-            device_id = device_result.data[0]['id']
-            logger.info(f"Device registered: {device_id} for user {user_id}")
+                device_result = self.client.table('test_bt_devices')\
+                    .insert(device_data)\
+                    .execute()
+
+                if not device_result.data:
+                    raise Exception("Failed to create device record")
+
+                device_id = device_result.data[0]['id']
+                action = 'created'
+                logger.info(f"Device created: {device_id} for user {user_id}")
 
             # Create initial session
             session_id = self.create_session(user_id, device_mac, device_name)
@@ -87,7 +122,8 @@ class SupabaseService:
             return {
                 'device_id': device_id,
                 'session_id': session_id,
-                'device': device_result.data[0]
+                'action': action,
+                'device': device_result.data[0] if device_result.data else existing.data[0]
             }
 
         except ValueError as e:
@@ -227,6 +263,7 @@ class SupabaseService:
 
             # Handle status transitions
             action = 'updated'
+            create_new_session = False
 
             if current_status == 'grace_period':
                 # Device returned during grace period - restore connection
@@ -236,9 +273,10 @@ class SupabaseService:
                 logger.info(f"Device {device_mac} restored from grace period")
 
             elif current_status == 'disconnected':
-                # Device came back in range - reconnect
+                # Device came back in range - reconnect and create new session
                 update_data['status'] = 'connected'
                 action = 'connected'
+                create_new_session = True
                 logger.info(f"Device {device_mac} reconnected")
 
             # Apply update
@@ -247,10 +285,20 @@ class SupabaseService:
                 .eq('id', device['id'])\
                 .execute()
 
+            # Create new session if needed
+            session_id = None
+            if create_new_session:
+                session_id = self.create_session(
+                    device['user_id'],
+                    device_mac,
+                    device.get('device_name')
+                )
+
             return {
                 'action': action,
                 'device': device,
-                'previous_status': current_status
+                'previous_status': current_status,
+                'session_id': session_id
             }
 
         except Exception as e:

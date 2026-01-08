@@ -1,5 +1,5 @@
 [project]
-name = "model"
+name = "player"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -8,4 +8,8 @@ dependencies = [
     "fastapi[standard]>=0.121.1",
     "httpx>=0.27.0",
     "pygame>=2.5.0",
+    "python-dotenv>=1.2.1",
+    "questionary>=2.1.1",
+    "requests>=2.32.5",
+    "typer>=0.20.0",
 ]

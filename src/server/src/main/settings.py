@@ -11,7 +11,7 @@ os.environ["DJANGO_RUNSERVER_HIDE_WARNING"] = "true"
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-secret-key")
 DEBUG = os.getenv("DEBUG", "True") == "True"
-load_dotenv(BASE_DIR.parent.parent / ".env" / ".env")
+load_dotenv(BASE_DIR.parent.parent / "env" / ".env")
 if DEBUG:
     ALLOWED_HOSTS = str(os.getenv("DEV_HOSTS", default=["*"])).split(",")
 else:

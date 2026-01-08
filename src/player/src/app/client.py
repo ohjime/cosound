@@ -24,7 +24,7 @@ import questionary
 from app.utils import delete_last_lines
 
 BASE_DIR = Path(__file__).resolve().parents[4]
-load_dotenv(BASE_DIR / ".env" / ".env")
+load_dotenv(BASE_DIR / "env" / ".env")
 DEBUG = os.getenv("DEBUG", "True") == "True"
 CHARS = string.ascii_uppercase + string.digits
 BASE_DIR = Path(__file__).resolve().parents[3]

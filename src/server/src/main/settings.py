@@ -37,16 +37,18 @@ DEBUG = "RENDER" not in os.environ
 ALLOWED_HOSTS = []
 
 if DEBUG:
-    ALLOWED_HOSTS.extend([
-        "localhost",
-        "127.0.0.1",
-        "0.0.0.0",
-        "localhost:5173",
-        "127.0.0.1:5173",
-        "0.0.0.0:5173",
-        LOCAL_IP,
-        f"{LOCAL_IP}:5173",
-    ])
+    ALLOWED_HOSTS.extend(
+        [
+            "localhost",
+            "127.0.0.1",
+            "0.0.0.0",
+            "localhost:5173",
+            "127.0.0.1:5173",
+            "0.0.0.0:5173",
+            LOCAL_IP,
+            f"{LOCAL_IP}:5173",
+        ]
+    )
 else:
     # Production hosts from env
     prod_hosts = os.environ.get("PROD_HOSTS", "")

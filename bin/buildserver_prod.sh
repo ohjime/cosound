@@ -2,16 +2,10 @@
 
 # Build script for production deployment
 # This script:
-# 1. Set bash script permissions
 # 2. Builds Vite assets for production
 # 3. Makes Django migrations
 # 4. Runs Django migrations
 # 5. Collects static files
-
-# Set Permissions
-chmod +x bin/clean_honcho.sh
-chmod +x bin/runserver_prod.sh
-chmod +x bin/build_prod_server.sh
 
 
 set -e  # Exit on any error

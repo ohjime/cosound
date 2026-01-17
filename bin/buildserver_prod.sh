@@ -12,11 +12,14 @@ set -e  # Exit on any error
 
 echo "🏗️  Starting production build..."
 
-# Navigate to server directory
-cd "$(dirname "$0")/../src/server"
+# Note: On Render, rootDir is src/server, so we're already in the right directory
+# For local testing, navigate to server directory if not already there
+if [[ ! -f "pyproject.toml" ]]; then
+  cd "$(dirname "$0")/../src/server"
+fi
 
 # Install dependencies
-echo "📦 Installing dependencies..."
+echo "📦 Installing dependencies with uv..."
 uv sync
 
 # Build Vite assets for production

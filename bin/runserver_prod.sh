@@ -21,5 +21,9 @@ fi
 echo "Cleanup complete."
 
 echo "Starting Server..."
-cd src/server
+
+if [[ ! -f "pyproject.toml" ]]; then
+  cd src/server
+fi
+
 uv run src/main.py proc runserver --procfile procfile.prod

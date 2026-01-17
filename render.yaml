@@ -9,6 +9,7 @@ services:
     plan: free
     name: cosound-server
     runtime: python
+    rootDir: src/server
     buildCommand: './bin/buildserver_prod.sh'
     startCommand: './bin/runserver_prod.sh'
     envVars:
@@ -22,6 +23,8 @@ services:
         value: 4
       - key: PYTHON_VERSION
         value: 3.13.1
+      - key: UV_VERSION
+        value: latest
       # Add your AWS credentials as secrets in Render Dashboard
       - key: AWS_ACCESS_KEY_ID
         sync: false

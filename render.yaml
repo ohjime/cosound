@@ -9,8 +9,9 @@ services:
     plan: free
     name: cosound-server
     runtime: python
-    buildCommand: './bin/buildserver_prod.sh'
-    startCommand: './bin/runserver_prod.sh'
+    rootDir: src/server
+    buildCommand: '../../bin/buildserver_prod.sh'
+    startCommand: '../../bin/runserver_prod.sh'
     envVars:
       - key: DATABASE_URL
         fromDatabase:

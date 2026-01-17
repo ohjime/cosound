@@ -216,6 +216,7 @@ DJANGO_VITE = {
         "dev_mode": DEBUG,
         "dev_server_host": LOCAL_IP,
         "dev_server_port": 5173,
+        "manifest_path": STATIC_ROOT / "manifest.json" if not DEBUG else BASE_DIR / "vite/static/manifest.json",
     }
 }
 AUTH_PASSWORD_VALIDATORS = []

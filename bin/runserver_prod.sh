@@ -1,5 +1,7 @@
 echo "Cleaning Orphaned Django Processes..."
 
+# Added Permission to Run!
+
 # Find matching processes (exclude the grep process itself via [] trick)
 PIDS=$(ps aux | grep -E '[m]ain\.py runserver|[m]anage\.py runserver' | awk '{print $2}')
 

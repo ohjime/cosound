@@ -24,7 +24,7 @@ services:
       - key: PYTHON_VERSION
         value: 3.13.1
       - key: UV_VERSION
-        value: latest
+        value: 0.9.18
       # Add your AWS credentials as secrets in Render Dashboard
       - key: AWS_ACCESS_KEY_ID
         sync: false

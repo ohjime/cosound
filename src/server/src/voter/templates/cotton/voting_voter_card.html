@@ -1,6 +1,6 @@
 <c-vars num_votes="" join_date="" username="" user_id="" />
-<div class="stats stats-vertical sm:stats-horizontal shadow w-full">
-    <div class="stat">
+<div class="stats stats-vertical sm:stats-horizontal shadow w-full max-w-96 mx-auto">
+    <div class="stat overflow-hidden">
         <div class="stat-figure text-secondary">
             <div class="avatar online">
                 <div class="w-16 rounded-full">
@@ -8,7 +8,7 @@
                 </div>
             </div>
         </div>
-        <div class="stat-title text-lg truncate">@{{ username }}</div>
+        <div class="stat-title text-lg truncate max-w-[10rem]">@{{ username }}</div>
         <div class="stat-value text-sm">Voter</div>
         <div class="stat-desc">Joined {{ join_date }}</div>
     </div>

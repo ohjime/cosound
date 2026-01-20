@@ -7,9 +7,20 @@ from dotenv import load_dotenv
 from typing import cast
 
 BASE_DIR = Path(__file__).resolve().parents[4]
+# Load project .env when running from source; this may be missing in packaged builds.
 load_dotenv(BASE_DIR / "env" / ".env")
-DEBUG = os.getenv("DEBUG", "True") == "True"
-API_URL = cast(str, os.getenv("DEV_API_URL") if DEBUG else os.getenv("PROD_API_URL"))
+
+# Default to production mode when no DEBUG is provided so packaged apps
+# talk to the live API instead of localhost.
+DEBUG = os.getenv("DEBUG", "False") == "True"
+
+DEFAULT_DEV_API = "http://localhost:8000/api"
+DEFAULT_PROD_API = "https://cosound-server.onrender.com/api"
+
+if DEBUG:
+    API_URL = cast(str, os.getenv("DEV_API_URL", DEFAULT_DEV_API))
+else:
+    API_URL = cast(str, os.getenv("PROD_API_URL", DEFAULT_PROD_API))
 
 
 def authenticate(email: str, password: str) -> dict[str, str] | None:

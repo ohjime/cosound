@@ -7,12 +7,26 @@ from django_file_form.model_admin import FileFormAdmin
 from django.contrib.auth.models import Group
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from unfold.admin import ModelAdmin
+from unfold.admin import ModelAdmin, TabularInline, StackedInline
 from unfold.contrib.filters.admin import FieldTextFilter
 from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 
 from core.models import PlayerAccount, User, Sound, Player
 from core.forms import SoundForm
+from voter.models import Voter
+
+
+class VoterInline(StackedInline):
+    model = Voter
+
+
+class PlayerAccountInline(StackedInline):
+    model = PlayerAccount
+
+
+class PlayerInline(TabularInline):
+    model = Player
+    extra = 0
 
 
 model = django_apps.get_model("django_file_form", "TemporaryUploadedFile")
@@ -23,6 +37,7 @@ admin.site.unregister(Group)
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin, ModelAdmin):
+    inlines = [PlayerAccountInline, VoterInline]
 
     class Meta:
         model = User
@@ -51,4 +66,6 @@ class PlayerAdmin(ModelAdmin):
 
 @admin.register(PlayerAccount)
 class PlayerAccountAdmin(ModelAdmin):
-    pass
+    list_display = ["name", "manager", "created_at"]
+    list_filter = [("name", FieldTextFilter)]
+    inlines = [PlayerInline]

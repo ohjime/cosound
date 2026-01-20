@@ -1,7 +1,10 @@
 player:
 ifeq ($(run),clean)
 	@echo "Cleaning Player Build..."
-	@rm -rf build/player
+	@rm -rf build/player.app/
+	@rm -rf src/player/build/
+	@rm -rf src/player/src/build/
+	@rm -rf src/player/media/
 	@echo "Deleting Python Cache..."
 	@cd src/player \
 		&& find . -type d -name "__pycache__" -exec rm -rf {} +
@@ -10,9 +13,17 @@ else ifdef build
 	@echo "Building Player for $(build)..."
 	@cd src/player \
 		&& uv sync
-	@mkdir -p ../../build/player
+	@rm -rf src/player/media/
 	@cd src/player \
-		&& uv run flet build $(build) --output ../../build/player/$(build)
+		&& uv run flet build $(build)
+	if [ "$(build)" = "macos" ]; then \
+			rm -rf build/player.app; \
+			mkdir -p build; \
+			cp -R src/player/build/macos/player.app build/; \
+			rm -rf src/player/build; \
+			rm -rf src/player/src/build; \
+			fi
+	@echo "Build completed in ./build/"
 else ifdef run
 	@echo "Running command in Player Environment..."
 	@cd src/player \

@@ -32,6 +32,9 @@ class PlayerAccount(db_models.Model):  # Database Class
     created_at = db_models.DateTimeField(auto_now_add=True)
     updated_at = db_models.DateTimeField(auto_now=True)
 
+    def __str__(self):
+        return self.name
+
 
 class SoundType(db_models.TextChoices):  # Data Class
 
@@ -69,6 +72,9 @@ class Sound(db_models.Model):  # Database Class
     created_at = db_models.DateTimeField(auto_now_add=True)
     updated_at = db_models.DateTimeField(auto_now=True)
 
+    def __str__(self):
+        return self.title
+
     def save(self, *args, **kwargs):
         if not self.features:
             classifier_path = settings.COSOUND_SOUND_CLASSIFICATION
@@ -99,6 +105,9 @@ class Player(db_models.Model):  # Database Class
     account = db_models.ForeignKey(PlayerAccount, on_delete=db_models.CASCADE)
     token = db_models.CharField(max_length=64, unique=True, editable=False)
     name = db_models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.name
 
     def save(self, *args, **kwargs):
         if not self.token:

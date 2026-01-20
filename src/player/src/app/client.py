@@ -24,11 +24,23 @@ import questionary
 from app.utils import delete_last_lines
 
 BASE_DIR = Path(__file__).resolve().parents[4]
+# Load project .env when running from source; this may be missing in packaged builds.
 load_dotenv(BASE_DIR / "env" / ".env")
-DEBUG = os.getenv("DEBUG", "True") == "True"
+
+# Default to production mode when no DEBUG is provided so packaged apps
+# talk to the live API instead of localhost.
+DEBUG = os.getenv("DEBUG", "False") == "True"
 CHARS = string.ascii_uppercase + string.digits
+
+DEFAULT_DEV_API = "http://localhost:8000/api"
+DEFAULT_PROD_API = "https://cosound-server.onrender.com/api"
+
+if DEBUG:
+    API_URL = cast(str, os.getenv("DEV_API_URL", DEFAULT_DEV_API))
+else:
+    API_URL = cast(str, os.getenv("PROD_API_URL", DEFAULT_PROD_API))
+
 BASE_DIR = Path(__file__).resolve().parents[3]
-API_URL = cast(str, os.getenv("DEV_API_URL") if DEBUG else os.getenv("PROD_API_URL"))
 MEDIA_PATH = Path(__file__).parent.parent.parent / "media"
 MANIFEST_PATH = Path(__file__).parent.parent.parent / "manifest.json"
 

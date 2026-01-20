@@ -50,7 +50,7 @@
         {% endif %}
         <c-voting-buttons upvote="0" last_upvoted="{{ last_vote_timestamp|date:'c' }}" />
         {% if voter_data %}
-            <div class="pt-4 pb-16">
+            <div class="pt-4 pb-16 max-w-96">
                 <c-voting-voter-card num_votes="{{ voter_data.num_votes }}"
                                      join_date="{{ voter_data.join_date }}"
                                      username="{{ voter_data.username }}"
@@ -61,11 +61,7 @@
 {% elif success %}
     <div class="flex flex-col justify-center items-center h-full gap-8">
         <div class="flex flex-col gap-4 w-full">
-            <div class="flex justify-center items-center">
-                <img src="https://zfcthk.com/wp-content/uploads/2022/07/dummy-logo-4b.png"
-                     alt="logo"
-                     class="max-w-32 object-contain">
-            </div>
+            <div class="flex justify-center items-center text-2xl font-semibold font-mono">cosound</div>
             <div class="flex flex-row justify-center items-center gap-4 text-sm text-gray-600 dark:text-gray-300">
                 <img src="https://www.ualberta.ca/en/toolkit/media-library/homepage-assets/ua_logo_green_rgb.png"
                      alt="clientLogo"

@@ -13,6 +13,9 @@ class Voter(db_models.Model):  # Database Class
     created_at = db_models.DateTimeField(auto_now_add=True)
     updated_at = db_models.DateTimeField(auto_now=True)
 
+    def __str__(self):
+        return str(self.user)
+
 
 class Vote(db_models.Model):  # Database Class
 
@@ -28,3 +31,6 @@ class Vote(db_models.Model):  # Database Class
     value = db_models.IntegerField()
     created_at = db_models.DateTimeField(auto_now_add=True)
     updated_at = db_models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.voter} voted {self.value} for {self.player}"

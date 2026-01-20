@@ -220,6 +220,10 @@ if not DEBUG:
 FILE_FORM_UPLOAD_DIR = "file-form-uploads"
 FILE_FORM_MUST_LOGIN = True  # Require authentication for uploads
 
+# Upload size limit - must be >= chunk size (default 2.5MB)
+# See: https://mbraak.github.io/django-file-form/details/#production
+DATA_UPLOAD_MAX_MEMORY_SIZE = 3 * 1024 * 1024  # 3MB (slightly above 2.5MB chunk size)
+
 # Tell Django to copy static assets into a path called `staticfiles` (for Render)
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATIC_URL = "/static/"
@@ -262,6 +266,18 @@ DATABASES = {
         conn_max_age=600,
     )
 }
+
+# Cache configuration
+# Use database cache for production (works with multiple gunicorn workers)
+# Local-memory cache doesn't work with multi-process servers like gunicorn
+# See: https://github.com/mbraak/django-file-form/issues/574
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "django_cache",
+    }
+}
+
 TASKS = {
     "default": {
         "BACKEND": "django_tasks.backends.database.DatabaseBackend",

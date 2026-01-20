@@ -37,6 +37,10 @@ uv run src/main.py makemigrations
 echo "🔄 Running migrations..."
 uv run src/main.py migrate
 
+# Create cache table for django-file-form (required for multi-worker gunicorn)
+echo "🗄️ Creating cache table..."
+uv run src/main.py createcachetable
+
 # Collect static files
 echo "📂 Collecting static files..."
 uv run src/main.py collectstatic --noinput

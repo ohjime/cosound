@@ -74,7 +74,7 @@ class Sound(db_models.Model):  # Database Class
             classifier_path = settings.COSOUND_SOUND_CLASSIFICATION
             try:
                 classifier: SoundClassifier = import_string(classifier_path)
-                self.features = classifier.classify(self.file)
+                self.features = classifier.classify()
             except ImportError as e:
                 raise ImportError(
                     f"Cosound Core: Could not import sound classifier '{classifier_path}': {e}"

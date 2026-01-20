@@ -10,7 +10,7 @@ class SoundClassifier(ABC):
 
     @staticmethod
     @abstractmethod
-    def classify(file) -> list[float]:
+    def classify() -> list[float]:
         pass
 
 
@@ -18,7 +18,7 @@ class RandomSoundClassifier(SoundClassifier):
     dimension = 5
 
     @staticmethod
-    def classify(file):
+    def classify() -> list[float]:
         vector = np.zeros(RandomSoundClassifier.dimension)
         for i in range(RandomSoundClassifier.dimension):
             vector[i] = random.uniform(0, 1)

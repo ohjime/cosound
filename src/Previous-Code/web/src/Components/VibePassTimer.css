@@ -1,0 +1,353 @@
+/* ============================================
+   VIBE PASS TIMER - Modern Glassmorphism Design
+   ============================================ */
+
+.vibe-timer {
+  position: fixed;
+  z-index: 99999;
+  transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+  cursor: pointer;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  user-select: none;
+  pointer-events: auto;
+}
+
+/* ============================================
+   EXPANDED STATE (Top-Right Corner)
+   ============================================ */
+
+.vibe-timer.expanded {
+  top: 20px;
+  right: 20px;
+  transform: none;
+  width: 280px;
+  height: auto;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 24px;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset,
+    0 4px 16px rgba(99, 102, 241, 0.2);
+  animation: slideInRight 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+}
+
+@keyframes slideInRight {
+  0% {
+    opacity: 0;
+    transform: translateX(100px) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* ============================================
+   COLLAPSED STATE (Top-right corner, compact)
+   ============================================ */
+
+.vibe-timer.collapsed {
+  top: 20px;
+  right: 20px;
+  transform: none;
+  width: 72px;
+  height: 72px;
+  background: rgba(99, 102, 241, 0.15);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 50%;
+  box-shadow: 
+    0 4px 16px rgba(99, 102, 241, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+  animation: slideInRight 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+}
+
+.vibe-timer.expanded:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.15) inset,
+    0 6px 20px rgba(99, 102, 241, 0.3);
+  transform: translateY(-2px);
+}
+
+.vibe-timer.collapsed:hover {
+  transform: scale(1.08);
+  background: rgba(99, 102, 241, 0.25);
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow: 
+    0 6px 24px rgba(99, 102, 241, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.15) inset;
+}
+
+/* ============================================
+   EXPANDED CONTENT
+   ============================================ */
+
+.timer-expanded {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 48px 32px;
+  color: white;
+}
+
+/* Header Badge */
+.timer-header {
+  margin-bottom: 36px;
+  animation: fadeInDown 0.6s ease-out 0.2s both;
+}
+
+.pass-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  padding: 8px 20px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Progress Circle */
+.timer-circle {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  margin-bottom: 28px;
+  animation: scaleIn 0.7s ease-out 0.3s both;
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.progress-ring {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.progress-circle {
+  transition: stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.3));
+}
+
+/* Time Text */
+.timer-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.minutes {
+  font-size: 64px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -2px;
+  display: block;
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.2);
+}
+
+.unit {
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0.7;
+  letter-spacing: 1px;
+  margin-top: 4px;
+  text-transform: lowercase;
+}
+
+/* Time Label */
+.timer-label {
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0.75;
+  margin-bottom: 24px;
+  animation: fadeIn 0.6s ease-out 0.5s both;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 0.75; }
+}
+
+/* Divider */
+.divider {
+  width: 60px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.2);
+  margin-bottom: 24px;
+  animation: expandWidth 0.6s ease-out 0.6s both;
+}
+
+@keyframes expandWidth {
+  from {
+    width: 0;
+    opacity: 0;
+  }
+  to {
+    width: 60px;
+    opacity: 1;
+  }
+}
+
+/* Now Playing */
+.now-playing {
+  text-align: center;
+  animation: fadeInUp 0.6s ease-out 0.7s both;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.playing-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2.5px;
+  opacity: 0.5;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.song-name {
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.3px;
+}
+
+/* Audio Bars */
+.audio-bars {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 28px;
+}
+
+.bar {
+  width: 3px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 2px;
+  animation: audioWave 1.2s ease-in-out infinite;
+}
+
+.bar:nth-child(1) { animation-delay: 0s; height: 10px; }
+.bar:nth-child(2) { animation-delay: 0.15s; height: 14px; }
+.bar:nth-child(3) { animation-delay: 0.3s; height: 18px; }
+.bar:nth-child(4) { animation-delay: 0.45s; height: 12px; }
+
+@keyframes audioWave {
+  0%, 100% {
+    transform: scaleY(0.5);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scaleY(1.5);
+    opacity: 1;
+  }
+}
+
+/* ============================================
+   COLLAPSED CONTENT
+   ============================================ */
+
+.timer-collapsed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: white;
+}
+
+.collapsed-badge {
+  text-align: center;
+}
+
+.collapsed-time {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -1px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.collapsed-unit {
+  font-size: 9px;
+  font-weight: 600;
+  opacity: 0.8;
+  margin-top: 2px;
+  letter-spacing: 0.5px;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 640px) {
+  .vibe-timer.expanded {
+    width: 300px;
+    height: 440px;
+  }
+  
+  .vibe-timer.collapsed {
+    width: 70px;
+    height: 70px;
+    top: 16px;
+    left: 16px;
+  }
+  
+  .timer-circle {
+    width: 140px;
+    height: 140px;
+  }
+  
+  .minutes {
+    font-size: 56px;
+  }
+  
+  .collapsed-time {
+    font-size: 22px;
+  }
+}

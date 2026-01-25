@@ -1,3 +1,4 @@
+{% load static %}
 {% if requires_login %}
     <div class="flex items-center justify-center h-full opacity-50 blur-sm pointer-events-none"
          x-data
@@ -17,9 +18,13 @@
         </div>
     </div>
 {% elif rate_limited %}
-    <div class="flex flex-col justify-center items-center h-full gap-8">
+    <div class="flex flex-col justify-center items-center h-full gap-10">
         <div class="flex flex-col gap-4 w-full">
-            <div class="flex justify-center items-center text-2xl font-semibold font-mono">cosound</div>
+            <div class="flex justify-center items-center pb-5">
+                <img src="{% static 'core/img/logo.png' %}"
+                     alt="cosound"
+                     class="h-24 object-contain drop-shadow-md">
+            </div>
             <div class="flex flex-row justify-center items-center gap-4 text-sm text-gray-600 dark:text-gray-300">
                 <img src="https://www.ualberta.ca/en/toolkit/media-library/homepage-assets/ua_logo_green_rgb.png"
                      alt="clientLogo"
@@ -32,36 +37,59 @@
             </div>
         </div>
         {% if layers %}
-            <c-voting-cosound>
-                {% for layer in layers %}
-                    <c-voting-cosound-layer id="{{ layer.id }}"
-                                            layer_type="{{ layer.layer_type }}"
-                                            gain_level="{{ layer.gain_level }}"
-                                            sound_name="{{ layer.sound_name }}"
-                                            recording_artist="{{ layer.recording_artist }}"
-                                            artwork_url="{{ layer.artwork_url }}" />
-                {% endfor %}
-            </c-voting-cosound>
-            <div class="flex w-full justify-center gap-2 pb-4">
-                {% for layer in layers %}
-                    <a href="#{{ layer.id }}" class="btn btn-primary btn-soft btn-md btn-circle">{{ forloop.counter }}</a>
-                {% endfor %}
+            <div class="flex items-center justify-center gap-4 w-full">
+                {% comment %} Left Arrow {% endcomment %}
+                <div class="text-gray-400 dark:text-gray-500">
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         height="32px"
+                         viewBox="0 -960 960 960"
+                         width="32px"
+                         fill="currentColor">
+                        <path d="M560-240 320-480l240-240 56 56-184 184 184 184-56 56Z" />
+                    </svg>
+                </div>
+                <c-voting-cosound>
+                    {% for layer in layers %}
+                        <c-voting-cosound-layer id="{{ layer.id }}"
+                                                layer_type="{{ layer.layer_type }}"
+                                                gain_level="{{ layer.gain_level }}"
+                                                sound_name="{{ layer.sound_name }}"
+                                                recording_artist="{{ layer.recording_artist }}"
+                                                artwork_url="{{ layer.artwork_url }}" />
+                    {% endfor %}
+                </c-voting-cosound>
+                {% comment %} Right Arrow {% endcomment %}
+                <div class="text-gray-400 dark:text-gray-500">
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         height="32px"
+                         viewBox="0 -960 960 960"
+                         width="32px"
+                         fill="currentColor">
+                        <path d="M504-480 320-664l56-56 240 240-240 240-56-56 184-184Z" />
+                    </svg>
+                </div>
             </div>
         {% endif %}
-        <c-voting-buttons upvote="0" last_upvoted="{{ last_vote_timestamp|date:'c' }}" />
+        <c-voting-buttons upvote="0"
+                          last_upvoted="{{ last_vote_timestamp|date:'c' }}"
+                          avatar_url="{{ voter_data.avatar_url }}" />
         {% if voter_data %}
-            <div class="pt-4 pb-16 max-w-96">
-                <c-voting-voter-card num_votes="{{ voter_data.num_votes }}"
-                                     join_date="{{ voter_data.join_date }}"
-                                     username="{{ voter_data.username }}"
-                                     user_id="{{ voter_data.user_id }}" />
+            <div class=" max-w-96">
+                <c-voting-voter-card votes_here="{{ voter_data.votes_here }}"
+                                     total_votes="{{ voter_data.total_votes }}"
+                                     join_date_iso="{{ voter_data.join_date_iso }}" />
             </div>
         {% endif %}
+        <c-voting-other-voters />
     </div>
 {% elif success %}
     <div class="flex flex-col justify-center items-center h-full gap-8">
         <div class="flex flex-col gap-4 w-full">
-            <div class="flex justify-center items-center text-2xl font-semibold font-mono">cosound</div>
+            <div class="flex justify-center items-center pt-10 pb-5">
+                <img src="{% static 'core/img/logo2.png' %}"
+                     alt="cosound"
+                     class="h-24 object-contain drop-shadow">
+            </div>
             <div class="flex flex-row justify-center items-center gap-4 text-sm text-gray-600 dark:text-gray-300">
                 <img src="https://www.ualberta.ca/en/toolkit/media-library/homepage-assets/ua_logo_green_rgb.png"
                      alt="clientLogo"
@@ -74,31 +102,50 @@
             </div>
         </div>
         {% if layers %}
-            <c-voting-cosound>
-                {% for layer in layers %}
-                    <c-voting-cosound-layer id="{{ layer.id }}"
-                                            layer_type="{{ layer.layer_type }}"
-                                            gain_level="{{ layer.gain_level }}"
-                                            sound_name="{{ layer.sound_name }}"
-                                            recording_artist="{{ layer.recording_artist }}"
-                                            artwork_url="{{ layer.artwork_url }}" />
-                {% endfor %}
-            </c-voting-cosound>
-            <div class="flex w-full justify-center gap-2 pb-4">
-                {% for layer in layers %}
-                    <a href="#{{ layer.id }}" class="btn btn-primary btn-soft btn-md btn-circle">{{ forloop.counter }}</a>
-                {% endfor %}
+            <div class="flex items-center justify-center gap-4 w-full">
+                {% comment %} Left Arrow {% endcomment %}
+                <div class="text-gray-400 dark:text-gray-500">
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         height="32px"
+                         viewBox="0 -960 960 960"
+                         width="32px"
+                         fill="currentColor">
+                        <path d="M560-240 320-480l240-240 56 56-184 184 184 184-56 56Z" />
+                    </svg>
+                </div>
+                <c-voting-cosound>
+                    {% for layer in layers %}
+                        <c-voting-cosound-layer id="{{ layer.id }}"
+                                                layer_type="{{ layer.layer_type }}"
+                                                gain_level="{{ layer.gain_level }}"
+                                                sound_name="{{ layer.sound_name }}"
+                                                recording_artist="{{ layer.recording_artist }}"
+                                                artwork_url="{{ layer.artwork_url }}" />
+                    {% endfor %}
+                </c-voting-cosound>
+                {% comment %} Right Arrow {% endcomment %}
+                <div class="text-gray-400 dark:text-gray-500">
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         height="32px"
+                         viewBox="0 -960 960 960"
+                         width="32px"
+                         fill="currentColor">
+                        <path d="M504-480 320-664l56-56 240 240-240 240-56-56 184-184Z" />
+                    </svg>
+                </div>
             </div>
         {% endif %}
-        <c-voting-buttons upvote="{{ vote.value }}" last_upvoted="{{ vote.created_at|date:'c' }}" />
+        <c-voting-buttons upvote="{{ vote.value }}"
+                          last_upvoted="{{ vote.created_at|date:'c' }}"
+                          avatar_url="{{ voter_data.avatar_url }}" />
         {% if voter_data %}
-            <div class="pt-4 pb-16">
-                <c-voting-voter-card num_votes="{{ voter_data.num_votes }}"
-                                     join_date="{{ voter_data.join_date }}"
-                                     username="{{ voter_data.username }}"
-                                     user_id="{{ voter_data.user_id }}" />
+            <div class=" max-w-96">
+                <c-voting-voter-card votes_here="{{ voter_data.votes_here }}"
+                                     total_votes="{{ voter_data.total_votes }}"
+                                     join_date_iso="{{ voter_data.join_date_iso }}" />
             </div>
         {% endif %}
+        <c-voting-other-voters />
     </div>
 {% else %}
     <div class="flex items-center justify-center h-full">

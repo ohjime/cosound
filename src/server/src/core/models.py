@@ -101,7 +101,7 @@ class Sound(db_models.Model):  # Database Class
 class Player(db_models.Model):  # Database Class
 
     library = db_models.ManyToManyField(Sound, blank=True)
-    playing = SchemaField(schema=Cosound, default=Cosound())
+    playing: Cosound = SchemaField(default=Cosound)
     account = db_models.ForeignKey(PlayerAccount, on_delete=db_models.CASCADE)
     token = db_models.CharField(max_length=64, unique=True, editable=False)
     name = db_models.CharField(max_length=255)

@@ -1,12 +1,16 @@
-<div class="relative" 
+<div class="relative"
+    {# djlint:off #}
      x-data="{
         type: 'Loading...',
         gain: '--',
         sound: '',
         artist: '',
+        liked: false,
+        activeItem: null,
 
         updateText() {
-            const el = $refs.carousel;
+            const el = this.$refs.carousel;
+            if (!el) return;
             const items = el.getElementsByClassName('carousel-item');
             
             // Exact same math as your original script
@@ -18,33 +22,65 @@
             if (index < 0) index = 0;
             if (index >= items.length) index = items.length - 1;
 
-            const activeItem = items[index];
+            this.activeItem = items[index];
 
-            if (activeItem) {
-                this.type = activeItem.dataset.layerType;
-                this.gain = activeItem.dataset.gain;
-                this.sound = activeItem.dataset.soundName;
-                this.artist = activeItem.dataset.recordingArtist;
+            if (this.activeItem) {
+                this.type = this.activeItem.dataset.layerType;
+                this.gain = this.activeItem.dataset.gain;
+                this.sound = this.activeItem.dataset.soundName;
+                this.artist = this.activeItem.dataset.recordingArtist;
+                this.liked = this.activeItem.dataset.liked === 'true';
             }
+        },
+
+        toggleLike() {
+            this.liked = !this.liked;
+            if (this.activeItem) {
+                this.activeItem.dataset.liked = this.liked.toString();
+            }
+        },
+
+        init() {
+            // Reset scroll position to first item on load
+            this.$nextTick(() => {
+                const el = this.$refs.carousel;
+                if (el) {
+                    el.scrollLeft = 0;
+                    this.updateText();
+                }
+            });
         }
      }"
-     x-init="updateText()"
-     @hashchange.window="setTimeout(() => updateText(), 100)">
-
+    {# djlint:on #}
+    x-init="init()"
+    @hashchange.window="setTimeout(() => updateText(), 100)">
     <div class="carousel-texts absolute inset-0 z-10 pointer-events-none text-white text-shadow-lg font-bold p-4 flex flex-col justify-between">
-        <div class="text-left">
-            <h2 class="text-2xl" x-text="type"></h2>
-            <h5 class="text-md">Gain: <span x-text="gain"></span></h5>
+        <div class="flex justify-between items-start">
+            <div class="text-left">
+                <h2 class="text-2xl" x-text="type"></h2>
+                <h5 class="text-md">
+                    Gain: <span x-text="gain"></span>
+                </h5>
+            </div>
+            <button @click="toggleLike()"
+                    class="pointer-events-auto p-2 transition-transform active:scale-90"
+                    :aria-label="liked ? 'Unlike' : 'Like'">
+                <svg xmlns="http://www.w3.org/2000/svg"
+                     class="w-8 h-8 transition-colors duration-200"
+                     :class="liked ? 'text-red-500 fill-red-500' : 'text-white fill-transparent'"
+                     viewBox="0 0 24 24"
+                     stroke="currentColor"
+                     stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+            </button>
         </div>
         <div class="text-right">
             <h2 class="text-2xl" x-text="sound"></h2>
             <h5 class="text-lg opacity-90" x-text="artist"></h5>
         </div>
     </div>
-
-    <div x-ref="carousel" 
+    <div x-ref="carousel"
          @scroll.debounce.5ms="updateText()"
-         class="carousel max-w-sm aspect-square rounded-box">
-        {{ slot }}
-    </div>
+         class="carousel max-w-sm aspect-square rounded-box">{{ slot }}</div>
 </div>

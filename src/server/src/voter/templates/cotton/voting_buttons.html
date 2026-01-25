@@ -1,8 +1,8 @@
-<c-vars upvote="0" last_upvoted="Never" />
+<c-vars upvote="0" last_upvoted="Never" avatar_url="" />
 <div class="flex flex-col items-center gap-3"
-     x-data="votingData('{{ upvote }}', '{{ last_upvoted }}')">
+     x-data="votingData('{{ upvote }}', '{{ last_upvoted }}', '{{ avatar_url }}')">
     <div class="flex flex-row items-center justify-center gap-8">
-        <button class="flex h-14 w-14 items-center justify-center rounded-full text-base-300-content/80 transition-all active:scale-95 bg-base-300/90 hover:bg-base-300/80 active:bg-base-300/100">
+        <button class="flex h-17 w-17 items-center justify-center rounded-full text-base-300-content/80 transition-all active:scale-95 bg-base-300/90 hover:bg-base-300/80 active:bg-base-300/100">
             <svg xmlns="http://www.w3.org/2000/svg"
                  height="24px"
                  class="h-9 w-9"
@@ -18,7 +18,7 @@
                 <defs>
                 <path id="circlePath" d="M 50, 50 m -36, 0 a 36,36 0 1,1 72,0 a 36,36 0 1,1 -72,0" />
                 </defs>
-                <text class="font-bold text-[8px] uppercase tracking-[0.15em]" :class="{ 'fill-success': upvote === 1, 'fill-error': upvote === -1, 'fill-base-content': upvote === 0 }">
+                <text class="font-bold text-[8px] uppercase tracking-[0.15em]" :class="{ 'fill-success': upvote === 1, 'fill-error': upvote === -1, 'fill-primary': upvote === 0 && timerFinished, 'fill-base-content': upvote === 0 && !timerFinished }">
                 <textPath xlink:href="#circlePath" startOffset="0%" text-anchor="middle">
                 </textPath>
                 <textPath xlink:href="#circlePath" startOffset="25%" text-anchor="middle">
@@ -33,39 +33,53 @@
             </svg>
             <button @click="handleClick()"
                     :disabled="upvote !== 0 || !timerFinished"
-                    :class="{ 'bg-error text-error-content cursor-not-allowed': upvote === -1, 'bg-success text-success-content cursor-not-allowed': upvote === 1, 'bg-neutral text-neutral-content cursor-not-allowed': upvote === 0 && !timerFinished, 'bg-primary text-primary-content hover:bg-primary/90': upvote === 0 && timerFinished }"
+                    :class="{ 'bg-error': upvote === -1, 'bg-success': upvote === 1, 'bg-neutral': upvote === 0 && !timerFinished, 'bg-primary hover:bg-primary/90': upvote === 0 && timerFinished }"
                     class="relative z-10 flex h-20 w-20 items-center justify-center rounded-full transition-all active:scale-95 disabled:active:scale-100 ring-4 ring-base-100">
+                <!-- Avatar shown behind timer during countdown -->
+                <template x-if="avatarUrl && upvote === 0 && !timerFinished">
+                    <img :src="avatarUrl"
+                         alt="User avatar"
+                         class="absolute h-17 w-17 rounded-full object-cover opacity-70">
+                </template>
+                <!-- Timer overlay with semi-transparent background -->
                 <span x-show="upvote === 0 && !timerFinished"
-                      class="font-mono text-3xl font-bold"
+                      class="relative font-mono text-3xl font-bold text-neutral-content drop-shadow-md"
                       x-text="totalSeconds"></span>
-                <svg x-show="upvote === 0 && timerFinished"
-                     xmlns="http://www.w3.org/2000/svg"
-                     height="32px"
-                     viewBox="0 -960 960 960"
-                     width="32px"
-                     fill="currentColor"
-                     class="h-9 w-9">
-                    <path d="M480-160q-134 0-227-93t-93-227q0-134 93-227t227-93q69 0 132 28.5T720-690v-110h80v240H560v-80h135q-44-51-103.5-80.5T480-720q-100 0-170 70t-70 170q0 100 70 170t170 70q77 0 139-44t87-116h84q-28 106-114 173t-196 67Z" />
-                </svg>
-                <svg x-show="upvote === 1"
-                     xmlns="http://www.w3.org/2000/svg"
-                     class="h-9 w-9"
-                     viewBox="0 0 24 24"
-                     fill="currentColor">
-                    <path d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-1.91l-.01-.01L23 10z" />
-                </svg>
-                <svg x-show="upvote === -1"
-                     xmlns="http://www.w3.org/2000/svg"
-                     height="24px"
-                     viewBox="0 -960 960 960"
-                     width="24px"
-                     fill="currentColor"
-                     class="h-9 w-9">
-                    <path d="M240-840h440v520L400-40l-50-50q-7-7-11.5-19t-4.5-23v-14l44-174H120q-32 0-56-24t-24-56v-80q0-7 2-15t4-15l120-282q9-20 30-34t44-14Zm360 80H240L120-480v80h360l-54 220 174-174v-406Zm0 406v-406 406Zm80 34v-80h120v-360H680v-80h200v520H680Z" />
-                </svg>
+                <!-- Avatar when vote is cast or ready to vote -->
+                <template x-if="avatarUrl && upvote !== 0">
+                    <img :src="avatarUrl" alt="User avatar" class="h-17 w-17 rounded-full object-cover">
+                </template>
+                <template x-if="upvote === 0 && timerFinished">
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         height="32px"
+                         viewBox="0 -960 960 960"
+                         width="32px"
+                         fill="currentColor"
+                         class="h-9 w-9 text-primary-content">
+                        <path d="M480-160q-134 0-227-93t-93-227q0-134 93-227t227-93q69 0 132 28.5T720-690v-110h80v240H560v-80h135q-44-51-103.5-80.5T480-720q-100 0-170 70t-70 170q0 100 70 170t170 70q77 0 139-44t87-116h84q-28 106-114 173t-196 67Z" />
+                    </svg>
+                </template>
+                <template x-if="!avatarUrl && upvote === 1">
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         class="h-9 w-9 text-success-content"
+                         viewBox="0 0 24 24"
+                         fill="currentColor">
+                        <path d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-1.91l-.01-.01L23 10z" />
+                    </svg>
+                </template>
+                <template x-if="!avatarUrl && upvote === -1">
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         height="24px"
+                         viewBox="0 -960 960 960"
+                         width="24px"
+                         fill="currentColor"
+                         class="h-9 w-9 text-error-content">
+                        <path d="M240-840h440v520L400-40l-50-50q-7-7-11.5-19t-4.5-23v-14l44-174H120q-32 0-56-24t-24-56v-80q0-7 2-15t4-15l120-282q9-20 30-34t44-14Zm360 80H240L120-480v80h360l-54 220 174-174v-406Zm0 406v-406 406Zm80 34v-80h120v-360H680v-80h200v520H680Z" />
+                    </svg>
+                </template>
             </button>
         </div>
-        <button class="flex h-14 w-14 items-center justify-center rounded-full text-base-300-content/80 transition-all active:scale-95 bg-base-300/90 hover:bg-base-300/80 active:bg-base-300/100">
+        <button class="flex h-17 w-17 items-center justify-center rounded-full text-base-300-content/80 transition-all active:scale-95 bg-base-300/90 hover:bg-base-300/80 active:bg-base-300/100">
             <svg xmlns="http://www.w3.org/2000/svg"
                  height="24px"
                  class="h-9 w-9"
@@ -76,12 +90,26 @@
             </svg>
         </button>
     </div>
+    <div class="flex justify-center mt-6">
+        <div class="badge font-bold capitalize tracking-widest font-mono text-center px-6 py-4"
+            {# djlint:off #}
+             :class="{ 
+                'badge-success text-success-content': upvote === 1, 
+                'badge-error text-error-content': upvote === -1, 
+                'badge-primary text-primary-content': upvote === 0 && timerFinished, 
+                'badge-neutral text-neutral-content': upvote === 0 && !timerFinished 
+             }">
+            {# djlint:on #}
+            @{{ voter_data.username }}
+        </div>
+    </div>
 </div>
 <script>
-    function votingData(upvoteRaw, lastVotedRaw) {
+    function votingData(upvoteRaw, lastVotedRaw, avatarUrlRaw) {
         return {
             upvote: parseInt(upvoteRaw, 10) || 0,
             lastVoted: lastVotedRaw,
+            avatarUrl: avatarUrlRaw || '',
             totalSeconds: 0,
             timer: null,
             timerFinished: false,
@@ -89,6 +117,7 @@
             get statusText() {
                 if (this.upvote === 1) return 'UPVOTE SENT';
                 if (this.upvote === -1) return 'DOWNVOTE SENT';
+                if (this.timerFinished) return 'VOTE AGAIN!';
                 return 'NEXT VOTE IN';
             },
             init() {

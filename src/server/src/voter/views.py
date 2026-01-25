@@ -9,6 +9,7 @@ from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponse
 from django.utils import timezone
 from datetime import timedelta
+from django.db.models import OuterRef, Subquery, Max
 
 from core.models import Player, Sound, User
 
@@ -114,6 +115,65 @@ def extract_sound_ids(cosound):
     return sound_ids
 
 
+def get_recent_voters(player, exclude_user=None, limit=5):
+    """
+    Get the last N distinct voters at this player with their vote data.
+    Returns a list of dicts with voter info for the template.
+    """
+    # Get the most recent vote for each voter at this player
+    recent_votes_subquery = (
+        Vote.objects.filter(player=player, voter=OuterRef("voter"))
+        .order_by("-created_at")
+        .values("id")[:1]
+    )
+
+    # Get distinct voters with their most recent vote
+    recent_votes = (
+        Vote.objects.filter(
+            player=player,
+            id__in=Subquery(
+                Vote.objects.filter(player=player)
+                .values("voter")
+                .annotate(latest_vote_id=Max("id"))
+                .values("latest_vote_id")
+            ),
+        )
+        .select_related("voter__user")
+        .order_by("-created_at")
+    )
+
+    # Exclude the current user if provided
+    if exclude_user and not exclude_user.is_anonymous:
+        recent_votes = recent_votes.exclude(voter__user=exclude_user)
+
+    recent_votes = recent_votes[:limit]
+
+    voters_data = []
+    for vote in recent_votes:
+        voter = vote.voter
+        user = voter.user
+
+        # Calculate stats for badges
+        total_votes = Vote.objects.filter(voter=voter).count()
+        votes_here = Vote.objects.filter(voter=voter, player=player).count()
+
+        voters_data.append(
+            {
+                "username": user.username,
+                "user_id": user.id,
+                "avatar_url": f"https://i.pravatar.cc/150?u={user.id}",
+                "vote_value": vote.value,
+                "voted_at": vote.created_at,
+                "voted_at_iso": vote.created_at.isoformat(),
+                "total_votes": total_votes,
+                "votes_here": votes_here,
+                "join_date_iso": user.date_joined.isoformat(),
+            }
+        )
+
+    return voters_data
+
+
 def voting_view(request):
     # Get URL parameters
     player_token = request.GET.get("player_token")
@@ -145,12 +205,16 @@ def voting_view(request):
 
     # Get voter card data
     voter_profile, _ = Voter.objects.get_or_create(user=request.user)
-    voter_vote_count = Vote.objects.filter(voter=voter_profile).count()
+    total_votes = Vote.objects.filter(voter=voter_profile).count()
+    votes_here = Vote.objects.filter(player=player).count()
     voter_data = {
-        "num_votes": voter_vote_count,
+        "total_votes": total_votes,
+        "votes_here": votes_here,
         "join_date": request.user.date_joined.strftime("%b %Y"),
+        "join_date_iso": request.user.date_joined.isoformat(),
         "username": request.user.username,
         "user_id": request.user.id,
+        "avatar_url": f"https://i.pravatar.cc/150?u={request.user.id}",
     }
 
     # User is logged in, check rate limiting (60 seconds)
@@ -196,6 +260,15 @@ def voting_view(request):
                 )
                 layer_index += 1
 
+        # Sort layers so Instrumental appears first
+        layers.sort(key=lambda x: (0 if "Instrumental" in x["layer_type"] else 1))
+        # Re-index layer IDs after sorting
+        for i, layer in enumerate(layers, 1):
+            layer["id"] = f"item{i}"
+
+        # Get recent voters for the "other voters" section
+        recent_voters = get_recent_voters(player, exclude_user=request.user, limit=5)
+
         return render(
             request,
             "voter/voting/index.html",
@@ -207,6 +280,7 @@ def voting_view(request):
                 "last_vote_timestamp": recent_vote.created_at,
                 "layers": layers,
                 "voter_data": voter_data,
+                "recent_voters": recent_voters,
             },
         )
 
@@ -262,6 +336,15 @@ def voting_view(request):
         )
         layer_index += 1
 
+    # Sort layers so Instrumental appears first
+    layers.sort(key=lambda x: (0 if "Instrumental" in x["layer_type"] else 1))
+    # Re-index layer IDs after sorting
+    for i, layer in enumerate(layers, 1):
+        layer["id"] = f"item{i}"
+
+    # Get recent voters for the "other voters" section
+    recent_voters = get_recent_voters(player, exclude_user=request.user, limit=5)
+
     # Render the voting view with all context
     return render(
         request,
@@ -275,5 +358,6 @@ def voting_view(request):
             "layers": layers,
             "success": True,
             "voter_data": voter_data,
+            "recent_voters": recent_voters,
         },
     )

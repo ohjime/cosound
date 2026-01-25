@@ -3,14 +3,22 @@
         gain_level="0.5"
         sound_name="Unknown Sound"
         recording_artist="Unknown Artist"
-        artwork_url="" />
+        artwork_url=""
+        liked="false" />
 <div id="{{ id }}"
      class="carousel-item w-full mx-4"
      data-layer-type="{{ layer_type }}"
      data-gain="{{ gain_level }}"
      data-sound-name="{{ sound_name }}"
-     data-recording-artist="{{ recording_artist }}">
-        <img src="{{ artwork_url }}"
-             alt="{{ sound_name }}"
-             class="w-full object-cover rounded-box" />
+     data-recording-artist="{{ recording_artist }}"
+     data-liked="{{ liked }}">
+        <div class="relative w-full">
+                <div class="skeleton w-full aspect-square rounded-box absolute inset-0"></div>
+                <img src="{{ artwork_url }}"
+                     alt="{{ sound_name }}"
+                     class="w-full object-cover rounded-box relative"
+                     onload="this.previousElementSibling.classList.add('hidden')" />
+                <div class="absolute inset-0 rounded-box pointer-events-none bg-[linear-gradient(to_bottom,rgba(0,0,0,0.9)_0%,transparent_30%,transparent_70%,rgba(0,0,0,0.9)_100%)]">
+                </div>
+        </div>
 </div>

@@ -87,6 +87,7 @@
     "editor.snippetSuggestions": "top",
     "djlint.ignore": [
         "H006",
-        "D018"
+        "D018",
+        "H026",
     ]
 }

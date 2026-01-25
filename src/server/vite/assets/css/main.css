@@ -13,6 +13,9 @@
 /* Initialize Tailwind Motion */
 @plugin "tailwindcss-motion";
 
+/* Initialize Tailwind Intersect (for scroll animations) */
+@plugin "tailwindcss-intersect";
+
 /* 2. Customize 'winter' and set it as the DEFAULT (Light Mode) */
 @plugin "daisyui/theme" {
     name: "winter";
@@ -36,8 +39,4 @@
 
 @utility no-scrollbar {
     @apply [scrollbar-width:none] [&::-webkit-scrollbar]:hidden;
-}
-
-@theme {
-    --font-sans: 'Helvetica Neue', Arial, sans-serif;
 }

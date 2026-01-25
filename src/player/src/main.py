@@ -134,7 +134,7 @@ async def main(page: ft.Page):
         """
         try:
             assets_dir = Path(__file__).resolve().parent.parent / "assets"
-            sound_path = assets_dir / "hiss.wav"
+            sound_path = assets_dir / "purr.wav"
             if not sound_path.exists():
                 return
             sound = pygame.mixer.Sound(str(sound_path))

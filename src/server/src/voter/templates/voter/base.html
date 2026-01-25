@@ -1,8 +1,10 @@
 {% load django_vite %}
 {% load django_htmx %}
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
     <head>
+        <link rel="shortcut icon" type="image/png" href="{% static 'core/img/icon.png' %}">
         <title>Vote | Cosound</title>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -137,7 +139,7 @@
                         setTimeout(function() {
                             loader.style.display = "none";
                         }, 300);
-                    }, 1000); // Show loader for at least 1 second
+                    }, 600); // Show loader for at least 1 second
                 }
             });
         </script>

@@ -6,6 +6,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
+from django.templatetags.static import static
 import dj_database_url
 
 
@@ -286,8 +287,20 @@ TASKS = {
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 UNFOLD = {
-    "SITE_TITLE": "cosound Manager",
-    "SITE_HEADER": "cosound Manager",
+    "SITE_TITLE": "Management Panel",
+    "SITE_HEADER": "Management Console",
+    "SITE_ICON": {
+        "light": lambda request: static("core/img/logo.png"),  # light mode
+        "dark": lambda request: static("core/img/logo.png"),  # dark mode
+    },
+    "SITE_FAVICONS": [
+        {
+            "rel": "icon",
+            "sizes": "46x46",
+            "type": "image/png",
+            "href": lambda request: static("core/img/icon.png"),
+        },
+    ],
     "SIDEBAR": {
         "show_search": True,  # Search in applications and models names
         "command_search": True,  # Replace the sidebar search with the command search

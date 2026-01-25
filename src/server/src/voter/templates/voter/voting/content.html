@@ -1,3 +1,4 @@
+{% load static %}
 {% if requires_login %}
     <div class="flex items-center justify-center h-full opacity-50 blur-sm pointer-events-none"
          x-data
@@ -19,7 +20,11 @@
 {% elif rate_limited %}
     <div class="flex flex-col justify-center items-center h-full gap-8">
         <div class="flex flex-col gap-4 w-full">
-            <div class="flex justify-center items-center text-2xl font-semibold font-mono">cosound</div>
+            <div class="flex justify-center items-center pt-10 pb-5">
+                <img src="{% static 'core/img/logo.png' %}"
+                     alt="cosound"
+                     class="h-24 object-contain drop-shadow-md">
+            </div>
             <div class="flex flex-row justify-center items-center gap-4 text-sm text-gray-600 dark:text-gray-300">
                 <img src="https://www.ualberta.ca/en/toolkit/media-library/homepage-assets/ua_logo_green_rgb.png"
                      alt="clientLogo"
@@ -61,7 +66,11 @@
 {% elif success %}
     <div class="flex flex-col justify-center items-center h-full gap-8">
         <div class="flex flex-col gap-4 w-full">
-            <div class="flex justify-center items-center text-2xl font-semibold font-mono">cosound</div>
+            <div class="flex justify-center items-center pt-10 pb-5">
+                <img src="{% static 'core/img/logo.png' %}"
+                     alt="cosound"
+                     class="h-24 object-contain drop-shadow">
+            </div>
             <div class="flex flex-row justify-center items-center gap-4 text-sm text-gray-600 dark:text-gray-300">
                 <img src="https://www.ualberta.ca/en/toolkit/media-library/homepage-assets/ua_logo_green_rgb.png"
                      alt="clientLogo"

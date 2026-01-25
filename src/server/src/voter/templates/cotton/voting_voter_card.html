@@ -1,29 +1,24 @@
 <c-vars num_votes="" join_date="" username="" user_id="" />
-<div class="stats stats-vertical sm:stats-horizontal shadow w-full max-w-96 mx-auto">
-    <div class="stat overflow-hidden">
-        <div class="stat-figure text-secondary">
-            <div class="avatar online">
-                <div class="w-16 rounded-full">
-                    <img src="https://i.pravatar.cc/150?u={{ user_id }}" alt="{{ username }}'s avatar" />
+<div class="stats stats-vertical min-[24rem]:stats-horizontal shadow w-full max-w-96 mx-auto">
+    <div class="stat">
+        <div class="stat-figure text-primary">
+            <div class="avatar">
+                <div class="w-16 rounded-full relative">
+                    <div class="skeleton w-16 h-16 rounded-full absolute inset-0"></div>
+                    <img src="https://i.pravatar.cc/150?u={{ user_id }}"
+                         alt="{{ username }}'s avatar"
+                         class="relative"
+                         onload="this.previousElementSibling.classList.add('hidden')" />
                 </div>
             </div>
         </div>
-        <div class="stat-title text-lg truncate max-w-[10rem]">@{{ username }}</div>
-        <div class="stat-value text-sm">Voter</div>
-        <div class="stat-desc">Joined {{ join_date }}</div>
-    </div>
-    <div class="stat">
-        <div class="stat-figure text-primary">
-            <svg xmlns="http://www.w3.org/2000/svg"
-                 fill="none"
-                 viewBox="0 0 24 24"
-                 class="inline-block h-8 w-8 stroke-current">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z">
-                </path>
-            </svg>
-        </div>
         <div class="stat-title">Total Votes</div>
-        <div class="stat-value text-primary">{{ num_votes }}</div>
+        <div class="stat-value text-secondary">{{ num_votes }}</div>
         <div class="stat-desc">Votes cast</div>
+    </div>
+    <div class="stat overflow-hidden">
+        <div class="stat-title text-md">Voter Name</div>
+        <div class="stat-value text-lg capitalize truncate max-w-[10rem]">{{ username }}</div>
+        <div class="stat-desc">Joined {{ join_date }}</div>
     </div>
 </div>

@@ -1,53 +1,87 @@
-# 🎵 Cosound - Interactive Music Voting Platform
+# 🎧 CoSounds - Adaptive, Personalized, Collaborative Soundscapes. 
+<img width="1700" height="946" alt="image" src="https://github.com/user-attachments/assets/c2138197-d27c-4177-b33f-9ac8a2503a54" />
 
-A real-time music voting and recommendation system that allows users to vote on songs using NFC tags or web interface, while capturing user preferences to deliver a collective personalized music recommendations.
+## 🌱 Inspiration
+Stress is something we can all relate to, and music is a universal way to relax.
 
-## 🎯 What Is This?
+Dr. Michael Frishkopf's Mindful Listening Spaces at the Cameron Library aimed to bring students together through shared ambient soundscapes. However, participation remained low — students rarely interacted with the system, limiting its ability to adapt to collective preferences.
 
-**Cosound** is an interactive music engagement platform designed for social listening experiences. It combines:
+Our team was inspired to solve this by making interaction seamless, non-intrusive, and meaningful. We asked ourselves:
 
-- **Real-time Voting**: Vote on currently playing songs via NFC tags or web interface
-- **Preference Learning**: Collect user music preferences through an intuitive survey
-- **Smart Recommendations**: Generate personalized song recommendations based on collective preferences
-- **Leaderboard System**: Track top-rated songs and user engagement
-- **Session Management**: Manage listening rooms and user participation
+- How can we get students to participate effortlessly?
+- Can we identify users without forcing sign-ups?
+- How can the system stay ethical and preserve privacy?
 
-## 🏗️ Architecture
+Co-sounds is our answer — a blend of AI, sound, and interaction design that lets students co-create adaptive, mindful soundscapes together.
 
-The project consists of three main components:
+## 🎶 What It Does
 
-### 1. **Web Application** (`src/web/`)
+Co-sounds transforms passive listening into a collaborative, responsive experience.
 
-- React-based responsive web interface
-- Real-time voting interface with NFC tag support
-- User authentication via Supabase
-- Music preference survey system
-- Vote confirmation animations
-- User settings and profile management
+Students simply tap their phones on an NFC tag to:
 
-### 2. **Backend Server** (`src/server/`)
+- Submit quick preferences or votes on the current soundscape
+- Provide feedback on relaxation and focus levels
+- Seamlessly contribute to a collective mood model
+
+The system uses this data to generate adaptive soundscapes that reflect both individual and group preferences, helping students relax and connect in shared spaces.
+
+## 🏗️ How We Built It
+
+### Architecture
+
+Co-sounds consists of three integrated components:
+
+### 1. 🌐 Web Application
+
+- React-based responsive interface
+- Real-time voting and feedback system
+- NFC tag support for tap-based interaction
+- Supabase authentication and data storage
+- Music preference surveys and user settings
+- Vote confirmation animations and progress indicators
+
+### 2. 🖥️ Backend Server
 
 - Express.js REST API
-- Supabase integration for data persistence
-- JWT authentication
-- API key protection for model endpoints
-- Real-time session management
+- Secure integration with Supabase
+- JWT authentication and API key protection
+- Real-time session management for collective soundscapes
 
-### 3. **Machine Learning Model** (`ml_model`)
+### 3. 🧠 Machine Learning Model
 
-#### What It Does
+- Built with a Linear Ridge Regression classifier
+- Trained on the ESC-50 dataset (Environmental Sound Classification)
+- Generates audio feature embeddings used to match user preferences to songs
+- Produces both individual and collective recommendation vectors
 
-The ML model classifies audio into various environmental sound categories:
+## ⚙️ Challenges We Ran Into
 
-User preferences are collected for these categories (values 0-1), which the system uses to recommend songs with matching ambient characteristics.
+- Designing an interaction flow that was low-effort but engaging
+- Balancing anonymity with persistent user identification
+- Training a sound classification model from raw audio using mathematical feature extraction and regression techniques
+- Integrating physical NFC inputs with digital web services
+- Ensuring reliable real-time feedback loops between frontend, backend, and ML model
 
-#### How It Works
+## 🏅 Accomplishments That We're Proud Of
 
-- **Dataset**: Uses the ESC-50 dataset (Environmental Sound Classification - 50 categories)
-- **Model**: Linear Ridge Regression classifier
-- **Input**: Audio files (.wav format)
-- **Output**: Classification scores for each of the 5 sound categories
-- **Integration**: User preference vectors are matched against song audio profiles
+- Successfully built a working prototype that connects NFC inputs to an adaptive ML pipeline
+- Developed a linear ridge regression model that classifies soundscapes using ESC-50 data
+- Created a learning algorithm that evolves based on user feedback and collective trends
+
+## 💡 What We Learned
+
+- The power of user-centered design in encouraging participation
+- How to bridge physical interactions (NFC) with cloud-based AI systems
+- The importance of ethical data collection and minimizing intrusiveness
+- How small design choices (like frictionless taps) can dramatically increase engagement
+
+## 🚀 What's Next for Co-sounds
+
+- Deploying Co-sounds in the Cameron Library Mindful Listening Space for pilot testing
+- Expanding the ML system to learn from emotion recognition
+- Building a mobile app companion for personalized profiles and real-time analytics
+- Introducing new sound categories and generative audio synthesis for richer ambient experiences
 
 ## 🚀 Getting Started
 
@@ -187,11 +221,5 @@ Web app will run on `http://localhost:5173` (Vite default)
 - Scikit-learn (Ridge Regression)
 - NumPy & SciPy
 - ESC-50 Dataset
-
-## 📚 Documentation
-
-- `docs/API_DOCUMENTATION.md` - Complete REST API reference
-- `docs/MODEL_API_DOCUMENTATION.md` - ML endpoints documentation
-- `ml_model/README.md` - ML model details & training guide
 
 **Happy Voting! 🎵👍👎**

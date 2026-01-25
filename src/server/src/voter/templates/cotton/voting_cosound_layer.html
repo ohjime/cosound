@@ -3,13 +3,15 @@
         gain_level="0.5"
         sound_name="Unknown Sound"
         recording_artist="Unknown Artist"
-        artwork_url="" />
+        artwork_url=""
+        liked="false" />
 <div id="{{ id }}"
      class="carousel-item w-full mx-4"
      data-layer-type="{{ layer_type }}"
      data-gain="{{ gain_level }}"
      data-sound-name="{{ sound_name }}"
-     data-recording-artist="{{ recording_artist }}">
+     data-recording-artist="{{ recording_artist }}"
+     data-liked="{{ liked }}">
         <div class="relative w-full">
                 <div class="skeleton w-full aspect-square rounded-box absolute inset-0"></div>
                 <img src="{{ artwork_url }}"

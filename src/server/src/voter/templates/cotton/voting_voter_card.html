@@ -1,24 +1,83 @@
-<c-vars num_votes="" join_date="" username="" user_id="" />
-<div class="stats stats-vertical min-[24rem]:stats-horizontal shadow w-full max-w-96 mx-auto">
-    <div class="stat">
-        <div class="stat-figure text-primary">
-            <div class="avatar">
-                <div class="w-16 rounded-full relative">
-                    <div class="skeleton w-16 h-16 rounded-full absolute inset-0"></div>
-                    <img src="https://i.pravatar.cc/150?u={{ user_id }}"
-                         alt="{{ username }}'s avatar"
-                         class="relative"
-                         onload="this.previousElementSibling.classList.add('hidden')" />
-                </div>
-            </div>
+<c-vars votes_here="0" total_votes="0" join_date_iso="" username="" user_id="" />
+<div class="stats stats-vertical min-[24rem]:stats-horizontal shadow w-full max-w-96 mx-auto"
+    {# djlint:off #}
+    x-data="{
+        votesHere: {{ votes_here }},
+        totalVotes: {{ total_votes }},
+        joinDateIso: '{{ join_date_iso }}',
+        
+        formatNumber(n) {
+            if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+            if (n >= 100000) return Math.round(n / 1000) + 'k';
+            if (n >= 10000) return Math.round(n / 1000) + 'k';
+            if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+            return n.toString();
+        },
+        
+        get accountAgeDays() {
+            const joinDate = new Date(this.joinDateIso);
+            const now = new Date();
+            return Math.floor((now - joinDate) / (1000 * 60 * 60 * 24));
+        },
+        
+        get formattedAge() {
+            const days = this.accountAgeDays;
+            if (days >= 365) return Math.floor(days / 365) + 'y';
+            if (days >= 30) return Math.floor(days / 30) + 'm';
+            return days + 'd';
+        },
+        
+        get votesHereBadge() {
+            if (this.votesHere >= 1000) return 'hometurf';
+            if (this.votesHere >= 100) return 'regular';
+            return 'tourist';
+        },
+        
+        get totalVotesBadge() {
+            if (this.totalVotes >= 1000) return 'master';
+            if (this.totalVotes >= 100) return 'adept';
+            return 'novice';
+        },
+        
+        get ageBadge() {
+            const days = this.accountAgeDays;
+            if (days >= 365) return 'mythical';
+            if (days >= 10) return 'elder';
+            return 'sprout';
+        }
+    }"
+    {# djlint:on #}
+    >
+    <div class="stat place-items-center">
+        <div class="stat-title">Votes Here</div>
+        <div class="stat-value" x-text="formatNumber(votesHere)"></div>
+        <div class="stat-actions">
+            <div class="badge badge-dash badge-primary" x-show="votesHereBadge === 'tourist'">Tourist</div>
+            <div class="badge badge-soft badge-primary" x-show="votesHereBadge === 'regular'">Regular</div>
+            <div class="badge badge-primary text-primary-content"
+                 x-show="votesHereBadge === 'hometurf'">Hometurf</div>
         </div>
-        <div class="stat-title">Total Votes</div>
-        <div class="stat-value text-secondary">{{ num_votes }}</div>
-        <div class="stat-desc">Votes cast</div>
     </div>
-    <div class="stat overflow-hidden">
-        <div class="stat-title text-md">Voter Name</div>
-        <div class="stat-value text-lg capitalize truncate max-w-[10rem]">{{ username }}</div>
-        <div class="stat-desc">Joined {{ join_date }}</div>
+    <div class="stat place-items-center">
+        <div class="stat-title">Total Votes</div>
+        <div class="stat-value" x-text="formatNumber(totalVotes)"></div>
+        <div class="stat-actions">
+            <div class="badge badge-dash badge-secondary" x-show="totalVotesBadge === 'novice'">Novice</div>
+            <div class="badge badge-soft badge-secondary" x-show="totalVotesBadge === 'adept'">Adept</div>
+            <div class="badge badge-secondary text-secondary-content"
+                 x-show="totalVotesBadge === 'master'">Master</div>
+        </div>
+    </div>
+    <div class="stat place-items-center">
+        <div class="stat-title">Account Age</div>
+        <div class="stat-value" x-text="formattedAge"></div>
+        <div class="stat-actions">
+            <div class="badge badge-dash badge-base text-base-content"
+                 x-show="ageBadge === 'sprout'">Sprout</div>
+            <div class="badge badge-soft badge-base text-base-content"
+                 x-show="ageBadge === 'elder'">Elder</div>
+            <div class="badge badge-base text-base-content"
+                 x-show="ageBadge === 'mythical'">Mythical</div>
+        </div>
     </div>
 </div>

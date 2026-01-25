@@ -1,0 +1,93 @@
+{% if recent_voters %}
+    <ul class="list bg-base-100 max-w-96">
+        <li class="p-4 pb-2 text-xs opacity-60 tracking-wide">Recent Voters at {{ player.name }}</li>
+        {% for voter in recent_voters %}
+            <li class="list-row"
+                {# djlint:off #}
+        x-data="{
+            voteValue: {{ voter.vote_value }},
+            votedAtIso: '{{ voter.voted_at_iso }}',
+            votesHere: {{ voter.votes_here }},
+            totalVotes: {{ voter.total_votes }},
+            joinDateIso: '{{ voter.join_date_iso }}',
+            
+            get timeAgo() {
+                const votedAt = new Date(this.votedAtIso);
+                const now = new Date();
+                const diffMs = now - votedAt;
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMs / 3600000);
+                const diffDays = Math.floor(diffMs / 86400000);
+                
+                if (diffMins < 1) return 'Just now';
+                if (diffMins < 60) return diffMins + ' min ago';
+                if (diffHours < 24) return diffHours + ' hr ago';
+                return diffDays + ' day' + (diffDays > 1 ? 's' : '') + ' ago';
+            },
+            
+            get accountAgeDays() {
+                const joinDate = new Date(this.joinDateIso);
+                const now = new Date();
+                return Math.floor((now - joinDate) / (1000 * 60 * 60 * 24));
+            },
+            
+            get votesHereBadge() {
+                if (this.votesHere >= 1000) return 'hometurf';
+                if (this.votesHere >= 100) return 'regular';
+                return 'tourist';
+            },
+            
+            get totalVotesBadge() {
+                if (this.totalVotes >= 1000) return 'master';
+                if (this.totalVotes >= 100) return 'adept';
+                return 'novice';
+            },
+            
+            get ageBadge() {
+                const days = this.accountAgeDays;
+                if (days >= 365) return 'mythical';
+                if (days >= 10) return 'elder';
+                return 'sprout';
+            }
+        }"
+                {# djlint:on #}
+                >
+                <div class="avatar indicator">
+                    <span class="indicator-item indicator-bottom indicator-center badge text-xs"
+                          :class="voteValue > 0 ? 'badge-success text-success-content' : 'badge-error text-error-content'"
+                          x-text="voteValue > 0 ? '+1' : '-1'"></span>
+                    <div class="size-20 rounded-2xl">
+                        <img alt="{{ voter.username }}'s avatar" src="{{ voter.avatar_url }}" />
+                    </div>
+                </div>
+                <div class="list-col-grow flex flex-col gap-2">
+                    <div class="font-bold capitalize tracking-widest font-mono text-sm">{{ voter.username }}</div>
+                    <div class="text-xs uppercase font-semibold opacity-60" x-text="timeAgo"></div>
+                    <div class="flex flex-row flex-wrap gap-2 list-col-wrap items-start">
+                        {% comment %} Votes Here Badge {% endcomment %}
+                        <div class="badge badge-dash badge-primary flex-none text-xs"
+                             x-show="votesHereBadge === 'tourist'">Tourist</div>
+                        <div class="badge badge-soft badge-primary flex-none text-xs"
+                             x-show="votesHereBadge === 'regular'">Regular</div>
+                        <div class="badge badge-primary text-primary-content flex-none text-xs"
+                             x-show="votesHereBadge === 'hometurf'">Hometurf</div>
+                        {% comment %} Total Votes Badge {% endcomment %}
+                        <div class="badge badge-dash badge-secondary flex-none text-xs"
+                             x-show="totalVotesBadge === 'novice'">Novice</div>
+                        <div class="badge badge-soft badge-secondary flex-none text-xs"
+                             x-show="totalVotesBadge === 'adept'">Adept</div>
+                        <div class="badge badge-secondary text-secondary-content flex-none text-xs"
+                             x-show="totalVotesBadge === 'master'">Master</div>
+                        {% comment %} Account Age Badge {% endcomment %}
+                        <div class="badge badge-dash badge-base text-base-content flex-none text-xs"
+                             x-show="ageBadge === 'sprout'">Sprout</div>
+                        <div class="badge badge-soft badge-base text-base-content flex-none text-xs"
+                             x-show="ageBadge === 'elder'">Elder</div>
+                        <div class="badge badge-base text-base-content flex-none text-xs"
+                             x-show="ageBadge === 'mythical'">Mythical</div>
+                    </div>
+                </div>
+            </li>
+        {% endfor %}
+    </ul>
+{% endif %}

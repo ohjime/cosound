@@ -195,31 +195,5 @@ npm run dev
 
 Web app will run on `http://localhost:5173` (Vite default)
 
-## 🛠️ Technology Stack
-
-**Frontend:**
-
-- React 19
-- React Router DOM
-- TailwindCSS 4
-- Vite 7
-- Jotai (state management)
-- Lucide React (icons)
-
-**Backend:**
-
-- Node.js
-- Express 5
-- Supabase (PostgreSQL + Auth)
-- JWT Authentication
-- CORS
-
-**Machine Learning:**
-
-- Python 3.8+
-- Librosa (audio processing)
-- Scikit-learn (Ridge Regression)
-- NumPy & SciPy
-- ESC-50 Dataset
 
 **Happy Voting! 🎵👍👎**

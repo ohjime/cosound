@@ -1,6 +1,41 @@
-<c-vars upvote="0" last_upvoted="Never" avatar_url="" />
+<c-vars upvote=0 waiting_time=0 avatar_url="" username="" />
 <div class="flex flex-col items-center gap-3"
-     x-data="votingData('{{ upvote }}', '{{ last_upvoted }}', '{{ avatar_url }}')">
+    {# djlint:off #}
+    x-data="{
+        upvote: {{ upvote }},
+        time_left: Number({{ waiting_time }}),
+        throttled: {{ waiting_time }} > 0,
+        
+        // Computed Helpers
+        get isWaiting() { return this.time_left > 0; },
+        get isReady() { return this.time_left === 0; },
+        
+        // Text for the spinning ring
+        get statusText() {
+            if (this.throttled && this.isWaiting) return 'NEXT VOTE IN';
+            if (this.throttled && !this.isWaiting && this.upvote === 1) return 'UPVOTE AGAIN?';
+            if (this.throttled && !this.isWaiting && this.upvote === 0) return 'DOWNVOTE AGAIN?';
+            if (!this.throttled && this.upvote === 1) return 'UPVOTE SENT';
+            if (!this.throttled && this.upvote === 0) return 'DOWNVOTE SENT';
+            return '';
+        },
+
+        // Timer Logic
+        startCountdown() {
+            if (!this.isWaiting) return;
+            
+            let interval = setInterval(() => {
+                if (this.time_left > 0) {
+                    this.time_left = this.time_left - 1;
+                } else {
+                    clearInterval(interval);
+                }
+            }, 1000);
+        }
+    }"
+    x-init="startCountdown()"
+    {# djlint:on #}
+    >
     <div class="flex flex-row items-center justify-center gap-8">
         <button class="flex h-17 w-17 items-center justify-center rounded-full text-base-300-content/80 transition-all active:scale-95 bg-base-300/90 hover:bg-base-300/80 active:bg-base-300/100">
             <svg xmlns="http://www.w3.org/2000/svg"
@@ -12,72 +47,67 @@
                 <path d="M200-360v-240h160l200-200v640L360-360H200Zm440 40v-322q45 21 72.5 65t27.5 97q0 53-27.5 96T640-320ZM480-606l-86 86H280v80h114l86 86v-252ZM380-480Z" />
             </svg>
         </button>
-        <div class="relative flex items-center justify-center">
-            <svg class="absolute w-32 h-32 pointer-events-none animate-[spin_10s_linear_infinite]"
-                 viewBox="0 0 100 100">
+        <div class="relative flex items-center justify-center w-28 h-28">
+            <svg x-show="throttled || (!throttled && (upvote === 1 || upvote === 0))"
+                 class="absolute inset-0 w-full h-full pointer-events-none animate-[spin_10s_linear_infinite] z-0"
+                 viewBox="0 0 100 100"
+                 overflow="visible">
                 <defs>
-                <path id="circlePath" d="M 50, 50 m -36, 0 a 36,36 0 1,1 72,0 a 36,36 0 1,1 -72,0" />
+                <path id="circlePath" d="M 50, 50 m -55, 0 a 55,55 0 1,1 110,0 a 55,55 0 1,1 -110,0" />
                 </defs>
-                <text class="font-bold text-[8px] uppercase tracking-[0.15em]" :class="{ 'fill-success': upvote === 1, 'fill-error': upvote === -1, 'fill-primary': upvote === 0 && timerFinished, 'fill-base-content': upvote === 0 && !timerFinished }">
-                <textPath xlink:href="#circlePath" startOffset="0%" text-anchor="middle">
-                </textPath>
+                <text class="font-black text-[9px] uppercase tracking-[0.15em] transition-colors duration-500"
+                {# djlint:off #}
+                      :class="{
+                          'fill-base-content': throttled && isWaiting,
+                          'fill-secondary': throttled && !isWaiting,
+                          'fill-success': !throttled && upvote === 1,
+                          'fill-error': !throttled && upvote === -1
+                      }"
+                {# djlint:on #}>
                 <textPath xlink:href="#circlePath" startOffset="25%" text-anchor="middle">
                 <tspan x-text="statusText"></tspan>
-                </textPath>
-                <textPath xlink:href="#circlePath" startOffset="50%" text-anchor="middle">
                 </textPath>
                 <textPath xlink:href="#circlePath" startOffset="75%" text-anchor="middle">
                 <tspan x-text="statusText"></tspan>
                 </textPath>
                 </text>
             </svg>
-            <button @click="handleClick()"
-                    :disabled="upvote !== 0 || !timerFinished"
-                    :class="{ 'bg-error': upvote === -1, 'bg-success': upvote === 1, 'bg-neutral': upvote === 0 && !timerFinished, 'bg-primary hover:bg-primary/90': upvote === 0 && timerFinished }"
-                    class="relative z-10 flex h-20 w-20 items-center justify-center rounded-full transition-all active:scale-95 disabled:active:scale-100 ring-4 ring-base-100">
-                <!-- Avatar shown behind timer during countdown -->
-                <template x-if="avatarUrl && upvote === 0 && !timerFinished">
-                    <img :src="avatarUrl"
-                         alt="User avatar"
-                         class="absolute h-17 w-17 rounded-full object-cover opacity-70">
-                </template>
-                <!-- Timer overlay with semi-transparent background -->
-                <span x-show="upvote === 0 && !timerFinished"
-                      class="relative font-mono text-3xl font-bold text-neutral-content drop-shadow-md"
-                      x-text="totalSeconds"></span>
-                <!-- Avatar when vote is cast or ready to vote -->
-                <template x-if="avatarUrl && upvote !== 0">
-                    <img :src="avatarUrl" alt="User avatar" class="h-17 w-17 rounded-full object-cover">
-                </template>
-                <template x-if="upvote === 0 && timerFinished">
+            <div class="z-10 relative w-24 h-24 rounded-full overflow-hidden ring-6 ring-offset-2 ring-offset-base-100 transition-all duration-500"
+                {# djlint:off #}
+                 :class="{
+                    'ring-base-content': throttled && isWaiting, 
+                    'ring-secondary': throttled && !isWaiting,
+                    'ring-success': !throttled && upvote === 1, 
+                    'ring-error': !throttled && upvote === 0
+                 }"
+                {# djlint:on #}>
+                <img src="{{ avatar_url }}"
+                     class="absolute inset-0 w-full h-full object-cover transition-all duration-700"
+                     :class="isWaiting ? 'brightness-[0.4] scale-105' : 'brightness-100 scale-100'"
+                     alt="Avatar">
+                <div class="absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-300"
+                     x-show="isWaiting"
+                     x-transition:leave="opacity-0">
+                    <span class="countdown font-mono text-4xl text-white font-bold drop-shadow-md">
+                        <span :style="`--value: ${time_left}; --digits:2`"></span>
+                    </span>
+                </div>
+                <button @click="window.location.reload()"
+                        class="absolute inset-0 flex items-center justify-center bg-secondary transition-all duration-300 cursor-pointer"
+                        :class="throttled && !isWaiting ? 'opacity-100 scale-100' : 'opacity-0 scale-90 pointer-events-none'">
                     <svg xmlns="http://www.w3.org/2000/svg"
-                         height="32px"
                          viewBox="0 -960 960 960"
-                         width="32px"
                          fill="currentColor"
-                         class="h-9 w-9 text-primary-content">
+                         class="size-10 text-white">
                         <path d="M480-160q-134 0-227-93t-93-227q0-134 93-227t227-93q69 0 132 28.5T720-690v-110h80v240H560v-80h135q-44-51-103.5-80.5T480-720q-100 0-170 70t-70 170q0 100 70 170t170 70q77 0 139-44t87-116h84q-28 106-114 173t-196 67Z" />
                     </svg>
-                </template>
-                <template x-if="!avatarUrl && upvote === 1">
-                    <svg xmlns="http://www.w3.org/2000/svg"
-                         class="h-9 w-9 text-success-content"
-                         viewBox="0 0 24 24"
-                         fill="currentColor">
-                        <path d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-1.91l-.01-.01L23 10z" />
-                    </svg>
-                </template>
-                <template x-if="!avatarUrl && upvote === -1">
-                    <svg xmlns="http://www.w3.org/2000/svg"
-                         height="24px"
-                         viewBox="0 -960 960 960"
-                         width="24px"
-                         fill="currentColor"
-                         class="h-9 w-9 text-error-content">
-                        <path d="M240-840h440v520L400-40l-50-50q-7-7-11.5-19t-4.5-23v-14l44-174H120q-32 0-56-24t-24-56v-80q0-7 2-15t4-15l120-282q9-20 30-34t44-14Zm360 80H240L120-480v80h360l-54 220 174-174v-406Zm0 406v-406 406Zm80 34v-80h120v-360H680v-80h200v520H680Z" />
-                    </svg>
-                </template>
-            </button>
+                </button>
+            </div>
+            <span x-show="!isWaiting && !throttled"
+                  x-transition:enter="transition zoom-in duration-300 delay-100"
+                  class="absolute indicator-item badge badge-lg text-sm font-black text-white z-20 shadow-lg border-2 bottom-0.5"
+                  :class="upvote === 1 ? 'badge-success ring-2 ring-success/20' : 'badge-error ring-2 ring-error/20'"
+                  x-text="upvote === 1 ? '+1' : '-1'"></span>
         </div>
         <button class="flex h-17 w-17 items-center justify-center rounded-full text-base-300-content/80 transition-all active:scale-95 bg-base-300/90 hover:bg-base-300/80 active:bg-base-300/100">
             <svg xmlns="http://www.w3.org/2000/svg"
@@ -91,73 +121,14 @@
         </button>
     </div>
     <div class="flex justify-center mt-6">
-        <div class="badge font-bold capitalize tracking-widest font-mono text-center px-6 py-4"
+        <div class="badge font-bold capitalize tracking-widest font-mono text-center px-6 py-4 transition-colors duration-500"
             {# djlint:off #}
              :class="{ 
-                'badge-success text-success-content': upvote === 1, 
-                'badge-error text-error-content': upvote === -1, 
-                'badge-primary text-primary-content': upvote === 0 && timerFinished, 
-                'badge-neutral text-neutral-content': upvote === 0 && !timerFinished 
-             }">
-            {# djlint:on #}
-            @{{ voter_data.username }}
-        </div>
+                 'badge-neutral': throttled && isWaiting, 
+                 'badge-secondary': throttled && !isWaiting, 
+                 'badge-success': !throttled && upvote === 1, 
+                 'badge-error': !throttled && upvote === -1 
+             }"
+            {# djlint:on #}>{{ username }}</div>
     </div>
 </div>
-<script>
-    function votingData(upvoteRaw, lastVotedRaw, avatarUrlRaw) {
-        return {
-            upvote: parseInt(upvoteRaw, 10) || 0,
-            lastVoted: lastVotedRaw,
-            avatarUrl: avatarUrlRaw || '',
-            totalSeconds: 0,
-            timer: null,
-            timerFinished: false,
-            // UPDATED: No more bullets in the text string
-            get statusText() {
-                if (this.upvote === 1) return 'UPVOTE SENT';
-                if (this.upvote === -1) return 'DOWNVOTE SENT';
-                if (this.timerFinished) return 'VOTE AGAIN!';
-                return 'NEXT VOTE IN';
-            },
-            init() {
-                if (this.upvote === 1 || this.upvote === -1) {
-                    this.timerFinished = true;
-                    return;
-                }
-                if (this.lastVoted === 'Never' || !this.lastVoted) {
-                    this.timerFinished = true;
-                    return;
-                }
-                const safeDateString = this.lastVoted.replace(' ', 'T');
-                const lastVoteDate = new Date(safeDateString);
-                if (isNaN(lastVoteDate.getTime())) {
-                    console.error('Invalid Date:', this.lastVoted);
-                    this.timerFinished = true;
-                    return;
-                }
-                const targetDate = new Date(lastVoteDate.getTime() + 60000);
-                if (Date.now() >= targetDate) {
-                    this.totalSeconds = 0;
-                    this.timerFinished = true;
-                    return;
-                }
-                this.updateClock(targetDate);
-                this.timer = setInterval(() => this.updateClock(targetDate), 1000);
-            },
-            updateClock(targetDate) {
-                const diff = targetDate - Date.now();
-                if (diff <= 0) {
-                    this.totalSeconds = 0;
-                    this.timerFinished = true;
-                    if (this.timer) clearInterval(this.timer);
-                } else {
-                    this.totalSeconds = Math.ceil(diff / 1000);
-                }
-            },
-            handleClick() {
-                if (this.upvote === 0 && this.timerFinished) window.location.reload();
-            }
-        };
-    }
-</script>

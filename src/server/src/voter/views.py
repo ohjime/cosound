@@ -10,11 +10,14 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+from django.conf import settings
 
 from core.models import Player, Sound, User
 
 from voter.models import Favorite, Voter, Vote
 from voter.adapters import UnifiedRequestLoginCodeForm
+
+THROTTLE_PERIOD = getattr(settings, "COSOUND_VOTER_THROTTLE_PERIOD", 60)
 
 
 @require_POST
@@ -157,6 +160,66 @@ def build_layer_data(cosound, sounds_dict, favorite_sound_ids):
     return layers
 
 
+def get_local_badge(votes_count):
+    if votes_count < 100:
+        return "Floating"
+    elif votes_count < 500:
+        return "Settling"
+    else:
+        return "Resting"
+
+
+def get_global_badge(votes_count):
+    if votes_count < 100:
+        return "Kindled"
+    elif votes_count < 500:
+        return "Burning"
+    else:
+        return "Embered"
+
+
+def get_age_badge(age):
+    if age < 100:
+        return "Leaf"
+    elif age < 500:
+        return "Branch"
+    else:
+        return "Oak"
+
+
+def check_anonymous(user):
+    if user.is_anonymous:
+        return True
+    elif user.is_authenticated:
+        email = user.email
+        if email.endswith("@anon.cosound.io"):
+            return True
+        else:
+            return False
+
+
+def get_random_avatar_url(seed):
+    sets = [2, 5, 5, 5]
+    bgs = [1, 2, 1, 1, 1]
+    set = sets[(int(seed) % 4)]
+    bg = bgs[(int(seed) % 5)]
+    return f"https://robohash.org/{seed}?bgset=bg{bg}&set=set{set}"
+
+
+def check_throttle_timer(voter, player):
+    recent_vote = (
+        Vote.objects.filter(voter=voter, player=player).order_by("-created_at").first()
+    )
+    if recent_vote:
+        elapsed = timezone.now() - recent_vote.created_at
+        if elapsed > timedelta(seconds=THROTTLE_PERIOD):
+            return 0
+        else:
+            return THROTTLE_PERIOD - int(elapsed.total_seconds())
+    else:
+        return 0
+
+
 def get_recent_voters(player, exclude_user=None, limit=5):
     """
     Get the last N distinct voters at this player with their vote data.
@@ -198,18 +261,22 @@ def get_recent_voters(player, exclude_user=None, limit=5):
         # Calculate stats for badges
         total_votes = Vote.objects.filter(voter=voter).count()
         votes_here = Vote.objects.filter(voter=voter, player=player).count()
+        age = (timezone.now().date() - user.date_joined.date()).days
 
         voters_data.append(
             {
                 "username": user.username,
                 "user_id": user.pk,
-                "avatar_url": f"https://robohash.org/{user.pk}?bgset=bg1&set=set2",
+                "avatar_url": get_random_avatar_url(user.pk),
                 "vote_value": vote.value,
                 "voted_at": vote.created_at,
                 "voted_at_iso": vote.created_at.isoformat(),
                 "total_votes": total_votes,
                 "votes_here": votes_here,
                 "join_date_iso": user.date_joined.isoformat(),
+                "local_badge": get_local_badge(votes_here),
+                "global_badge": get_global_badge(total_votes),
+                "age_badge": get_age_badge(age),
             }
         )
 
@@ -220,18 +287,17 @@ def voting_view(request):
     # Get URL parameters
     player_token = request.GET.get("player_token")
     choice = request.GET.get("choice")
-    choice_raw = (choice or "").strip().lower()
 
-    # Validate parameters
+    # If choice and token is not provided, return 400
     if not player_token or choice is None:
         return HttpResponse(
             "Missing required parameters: player_token and choice", status=400
         )
+    # If choice is not 0 or 1 return 400
+    if choice not in ["0", "1", 0, 1]:
+        return HttpResponse("Invalid choice value", status=400)
 
-    # Convert choice to vote value (1 or -1) or mark as refresh (0)
-    is_refresh_request = choice_raw in ["0", "", "none", "refresh"]
-    is_upvote = choice_raw in ["true", "1", "yes"]
-    vote_value = None if is_refresh_request else (1 if is_upvote else -1)
+    vote_value = int(choice)
 
     # Get the player object
     player = get_object_or_404(Player, token=player_token)
@@ -247,18 +313,27 @@ def voting_view(request):
             },
         )
 
-    # Get voter card data
+    # Aggregate necessary voter data
     voter_profile, _ = Voter.objects.get_or_create(user=request.user)
     total_votes = Vote.objects.filter(voter=voter_profile).count()
     votes_here = Vote.objects.filter(voter=voter_profile, player=player).count()
+    join_date = request.user.date_joined
+    age = (timezone.now().date() - join_date.date()).days
+    is_anonymous = check_anonymous(request.user)
+    waiting_time = check_throttle_timer(voter_profile, player)
     voter_data = {
+        "vote_value": vote_value,
         "total_votes": total_votes,
         "votes_here": votes_here,
-        "join_date": request.user.date_joined.strftime("%b %Y"),
         "join_date_iso": request.user.date_joined.isoformat(),
         "username": request.user.username,
-        "user_id": request.user.id,
-        "avatar_url": f"https://robohash.org/{request.user.id}?bgset=bg1&set=set2",
+        "is_anonymous": is_anonymous,
+        "age": age,
+        "waiting_time": waiting_time,
+        "avatar_url": get_random_avatar_url(request.user.id),
+        "local_badge": get_local_badge(votes_here),
+        "global_badge": get_global_badge(total_votes),
+        "age_badge": get_age_badge(age),
     }
 
     favorite_sound_ids = set(
@@ -269,110 +344,36 @@ def voting_view(request):
     )
     favorite_url = reverse("voter_toggle_favorite")
 
-    # User is logged in, check rate limiting (60 seconds)
-    one_minute_ago = timezone.now() - timedelta(seconds=60)
-    recent_vote = Vote.objects.filter(
-        voter=voter_profile, player=player, created_at__gte=one_minute_ago
-    ).first()
-
-    if recent_vote:
-        # Build layers for rate-limited view
-        cosound = player.playing
-        layers = []
-        if cosound:
-            sound_ids = extract_sound_ids(cosound)
-            sounds = Sound.objects.filter(id__in=sound_ids) if sound_ids else []
-            sounds_dict = {str(sound.pk): sound for sound in sounds}
-            layers = build_layer_data(cosound, sounds_dict, favorite_sound_ids)
-
-        # Get recent voters for the "other voters" section
-        recent_voters = get_recent_voters(player, exclude_user=request.user, limit=5)
-
-        return render(
-            request,
-            "voter/voting/index.html",
-            {
-                "rate_limited": True,
-                "player": player,
-                "client": player.account.manager,
-                "recent_vote": recent_vote,
-                "last_vote_timestamp": recent_vote.created_at,
-                "layers": layers,
-                "voter_data": voter_data,
-                "recent_voters": recent_voters,
-                "favorite_url": favorite_url,
-            },
-        )
-
-    # If this is a refresh request, do not cast a vote; just render the view.
-    if is_refresh_request:
-        cosound = player.playing
-
-        if not cosound:
-            return HttpResponse("No cosound available for this player", status=404)
-
+    cosound = player.playing
+    layers = []
+    if cosound:
         sound_ids = extract_sound_ids(cosound)
         sounds = Sound.objects.filter(id__in=sound_ids) if sound_ids else []
         sounds_dict = {str(sound.pk): sound for sound in sounds}
         layers = build_layer_data(cosound, sounds_dict, favorite_sound_ids)
 
-        # Get recent voters for the "other voters" section
-        recent_voters = get_recent_voters(player, exclude_user=request.user, limit=5)
+    recent_voters_data = get_recent_voters(player, exclude_user=request.user, limit=5)
 
-        return render(
-            request,
-            "voter/voting/index.html",
-            {
-                "ready_to_vote": True,
-                "player": player,
-                "client": player.account.manager,
-                "last_vote_timestamp": recent_vote.created_at if recent_vote else None,
-                "layers": layers,
-                "voter_data": voter_data,
-                "recent_voters": recent_voters,
-                "favorite_url": favorite_url,
-            },
-        )
+    if waiting_time == 0:
+        # Create a new vote for the user
+        try:
+            new_vote = Vote.objects.create(
+                voter=voter_profile,
+                player=player,
+                cosound=cosound,
+                value=vote_value,
+            )
+        except Exception as e:
+            return HttpResponse(f"Error creating vote: {str(e)}", status=500)
 
-    # Get the cosound from the player's SchemaField
-    cosound = player.playing
-
-    if not cosound:
-        return HttpResponse("No cosound available for this player", status=404)
-
-    # Create the vote
-    voter_obj = voter_profile if not request.user.is_anonymous else None
-
-    vote = Vote.objects.create(
-        value=vote_value,
-        voter=voter_profile,
-        player=player,
-        cosound=cosound,
-    )
-
-    # Get Sound objects from cosound JSON and build layer data
-    sound_ids = extract_sound_ids(cosound)
-    sounds = Sound.objects.filter(id__in=sound_ids) if sound_ids else []
-    sounds_dict = {str(sound.pk): sound for sound in sounds}
-    layers = build_layer_data(cosound, sounds_dict, favorite_sound_ids)
-
-    # Get recent voters for the "other voters" section
-    recent_voters = get_recent_voters(player, exclude_user=request.user, limit=5)
-
-    # Render the voting view with all context
     return render(
         request,
         "voter/voting/index.html",
         {
-            "vote": vote,
             "player": player,
-            "client": player.account.manager,
-            "voter": voter_obj,
-            "sounds": sounds,
             "layers": layers,
-            "success": True,
             "voter_data": voter_data,
-            "recent_voters": recent_voters,
+            "recent_voters": recent_voters_data,
             "favorite_url": favorite_url,
         },
     )

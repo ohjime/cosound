@@ -4,7 +4,7 @@ import logging
 from typing import cast
 from django.core.management.base import BaseCommand
 from core.models import Cosound, Player
-from config import settings
+from app import settings
 from django.utils.module_loading import import_string
 
 

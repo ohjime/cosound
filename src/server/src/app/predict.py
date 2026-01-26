@@ -12,7 +12,7 @@ def predictor_v1(
     player_id: int,
     *args,
     **kwargs,
-    ) -> int:
+) -> int:
     """
     Predictor V1: vote-aware cosound prediction algorithm.
 

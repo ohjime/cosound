@@ -131,7 +131,14 @@
             }
         </style>
         <script>
+            // Force scroll to top on page load (prevents browser scroll restoration)
+            if ('scrollRestoration' in history) {
+                history.scrollRestoration = 'manual';
+            }
+            window.scrollTo(0, 0);
+
             window.addEventListener("DOMContentLoaded", function() {
+                window.scrollTo(0, 0);
                 var loader = document.getElementById("page-loader");
                 if (loader) {
                     setTimeout(function() {
@@ -141,6 +148,11 @@
                         }, 300);
                     }, 1000); // Show loader for at least 1 second
                 }
+            });
+
+            // Reset scroll position before unload (for refresh button)
+            window.addEventListener("beforeunload", function() {
+                window.scrollTo(0, 0);
             });
         </script>
         {% vite_hmr_client %}

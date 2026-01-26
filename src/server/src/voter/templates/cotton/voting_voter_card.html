@@ -24,6 +24,7 @@
             const days = this.accountAgeDays;
             if (days >= 365) return Math.floor(days / 365) + 'y';
             if (days >= 30) return Math.floor(days / 30) + 'm';
+            if (days < 1) return '1d';
             return days + 'd';
         },
         

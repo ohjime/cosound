@@ -161,7 +161,7 @@ def get_recent_voters(player, exclude_user=None, limit=5):
             {
                 "username": user.username,
                 "user_id": user.id,
-                "avatar_url": f"https://i.pravatar.cc/150?u={user.id}",
+                "avatar_url": f"https://robohash.org/{user.id}?bgset=bg1&set=set2",
                 "vote_value": vote.value,
                 "voted_at": vote.created_at,
                 "voted_at_iso": vote.created_at.isoformat(),
@@ -178,6 +178,7 @@ def voting_view(request):
     # Get URL parameters
     player_token = request.GET.get("player_token")
     choice = request.GET.get("choice")
+    choice_raw = (choice or "").strip().lower()
 
     # Validate parameters
     if not player_token or choice is None:
@@ -185,9 +186,10 @@ def voting_view(request):
             "Missing required parameters: player_token and choice", status=400
         )
 
-    # Convert choice to vote value (1 or -1)
-    is_upvote = choice.lower() in ["true", "1", "yes"]
-    vote_value = 1 if is_upvote else -1
+    # Convert choice to vote value (1 or -1) or mark as refresh (0)
+    is_refresh_request = choice_raw in ["0", "", "none", "refresh"]
+    is_upvote = choice_raw in ["true", "1", "yes"]
+    vote_value = None if is_refresh_request else (1 if is_upvote else -1)
 
     # Get the player object
     player = get_object_or_404(Player, token=player_token)
@@ -206,7 +208,7 @@ def voting_view(request):
     # Get voter card data
     voter_profile, _ = Voter.objects.get_or_create(user=request.user)
     total_votes = Vote.objects.filter(voter=voter_profile).count()
-    votes_here = Vote.objects.filter(player=player).count()
+    votes_here = Vote.objects.filter(voter=voter_profile, player=player).count()
     voter_data = {
         "total_votes": total_votes,
         "votes_here": votes_here,
@@ -214,7 +216,7 @@ def voting_view(request):
         "join_date_iso": request.user.date_joined.isoformat(),
         "username": request.user.username,
         "user_id": request.user.id,
-        "avatar_url": f"https://i.pravatar.cc/150?u={request.user.id}",
+        "avatar_url": f"https://robohash.org/{request.user.id}?bgset=bg1&set=set2",
     }
 
     # User is logged in, check rate limiting (60 seconds)
@@ -278,6 +280,70 @@ def voting_view(request):
                 "client": player.account.manager,
                 "recent_vote": recent_vote,
                 "last_vote_timestamp": recent_vote.created_at,
+                "layers": layers,
+                "voter_data": voter_data,
+                "recent_voters": recent_voters,
+            },
+        )
+
+    # If this is a refresh request, do not cast a vote; just render the view.
+    if is_refresh_request:
+        cosound = player.playing
+
+        if not cosound:
+            return HttpResponse("No cosound available for this player", status=404)
+
+        sound_ids = extract_sound_ids(cosound)
+        sounds = Sound.objects.filter(id__in=sound_ids) if sound_ids else []
+        sounds_dict = {str(sound.pk): sound for sound in sounds}
+
+        layers = []
+        layer_index = 1
+
+        for layer in cosound.layers:
+            sound_id = getattr(layer, "sound_id", None)
+            sound = sounds_dict.get(str(sound_id)) if sound_id else None
+            sound_type = getattr(layer, "sound_type", None) or getattr(
+                layer, "type", "Layer"
+            )
+            gain_value = getattr(layer, "sound_gain", 0.5) or 0.5
+            layers.append(
+                {
+                    "id": f"item{layer_index}",
+                    "layer_type": f"{sound_type} Layer",
+                    "gain_level": f"{gain_value:.2f}",
+                    "sound_name": (
+                        sound.title
+                        if sound
+                        else getattr(layer, "sound_title", "Unknown Sound")
+                    ),
+                    "recording_artist": (
+                        sound.artist
+                        if sound
+                        else getattr(layer, "sound_artist", "Unknown Artist")
+                    ),
+                    "artwork_url": f"https://picsum.photos/seed/{sound_id}/400/400",
+                }
+            )
+            layer_index += 1
+
+        # Sort layers so Instrumental appears first
+        layers.sort(key=lambda x: (0 if "Instrumental" in x["layer_type"] else 1))
+        # Re-index layer IDs after sorting
+        for i, layer in enumerate(layers, 1):
+            layer["id"] = f"item{i}"
+
+        # Get recent voters for the "other voters" section
+        recent_voters = get_recent_voters(player, exclude_user=request.user, limit=5)
+
+        return render(
+            request,
+            "voter/voting/index.html",
+            {
+                "ready_to_vote": True,
+                "player": player,
+                "client": player.account.manager,
+                "last_vote_timestamp": recent_vote.created_at if recent_vote else None,
                 "layers": layers,
                 "voter_data": voter_data,
                 "recent_voters": recent_voters,

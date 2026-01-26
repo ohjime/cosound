@@ -1,0 +1,12 @@
+<c-vars player_name="{{ player.name }}"
+        player_account_logo="https://www.ualberta.ca/en/toolkit/media-library/homepage-assets/ua_logo_green_rgb.png" />
+<div class="flex flex-row justify-center items-center gap-4 text-sm text-gray-600 dark:text-gray-300">
+    <img src="{{ player_account_logo }}"
+         alt="clientLogo"
+         class="max-w-28 h-10 object-contain">
+    <div class="h-8 w-px bg-gray-300 dark:bg-gray-600"></div>
+    <div class="flex flex-col justify-center text-base-content">
+        <span class="text-xs uppercase tracking-wide opacity-75">Now Playing at</span>
+        <span class="text-lg font-bold">{{ player_name }}</span>
+    </div>
+</div>

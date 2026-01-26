@@ -1,11 +1,25 @@
 import time
 import sys
 import logging
-from typing import cast
+from typing import cast, Any
 from django.core.management.base import BaseCommand
+from django.utils.module_loading import import_string
 from core.models import Cosound, Player
 from app import settings
-from django.utils.module_loading import import_string
+
+
+def _get_predictor() -> Any:
+    """Resolve the predictor, falling back to core.predict.random_predictor if not configured."""
+    predictor_path = getattr(settings, "COSOUND_CORE_PREDICTOR", None)
+    if predictor_path:
+        try:
+            return import_string(predictor_path)
+        except ImportError:
+            pass
+    # Fallback to core default
+    from core.predict import random_predictor
+
+    return random_predictor
 
 
 class Command(BaseCommand):
@@ -17,17 +31,7 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS("Initializing Cosound Generation Scheduler...")
         )
-        predictor_path = getattr(
-            settings,
-            "COSOUND_CORE_PREDICTION_FUNCTION",
-            "core.predict.random_cosound",
-        )
-        try:
-            predictor = import_string(predictor_path)
-        except ImportError as e:
-            raise ImportError(
-                f"Cosound Core: Could not import prediction model '{predictor_path}': {e}"
-            )
+        predictor = _get_predictor()
 
         try:
             while True:

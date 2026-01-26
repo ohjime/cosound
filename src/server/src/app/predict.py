@@ -10,8 +10,6 @@ from voter.models import Vote
 @task
 def predictor_v1(
     player_id: int,
-    *args,
-    **kwargs,
 ) -> int:
     """
     Predictor V1: vote-aware cosound prediction algorithm.

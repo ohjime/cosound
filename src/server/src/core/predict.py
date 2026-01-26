@@ -1,16 +1,10 @@
 import random
-from abc import ABC, abstractmethod
-from typing import Optional
-
 from django.tasks import task
-import numpy as np
-from pprint import pprint
-
-from core.models import Cosound, Sound, SoundLayer, Player
+from core.models import Cosound, SoundLayer, Player
 
 
 @task
-def random_cosound(
+def random_predictor(
     player_id: int,
     *args,
     **kwargs,

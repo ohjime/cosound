@@ -10,7 +10,34 @@ from django.contrib.auth.models import AbstractUser
 from django.utils.module_loading import import_string
 
 from app import settings
-from core.classify import SoundClassifier
+
+
+def _get_sound_dimension():
+    """Resolve the sound dimension, falling back to core.classify.dim if not configured."""
+    dim_path = getattr(settings, "COSOUND_SOUND_DIMENSION", None)
+    if dim_path:
+        try:
+            return import_string(dim_path)
+        except ImportError:
+            pass
+    # Fallback to core default
+    from core.classify import dim
+
+    return dim
+
+
+def _get_sound_classifier():
+    """Resolve the sound classifier, falling back to core.classify.random_classifier if not configured."""
+    classifier_path = getattr(settings, "COSOUND_SOUND_CLASSIFIER", None)
+    if classifier_path:
+        try:
+            return import_string(classifier_path)
+        except ImportError:
+            pass
+    # Fallback to core default
+    from core.classify import random_classifier
+
+    return random_classifier
 
 
 class User(AbstractUser):  # Database Class
@@ -67,7 +94,7 @@ class Sound(db_models.Model):  # Database Class
     type = db_models.CharField(choices=SoundType.choices)
     features = VectorField(
         null=True,
-        dimensions=settings.COSOUND_SOUND_CLASSIFICATION_DIM,
+        dimensions=_get_sound_dimension(),
     )
     created_at = db_models.DateTimeField(auto_now_add=True)
     updated_at = db_models.DateTimeField(auto_now=True)
@@ -77,14 +104,8 @@ class Sound(db_models.Model):  # Database Class
 
     def save(self, *args, **kwargs):
         if not self.features:
-            classifier_path = settings.COSOUND_SOUND_CLASSIFICATION
-            try:
-                classifier: SoundClassifier = import_string(classifier_path)
-                self.features = classifier.classify()
-            except ImportError as e:
-                raise ImportError(
-                    f"Cosound Core: Could not import sound classifier '{classifier_path}': {e}"
-                )
+            classifier = _get_sound_classifier()
+            self.features = classifier(self.file)
         super().save(*args, **kwargs)
 
     def asLayer(self, with_gain: float = 1.0) -> SoundLayer:

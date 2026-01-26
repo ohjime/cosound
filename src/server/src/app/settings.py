@@ -354,8 +354,3 @@ UNFOLD = {
         ],
     },
 }
-
-
-COSOUND_SOUND_CLASSIFICATION = "core.classify.RandomSoundClassifier"
-COSOUND_SOUND_CLASSIFICATION_DIM = 5
-COSOUND_CORE_PREDICTION_FUNCTION = "app.predict.predictor_v1"

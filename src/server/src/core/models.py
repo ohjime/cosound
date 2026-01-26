@@ -9,7 +9,7 @@ from django_pydantic_field import SchemaField
 from django.contrib.auth.models import AbstractUser
 from django.utils.module_loading import import_string
 
-from app import settings
+from django.conf import settings
 
 
 def _get_sound_dimension():

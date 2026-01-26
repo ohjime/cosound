@@ -5,7 +5,7 @@ from typing import cast, Any
 from django.core.management.base import BaseCommand
 from django.utils.module_loading import import_string
 from core.models import Cosound, Player
-from app import settings
+from django.conf import settings
 
 
 def _get_predictor() -> Any:

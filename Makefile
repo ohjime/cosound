@@ -14,9 +14,8 @@ else ifdef build
 	@cd src/player \
 		&& uv sync
 	@rm -rf src/player/media/
-	@cd src/player \
-		&& uv run flet build $(build)
-	if [ "$(build)" = "macos" ]; then \
+	@if [ "$(build)" = "macos" ]; then \
+			cd src/player && uv run flet build macos --arch arm64 x64; \
 			rm -rf build/player.app; \
 			mkdir -p build; \
 			cp -R src/player/build/macos/player.app build/; \

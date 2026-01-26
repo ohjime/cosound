@@ -1,19 +1,19 @@
-import uuid
-from django.contrib.auth import login, get_user_model
-from django.shortcuts import redirect, render
-from random_username.generate import generate_username
-from django.views.decorators.http import require_POST
-from django.http import HttpResponse
-from allauth.account.adapter import get_adapter
-from django.shortcuts import render, get_object_or_404
-from django.http import HttpResponse
-from django.utils import timezone
+import json
 from datetime import timedelta
-from django.db.models import OuterRef, Subquery, Max
+
+from random_username.generate import generate_username
+from allauth.account.adapter import get_adapter
+from django.contrib.auth import login
+from django.db.models import Max, OuterRef, Subquery
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from core.models import Player, Sound, User
 
-from voter.models import Voter, Vote
+from voter.models import Favorite, Voter, Vote
 from voter.adapters import UnifiedRequestLoginCodeForm
 
 
@@ -115,6 +115,48 @@ def extract_sound_ids(cosound):
     return sound_ids
 
 
+def build_layer_data(cosound, sounds_dict, favorite_sound_ids):
+    layers = []
+    layer_index = 1
+
+    for layer in cosound.layers:
+        sound_id = getattr(layer, "sound_id", None)
+        sound_key = str(sound_id) if sound_id is not None else ""
+        sound = sounds_dict.get(sound_key) if sound_key else None
+        sound_type = getattr(layer, "sound_type", None) or getattr(
+            layer, "type", "Layer"
+        )
+        gain_value = getattr(layer, "sound_gain", 0.5) or 0.5
+
+        layers.append(
+            {
+                "id": f"item{layer_index}",
+                "layer_type": f"{sound_type} Layer",
+                "gain_level": f"{gain_value:.2f}",
+                "sound_name": (
+                    sound.title
+                    if sound
+                    else getattr(layer, "sound_title", "Unknown Sound")
+                ),
+                "recording_artist": (
+                    sound.artist
+                    if sound
+                    else getattr(layer, "sound_artist", "Unknown Artist")
+                ),
+                "artwork_url": f"https://picsum.photos/seed/{sound_id}/400/400",
+                "sound_id": sound_key,
+                "liked": sound_key in favorite_sound_ids,
+            }
+        )
+        layer_index += 1
+
+    layers.sort(key=lambda x: (0 if "Instrumental" in x["layer_type"] else 1))
+    for i, layer in enumerate(layers, 1):
+        layer["id"] = f"item{i}"
+
+    return layers
+
+
 def get_recent_voters(player, exclude_user=None, limit=5):
     """
     Get the last N distinct voters at this player with their vote data.
@@ -160,8 +202,8 @@ def get_recent_voters(player, exclude_user=None, limit=5):
         voters_data.append(
             {
                 "username": user.username,
-                "user_id": user.id,
-                "avatar_url": f"https://robohash.org/{user.id}?bgset=bg1&set=set2",
+                "user_id": user.pk,
+                "avatar_url": f"https://robohash.org/{user.pk}?bgset=bg1&set=set2",
                 "vote_value": vote.value,
                 "voted_at": vote.created_at,
                 "voted_at_iso": vote.created_at.isoformat(),
@@ -219,6 +261,14 @@ def voting_view(request):
         "avatar_url": f"https://robohash.org/{request.user.id}?bgset=bg1&set=set2",
     }
 
+    favorite_sound_ids = set(
+        str(sound_id)
+        for sound_id in Favorite.objects.filter(voter=voter_profile).values_list(
+            "sound_id", flat=True
+        )
+    )
+    favorite_url = reverse("voter_toggle_favorite")
+
     # User is logged in, check rate limiting (60 seconds)
     one_minute_ago = timezone.now() - timedelta(seconds=60)
     recent_vote = Vote.objects.filter(
@@ -233,40 +283,7 @@ def voting_view(request):
             sound_ids = extract_sound_ids(cosound)
             sounds = Sound.objects.filter(id__in=sound_ids) if sound_ids else []
             sounds_dict = {str(sound.pk): sound for sound in sounds}
-            layer_index = 1
-
-            for layer in cosound.layers:
-                sound_id = getattr(layer, "sound_id", None)
-                sound = sounds_dict.get(str(sound_id)) if sound_id else None
-                sound_type = getattr(layer, "sound_type", None) or getattr(
-                    layer, "type", "Layer"
-                )
-                gain_value = getattr(layer, "sound_gain", 0.5) or 0.5
-                layers.append(
-                    {
-                        "id": f"item{layer_index}",
-                        "layer_type": f"{sound_type} Layer",
-                        "gain_level": f"{gain_value:.2f}",
-                        "sound_name": (
-                            sound.title
-                            if sound
-                            else getattr(layer, "sound_title", "Unknown Sound")
-                        ),
-                        "recording_artist": (
-                            sound.artist
-                            if sound
-                            else getattr(layer, "sound_artist", "Unknown Artist")
-                        ),
-                        "artwork_url": f"https://picsum.photos/seed/{sound_id}/400/400",
-                    }
-                )
-                layer_index += 1
-
-        # Sort layers so Instrumental appears first
-        layers.sort(key=lambda x: (0 if "Instrumental" in x["layer_type"] else 1))
-        # Re-index layer IDs after sorting
-        for i, layer in enumerate(layers, 1):
-            layer["id"] = f"item{i}"
+            layers = build_layer_data(cosound, sounds_dict, favorite_sound_ids)
 
         # Get recent voters for the "other voters" section
         recent_voters = get_recent_voters(player, exclude_user=request.user, limit=5)
@@ -283,6 +300,7 @@ def voting_view(request):
                 "layers": layers,
                 "voter_data": voter_data,
                 "recent_voters": recent_voters,
+                "favorite_url": favorite_url,
             },
         )
 
@@ -296,42 +314,7 @@ def voting_view(request):
         sound_ids = extract_sound_ids(cosound)
         sounds = Sound.objects.filter(id__in=sound_ids) if sound_ids else []
         sounds_dict = {str(sound.pk): sound for sound in sounds}
-
-        layers = []
-        layer_index = 1
-
-        for layer in cosound.layers:
-            sound_id = getattr(layer, "sound_id", None)
-            sound = sounds_dict.get(str(sound_id)) if sound_id else None
-            sound_type = getattr(layer, "sound_type", None) or getattr(
-                layer, "type", "Layer"
-            )
-            gain_value = getattr(layer, "sound_gain", 0.5) or 0.5
-            layers.append(
-                {
-                    "id": f"item{layer_index}",
-                    "layer_type": f"{sound_type} Layer",
-                    "gain_level": f"{gain_value:.2f}",
-                    "sound_name": (
-                        sound.title
-                        if sound
-                        else getattr(layer, "sound_title", "Unknown Sound")
-                    ),
-                    "recording_artist": (
-                        sound.artist
-                        if sound
-                        else getattr(layer, "sound_artist", "Unknown Artist")
-                    ),
-                    "artwork_url": f"https://picsum.photos/seed/{sound_id}/400/400",
-                }
-            )
-            layer_index += 1
-
-        # Sort layers so Instrumental appears first
-        layers.sort(key=lambda x: (0 if "Instrumental" in x["layer_type"] else 1))
-        # Re-index layer IDs after sorting
-        for i, layer in enumerate(layers, 1):
-            layer["id"] = f"item{i}"
+        layers = build_layer_data(cosound, sounds_dict, favorite_sound_ids)
 
         # Get recent voters for the "other voters" section
         recent_voters = get_recent_voters(player, exclude_user=request.user, limit=5)
@@ -347,6 +330,7 @@ def voting_view(request):
                 "layers": layers,
                 "voter_data": voter_data,
                 "recent_voters": recent_voters,
+                "favorite_url": favorite_url,
             },
         )
 
@@ -370,43 +354,7 @@ def voting_view(request):
     sound_ids = extract_sound_ids(cosound)
     sounds = Sound.objects.filter(id__in=sound_ids) if sound_ids else []
     sounds_dict = {str(sound.pk): sound for sound in sounds}
-
-    # Build enriched layer data for cotton components
-    layers = []
-    layer_index = 1
-
-    for layer in cosound.layers:
-        sound_id = getattr(layer, "sound_id", None)
-        sound = sounds_dict.get(str(sound_id)) if sound_id else None
-        sound_type = getattr(layer, "sound_type", None) or getattr(
-            layer, "type", "Layer"
-        )
-        gain_value = getattr(layer, "sound_gain", 0.5) or 0.5
-        layers.append(
-            {
-                "id": f"item{layer_index}",
-                "layer_type": f"{sound_type} Layer",
-                "gain_level": f"{gain_value:.2f}",
-                "sound_name": (
-                    sound.title
-                    if sound
-                    else getattr(layer, "sound_title", "Unknown Sound")
-                ),
-                "recording_artist": (
-                    sound.artist
-                    if sound
-                    else getattr(layer, "sound_artist", "Unknown Artist")
-                ),
-                "artwork_url": f"https://picsum.photos/seed/{sound_id}/400/400",
-            }
-        )
-        layer_index += 1
-
-    # Sort layers so Instrumental appears first
-    layers.sort(key=lambda x: (0 if "Instrumental" in x["layer_type"] else 1))
-    # Re-index layer IDs after sorting
-    for i, layer in enumerate(layers, 1):
-        layer["id"] = f"item{i}"
+    layers = build_layer_data(cosound, sounds_dict, favorite_sound_ids)
 
     # Get recent voters for the "other voters" section
     recent_voters = get_recent_voters(player, exclude_user=request.user, limit=5)
@@ -425,5 +373,43 @@ def voting_view(request):
             "success": True,
             "voter_data": voter_data,
             "recent_voters": recent_voters,
+            "favorite_url": favorite_url,
         },
     )
+
+
+@require_POST
+def toggle_favorite_sound(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({"detail": "Authentication required."}, status=401)
+
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        payload = request.POST
+
+    sound_id = payload.get("sound_id") or request.POST.get("sound_id")
+    liked_raw = payload.get("liked")
+
+    if isinstance(liked_raw, str):
+        liked_value = liked_raw.lower() in ["1", "true", "yes", "on"]
+    elif liked_raw is None:
+        liked_value = None
+    else:
+        liked_value = bool(liked_raw)
+
+    if not sound_id:
+        return JsonResponse({"detail": "sound_id is required."}, status=400)
+
+    sound = get_object_or_404(Sound, id=sound_id)
+    voter, _ = Voter.objects.get_or_create(user=request.user)
+
+    exists = Favorite.objects.filter(voter=voter, sound=sound).exists()
+    target_state = liked_value if liked_value is not None else not exists
+
+    if target_state and not exists:
+        Favorite.objects.create(voter=voter, sound=sound)
+    elif not target_state and exists:
+        Favorite.objects.filter(voter=voter, sound=sound).delete()
+
+    return JsonResponse({"liked": target_state})

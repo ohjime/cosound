@@ -24,15 +24,17 @@
             <c-voting-player-info player_name="{{ player.name }}" />
         </div>
         {% if layers %}
-            <div class="pb-5 pt-2">
+            <div class="py-0">
                 <c-voting-cosound>
                     {% for layer in layers %}
                         <c-voting-cosound-layer id="{{ layer.id }}"
+                                                sound_id="{{ layer.sound_id }}"
                                                 layer_type="{{ layer.layer_type }}"
                                                 gain_level="{{ layer.gain_level }}"
                                                 sound_name="{{ layer.sound_name }}"
                                                 recording_artist="{{ layer.recording_artist }}"
-                                                artwork_url="{{ layer.artwork_url }}" />
+                                                artwork_url="{{ layer.artwork_url }}"
+                                                liked="{{ layer.liked|yesno:'true,false' }}" />
                     {% endfor %}
                 </c-voting-cosound>
             </div>
@@ -57,15 +59,17 @@
             <c-voting-player-info player_name="{{ player.name }}" />
         </div>
         {% if layers %}
-            <div class="pb-5 pt-2">
+            <div class="py-0">
                 <c-voting-cosound>
                     {% for layer in layers %}
                         <c-voting-cosound-layer id="{{ layer.id }}"
+                                                sound_id="{{ layer.sound_id }}"
                                                 layer_type="{{ layer.layer_type }}"
                                                 gain_level="{{ layer.gain_level }}"
                                                 sound_name="{{ layer.sound_name }}"
                                                 recording_artist="{{ layer.recording_artist }}"
-                                                artwork_url="{{ layer.artwork_url }}" />
+                                                artwork_url="{{ layer.artwork_url }}"
+                                                liked="{{ layer.liked|yesno:'true,false' }}" />
                     {% endfor %}
                 </c-voting-cosound>
             </div>

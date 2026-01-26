@@ -6,6 +6,7 @@ from voter.views import (
     htmx_auth_options,
     htmx_login_email,
     htmx_login_code,
+    toggle_favorite_sound,
     voting_view,
 )
 
@@ -16,6 +17,11 @@ urlpatterns = [
         "vote/",
         voting_view,
         name="vote",
+    ),
+    path(
+        "favorites/toggle/",
+        toggle_favorite_sound,
+        name="voter_toggle_favorite",
     ),
     # HTMX Auth Modal Views
     path(

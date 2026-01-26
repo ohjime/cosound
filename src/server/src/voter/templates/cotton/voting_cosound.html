@@ -6,7 +6,18 @@
         sound: '',
         artist: '',
         liked: false,
+        soundId: '',
+        favoriteUrl: '{{ favorite_url|default:""|escapejs }}',
         activeItem: null,
+
+        csrfToken() {
+            const name = 'csrftoken=';
+            const cookie = document.cookie
+                .split(';')
+                .map((c) => c.trim())
+                .find((c) => c.startsWith(name));
+            return cookie ? cookie.substring(name.length) : '';
+        },
 
         updateText() {
             const el = this.$refs.carousel;
@@ -29,15 +40,54 @@
                 this.gain = this.activeItem.dataset.gain;
                 this.sound = this.activeItem.dataset.soundName;
                 this.artist = this.activeItem.dataset.recordingArtist;
+                this.soundId = this.activeItem.dataset.soundId || '';
                 this.liked = this.activeItem.dataset.liked === 'true';
             }
         },
 
         toggleLike() {
-            this.liked = !this.liked;
-            if (this.activeItem) {
-                this.activeItem.dataset.liked = this.liked.toString();
+            const targetId = this.activeItem ? this.activeItem.dataset.soundId : '';
+            if (!targetId) {
+                return;
             }
+
+            const nextState = !this.liked;
+            this.liked = nextState;
+
+            if (this.activeItem) {
+                this.activeItem.dataset.liked = nextState.toString();
+            }
+
+            if (!this.favoriteUrl) {
+                return;
+            }
+
+            fetch(this.favoriteUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': this.csrfToken(),
+                },
+                body: JSON.stringify({ sound_id: targetId, liked: nextState }),
+            })
+                .then((resp) => {
+                    if (!resp.ok) throw new Error('Favorite toggle failed');
+                    return resp.json();
+                })
+                .then((data) => {
+                    const serverState = !!data.liked;
+                    this.liked = serverState;
+                    if (this.activeItem) {
+                        this.activeItem.dataset.liked = serverState.toString();
+                    }
+                })
+                .catch(() => {
+                    const rollback = !nextState;
+                    this.liked = rollback;
+                    if (this.activeItem) {
+                        this.activeItem.dataset.liked = rollback.toString();
+                    }
+                });
         },
 
         init() {

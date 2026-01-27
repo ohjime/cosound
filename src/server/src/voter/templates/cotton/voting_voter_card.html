@@ -1,0 +1,66 @@
+<c-vars votes_here="0"
+        total_votes="0"
+        join_date_iso=""
+        local_badge=""
+        global_badge=""
+        age_badge="" />
+<div class="stats stats-vertical min-[24rem]:stats-horizontal shadow w-full max-w-96 mx-auto"
+    {# djlint:off #}
+    x-data="{
+        votesHere: {{ votes_here }},
+        totalVotes: {{ total_votes }},
+        joinDateIso: '{{ join_date_iso }}',
+        localBadge: '{{ local_badge }}',
+        globalBadge: '{{ global_badge }}',
+        ageBadge: '{{ age_badge }}',
+        
+        formatNumber(n) {
+            if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+            if (n >= 100000) return Math.round(n / 1000) + 'k';
+            if (n >= 10000) return Math.round(n / 1000) + 'k';
+            if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+            return n.toString();
+        },
+        
+        get formattedAge() {
+            const days = Math.floor((new Date() - new Date(this.joinDateIso)) / (1000 * 60 * 60 * 24));
+            if (days >= 365) return Math.floor(days / 365) + 'y';
+            if (days >= 30) return Math.floor(days / 30) + 'm';
+            if (days < 1) return '1d';
+            return days + 'd';
+        }
+    }"
+    {# djlint:on #}
+    >
+    <div class="stat place-items-center">
+        <div class="stat-title">Votes Here</div>
+        <div class="stat-value" x-text="formatNumber(votesHere)"></div>
+        <div class="stat-actions">
+            <div class="badge badge-dash badge-primary" x-show="localBadge === 'Floating'">Floating</div>
+            <div class="badge badge-soft badge-primary" x-show="localBadge === 'Settling'">Settling</div>
+            <div class="badge badge-primary text-primary-content"
+                 x-show="localBadge === 'Resting'">Resting</div>
+        </div>
+    </div>
+    <div class="stat place-items-center">
+        <div class="stat-title">Total Votes</div>
+        <div class="stat-value" x-text="formatNumber(totalVotes)"></div>
+        <div class="stat-actions">
+            <div class="badge badge-dash badge-secondary" x-show="globalBadge === 'Kindled'">Kindled</div>
+            <div class="badge badge-soft badge-secondary" x-show="globalBadge === 'Burning'">Burning</div>
+            <div class="badge badge-secondary text-secondary-content"
+                 x-show="globalBadge === 'Embered'">Embered</div>
+        </div>
+    </div>
+    <div class="stat place-items-center">
+        <div class="stat-title">Account Age</div>
+        <div class="stat-value" x-text="formattedAge"></div>
+        <div class="stat-actions">
+            <div class="badge badge-dash badge-base text-base-content"
+                 x-show="ageBadge === 'Leaf'">Leaf</div>
+            <div class="badge badge-soft badge-base text-base-content"
+                 x-show="ageBadge === 'Branch'">Branch</div>
+            <div class="badge badge-base text-base-content" x-show="ageBadge === 'Oak'">Oak</div>
+        </div>
+    </div>
+</div>

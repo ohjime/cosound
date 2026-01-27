@@ -1,0 +1,34 @@
+<div class="motion-preset-slide-right motion-duration-300">
+    <div class="text-center mb-6">
+        <h2 class="text-xl font-bold text-gray-900 dark:text-white">Sign In with Email</h2>
+        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">We'll send you a code. No password needed.</p>
+    </div>
+    <form hx-post="{% url 'htmx_login_email' %}"
+          hx-target="#auth-modal-content"
+          hx-swap="innerHTML"
+          hx-indicator="#auth-modal-loader"
+          class="space-y-4">
+        {% csrf_token %}
+        <div>
+            <label for="id_email" class="sr-only">Email address</label>
+            <input type="email"
+                   name="email"
+                   id="id_email"
+                   required
+                   class="appearance-none rounded-xl relative block w-full px-4 py-3 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white dark:bg-gray-700 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
+                   placeholder="Enter your email"
+                   value="{{ form.email.value|default:'' }}">
+            {% if form.email.errors %}<p class="mt-2 text-sm text-red-600">{{ form.email.errors.0 }}</p>{% endif %}
+        </div>
+        <button type="submit"
+                class="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">
+            Send Login Code
+        </button>
+        <button type="button"
+                hx-get="{% url 'htmx_auth_options' %}"
+                hx-target="#auth-modal-content"
+                class="w-full text-center text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+            Back to options
+        </button>
+    </form>
+</div>

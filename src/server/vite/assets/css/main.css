@@ -1,0 +1,42 @@
+@import url('https://fonts.cdnfonts.com/css/helvetica-neue-5');
+@import "tailwindcss";
+
+@source "../../../src";
+@source "..";
+
+/* 1. Initialize DaisyUI */
+@plugin "daisyui" {
+    /* We just list the themes we want to use here, but we define defaults below */
+    themes: winter, dim;
+}
+
+/* Initialize Tailwind Motion */
+@plugin "tailwindcss-motion";
+
+/* Initialize Tailwind Intersect (for scroll animations) */
+@plugin "tailwindcss-intersect";
+
+/* 2. Customize 'winter' and set it as the DEFAULT (Light Mode) */
+@plugin "daisyui/theme" {
+    name: "winter";
+    default: true;
+    /* Sets winter as the default theme */
+    --color-base-100: #f3f4f6;
+    /* Custom background color */
+}
+
+/* 3. Customize 'dim' and set it as the PREFERRED DARK (Dark Mode) */
+@plugin "daisyui/theme" {
+    name: "dim";
+    prefersdark: true;
+    /* Sets dim as the dark mode theme */
+    --color-base-100: #1f2733;
+    /* Custom background color */
+}
+
+/* 4. Configure the 'dark:' variant for Tailwind */
+@custom-variant dark (&:where([data-theme=dim], [data-theme=dim] *));
+
+@utility no-scrollbar {
+    @apply [scrollbar-width:none] [&::-webkit-scrollbar]:hidden;
+}

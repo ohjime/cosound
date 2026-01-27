@@ -1,0 +1,80 @@
+{
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/__init__.py": true,
+        "**/*.pyc": true,
+        "**/*.pyo": true,
+        "**/*.pyd": true,
+        "**/.Python": true,
+        "**/venv/": true,
+        "**/.venv/": true,
+        "**/node_modules/": true,
+        "**/package-lock.json": true,
+        "**/uv.lock": true,
+        "**/.vscode/": true,
+        "**/.prettierignore": true,
+        "**/eslint.config.js": true,
+        "**/prettier.config.js": true,
+        "**/dist": true,
+        "**/.gitignore": true,
+        "**/.python-version": true,
+        "**/procfile.dev": true,
+        "**/procfile.prod": true,
+        "**/asgi.py": true,
+        "**/wsgi.py": true,
+        "**/apps.py": true,
+        "**/migrations/": true,
+        "**/pyproject.toml": true,
+    },
+    "files.watcherExclude": {
+        "**/routeTree.gen.ts": true
+    },
+    "search.exclude": {
+        "**/routeTree.gen.ts": true
+    },
+    "files.readonlyInclude": {
+        "**/routeTree.gen.ts": true
+    },
+    "python.terminal.activateEnvironment": false,
+    "[python]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "ms-python.black-formatter"
+    },
+    "[json]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "vscode.json-language-features"
+    },
+    "[jsonc]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "vscode.json-language-features"
+    },
+    "[django-html]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "monosans.djlint"
+    },
+    "auto-close-tag.activationOnLanguage": [
+        "markdown",
+        "django-html",
+        "html",
+    ],
+    "auto-rename-tag.activationOnLanguage": [
+        "markdown",
+        "django-html",
+        "html",
+    ],
+    "alpine-intellisense.settings.languageScopes": "html",
+    "emmet.includeLanguages": {
+        "django-html": "html",
+    },
+    "djlint.formatJs": true,
+    "djlint.formatCss": true,
+    "djlint.maxAttributeLength": 80,
+    "djlint.maxLineLength": 120,
+    "editor.suggest.showWords": false,
+    "editor.snippetSuggestions": "top",
+    "djlint.ignore": [
+        "H006",
+        "D018",
+        "H026",
+    ]
+}

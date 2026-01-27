@@ -1,0 +1,134 @@
+<c-vars upvote=0 waiting_time=0 avatar_url="" username="" />
+<div class="flex flex-col items-center gap-3"
+    {# djlint:off #}
+    x-data="{
+        upvote: {{ upvote }},
+        time_left: Number({{ waiting_time }}),
+        throttled: {{ waiting_time }} > 0,
+        
+        // Computed Helpers
+        get isWaiting() { return this.time_left > 0; },
+        get isReady() { return this.time_left === 0; },
+        
+        // Text for the spinning ring
+        get statusText() {
+            if (this.throttled && this.isWaiting) return 'NEXT VOTE IN';
+            if (this.throttled && !this.isWaiting && this.upvote === 1) return 'UPVOTE AGAIN?';
+            if (this.throttled && !this.isWaiting && this.upvote === 0) return 'DOWNVOTE AGAIN?';
+            if (!this.throttled && this.upvote === 1) return 'UPVOTE SENT';
+            if (!this.throttled && this.upvote === 0) return 'DOWNVOTE SENT';
+            return '';
+        },
+
+        // Timer Logic
+        startCountdown() {
+            if (!this.isWaiting) return;
+            
+            let interval = setInterval(() => {
+                if (this.time_left > 0) {
+                    this.time_left = this.time_left - 1;
+                } else {
+                    clearInterval(interval);
+                }
+            }, 1000);
+        }
+    }"
+    x-init="startCountdown()"
+    {# djlint:on #}
+    >
+    <div class="flex flex-row items-center justify-center gap-8">
+        <button class="flex h-17 w-17 items-center justify-center rounded-full text-base-300-content/80 transition-all active:scale-95 bg-base-300/90 hover:bg-base-300/80 active:bg-base-300/100">
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 height="24px"
+                 class="h-9 w-9"
+                 viewBox="0 -960 960 960"
+                 width="24px"
+                 fill="currentColor">
+                <path d="M200-360v-240h160l200-200v640L360-360H200Zm440 40v-322q45 21 72.5 65t27.5 97q0 53-27.5 96T640-320ZM480-606l-86 86H280v80h114l86 86v-252ZM380-480Z" />
+            </svg>
+        </button>
+        <div class="relative flex items-center justify-center w-28 h-28">
+            <svg x-show="throttled || (!throttled && (upvote === 1 || upvote === 0))"
+                 class="absolute inset-0 w-full h-full pointer-events-none animate-[spin_10s_linear_infinite] z-0"
+                 viewBox="0 0 100 100"
+                 overflow="visible">
+                <defs>
+                <path id="circlePath" d="M 50, 50 m -55, 0 a 55,55 0 1,1 110,0 a 55,55 0 1,1 -110,0" />
+                </defs>
+                <text class="font-black text-[9px] uppercase tracking-[0.15em] transition-colors duration-500"
+                {# djlint:off #}
+                      :class="{
+                          'fill-base-content': throttled && isWaiting,
+                          'fill-secondary': throttled && !isWaiting,
+                          'fill-success': !throttled && upvote === 1,
+                          'fill-error': !throttled && upvote === -1
+                      }"
+                {# djlint:on #}>
+                <textPath xlink:href="#circlePath" startOffset="25%" text-anchor="middle">
+                <tspan x-text="statusText"></tspan>
+                </textPath>
+                <textPath xlink:href="#circlePath" startOffset="75%" text-anchor="middle">
+                <tspan x-text="statusText"></tspan>
+                </textPath>
+                </text>
+            </svg>
+            <div class="z-10 relative w-24 h-24 rounded-full overflow-hidden ring-6 ring-offset-2 ring-offset-base-100 transition-all duration-500"
+                {# djlint:off #}
+                 :class="{
+                    'ring-base-content': throttled && isWaiting, 
+                    'ring-secondary': throttled && !isWaiting,
+                    'ring-success': !throttled && upvote === 1, 
+                    'ring-error': !throttled && upvote === 0
+                 }"
+                {# djlint:on #}>
+                <img src="{{ avatar_url }}"
+                     class="absolute inset-0 w-full h-full object-cover transition-all duration-700"
+                     :class="isWaiting ? 'brightness-[0.4] scale-105' : 'brightness-100 scale-100'"
+                     alt="Avatar">
+                <div class="absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-300"
+                     x-show="isWaiting"
+                     x-transition:leave="opacity-0">
+                    <span class="countdown font-mono text-4xl text-white font-bold drop-shadow-md">
+                        <span :style="`--value: ${time_left}; --digits:2`"></span>
+                    </span>
+                </div>
+                <button @click="window.location.reload()"
+                        class="absolute inset-0 flex items-center justify-center bg-secondary transition-all duration-300 cursor-pointer"
+                        :class="throttled && !isWaiting ? 'opacity-100 scale-100' : 'opacity-0 scale-90 pointer-events-none'">
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         viewBox="0 -960 960 960"
+                         fill="currentColor"
+                         class="size-10 text-white">
+                        <path d="M480-160q-134 0-227-93t-93-227q0-134 93-227t227-93q69 0 132 28.5T720-690v-110h80v240H560v-80h135q-44-51-103.5-80.5T480-720q-100 0-170 70t-70 170q0 100 70 170t170 70q77 0 139-44t87-116h84q-28 106-114 173t-196 67Z" />
+                    </svg>
+                </button>
+            </div>
+            <span x-show="!isWaiting && !throttled"
+                  x-transition:enter="transition zoom-in duration-300 delay-100"
+                  class="absolute indicator-item badge badge-lg text-sm font-black text-white z-20 shadow-lg border-2 bottom-0.5"
+                  :class="upvote === 1 ? 'badge-success ring-2 ring-success/20' : 'badge-error ring-2 ring-error/20'"
+                  x-text="upvote === 1 ? '+1' : '-1'"></span>
+        </div>
+        <button class="flex h-17 w-17 items-center justify-center rounded-full text-base-300-content/80 transition-all active:scale-95 bg-base-300/90 hover:bg-base-300/80 active:bg-base-300/100">
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 height="24px"
+                 class="h-9 w-9"
+                 viewBox="0 -960 960 960"
+                 width="24px"
+                 fill="currentColor">
+                <path d="M560-131v-82q90-26 145-100t55-168q0-94-55-168T560-749v-82q124 28 202 125.5T840-481q0 127-78 224.5T560-131ZM120-360v-240h160l200-200v640L280-360H120Zm440 40v-322q47 22 73.5 66t26.5 96q0 51-26.5 94.5T560-320ZM400-606l-86 86H200v80h114l86 86v-252ZM300-480Z" />
+            </svg>
+        </button>
+    </div>
+    <div class="flex justify-center mt-6">
+        <div class="badge font-bold capitalize tracking-widest font-mono text-center px-6 py-4 transition-colors duration-500"
+            {# djlint:off #}
+             :class="{ 
+                 'badge-neutral': throttled && isWaiting, 
+                 'badge-secondary': throttled && !isWaiting, 
+                 'badge-success': !throttled && upvote === 1, 
+                 'badge-error': !throttled && upvote === -1 
+             }"
+            {# djlint:on #}>{{ username }}</div>
+    </div>
+</div>

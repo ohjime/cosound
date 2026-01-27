@@ -1,0 +1,39 @@
+<div class="motion-preset-slide-right motion-duration-300">
+    <div class="text-center mb-6">
+        <h2 class="text-xl font-bold text-gray-900 dark:text-white">Enter Code</h2>
+        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            Check your email <span class="font-medium text-gray-900 dark:text-gray-200">{{ email }}</span>
+        </p>
+    </div>
+    <form hx-post="{% url 'htmx_login_code' %}"
+          hx-target="#auth-modal-content"
+          hx-indicator="#auth-modal-loader"
+          class="space-y-4">
+        {% csrf_token %}
+        <div class="flex justify-center">
+            <input type="text"
+                   name="code"
+                   id="id_code"
+                   required
+                   class="appearance-none rounded-xl block w-48 px-4 py-3 text-center tracking-[0.5em] text-2xl font-bold border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white dark:bg-gray-700 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                   placeholder="000000"
+                   maxlength="6"
+                   inputmode="numeric"
+                   pattern="[0-9]*"
+                   autocomplete="one-time-code"
+                   autofocus
+                   value="{{ value|default:'' }}">
+        </div>
+        {% if error %}<div class="text-center text-sm text-red-600 motion-preset-shake">{{ error }}</div>{% endif %}
+        <button type="submit"
+                class="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">
+            Confirm & Vote
+        </button>
+        <button type="button"
+                hx-get="{% url 'htmx_login_email' %}"
+                hx-target="#auth-modal-content"
+                class="w-full text-center text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+            Use a different email
+        </button>
+    </form>
+</div>

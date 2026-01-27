@@ -1,0 +1,152 @@
+{% load i18n %}
+<div class="dff-uploader">
+    {% if widget.value.url %}
+        <div class="mb-4">
+            <audio controls style="width: 100%; max-width: 400px;">
+                <source src="{{ widget.value.url }}" type="audio/mpeg">
+                Your browser does not support the audio element.
+            </audio>
+        </div>
+    {% endif %}
+    <div class="dff-container" data-translations="{{ translations }}">
+        <label class="dff-file-button">
+            <span class="dff-button-text">Choose File</span>
+            {% include "django/forms/widgets/input.html" %}
+        </label>
+    </div>
+</div>
+<style>
+    .dff-uploader .dff-file-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        background-color: #4f46e5;
+        color: white;
+        font-size: 0.875rem;
+        font-weight: 500;
+        border-radius: 0.375rem;
+        cursor: pointer;
+        transition: background-color 0.15s ease;
+    }
+
+    .dff-uploader .dff-file-button:hover {
+        background-color: #4338ca;
+    }
+
+    .dff-uploader .dff-file-button input[type="file"] {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    /* Dark mode support */
+    @media (prefers-color-scheme: dark) {
+        .dff-uploader .dff-file-button {
+            background-color: #6366f1;
+        }
+
+        .dff-uploader .dff-file-button:hover {
+            background-color: #818cf8;
+        }
+    }
+
+    /* Unfold dark mode class support */
+    .dark .dff-uploader .dff-file-button {
+        background-color: #6366f1;
+    }
+
+    .dark .dff-uploader .dff-file-button:hover {
+        background-color: #818cf8;
+    }
+
+    /* File list styling */
+    .dff-uploader .dff-files {
+        margin-top: 0.75rem;
+    }
+
+    .dff-uploader .dff-file {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.75rem 1rem;
+        background-color: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.375rem;
+        margin-top: 0.5rem;
+    }
+
+    .dark .dff-uploader .dff-file {
+        background-color: #1f2937;
+        border-color: #374151;
+    }
+
+    .dff-uploader .dff-filename {
+        flex: 1;
+        font-size: 0.875rem;
+        color: #374151;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .dark .dff-uploader .dff-filename {
+        color: #d1d5db;
+    }
+
+    .dff-uploader .dff-filesize {
+        font-size: 0.75rem;
+        color: #6b7280;
+        white-space: nowrap;
+    }
+
+    .dff-uploader .dff-delete {
+        font-size: 0.75rem;
+        color: #dc2626;
+        text-decoration: none;
+        font-weight: 500;
+    }
+
+    .dff-uploader .dff-delete:hover {
+        text-decoration: underline;
+    }
+</style>
+<script>
+    (function() {
+        function truncateFilenames(container) {
+            container.querySelectorAll('.dff-filename').forEach(function(el) {
+                const fullPath = el.textContent;
+                const filename = fullPath.split('/').pop();
+                if (filename && filename !== fullPath) {
+                    el.textContent = filename;
+                    el.title = fullPath;
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            truncateFilenames(document);
+        });
+
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                mutation.addedNodes.forEach(function(node) {
+                    if (node.nodeType === 1) {
+                        truncateFilenames(node);
+                    }
+                });
+            });
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+    })();
+</script>

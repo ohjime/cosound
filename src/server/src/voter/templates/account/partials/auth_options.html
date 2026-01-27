@@ -1,0 +1,42 @@
+<div class="space-y-6 text-center motion-preset-slide-up motion-duration-300">
+    <div>
+        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Cast Your Vote</h2>
+        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Choose how you want to sign in to continue.</p>
+    </div>
+    <div class="space-y-3">
+        <button hx-get="{% url 'htmx_login_email' %}"
+                hx-target="#auth-modal-content"
+                hx-swap="innerHTML transition:true"
+                class="w-full flex items-center justify-center gap-3 px-4 py-3 border border-transparent text-base font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 md:py-4 md:text-lg md:px-10 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 class="h-6 w-6"
+                 fill="none"
+                 viewBox="0 0 24 24"
+                 stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            Vote with Email
+        </button>
+        <div class="relative">
+            <div class="absolute inset-0 flex items-center">
+                <div class="w-full border-t border-gray-300 dark:border-gray-600"></div>
+            </div>
+            <div class="relative flex justify-center text-sm">
+                <span class="px-2 bg-white dark:bg-gray-800 text-gray-500">Or</span>
+            </div>
+        </div>
+        <button hx-post="{% url 'account_guest_login' %}"
+                hx-target="#auth-modal-content"
+                hx-indicator="#auth-modal-loader"
+                class="w-full flex items-center justify-center gap-3 px-4 py-3 border-2 border-gray-200 dark:border-gray-700 text-base font-medium rounded-xl text-gray-700 dark:text-gray-200 bg-transparent hover:bg-gray-50 dark:hover:bg-gray-700 md:py-4 md:text-lg md:px-10 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 class="h-6 w-6"
+                 fill="none"
+                 viewBox="0 0 24 24"
+                 stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            Vote Anonymously
+        </button>
+    </div>
+</div>

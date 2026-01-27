@@ -1,0 +1,69 @@
+{% if recent_voters %}
+    <ul class="list bg-base-100 max-w-96">
+        <li class="p-4 pb-2 text-xs opacity-60 tracking-wide">Recent Voters at {{ player.name }}</li>
+        {% for voter in recent_voters %}
+            <li class="list-row"
+                {# djlint:off #}
+        x-data="{
+            voteValue: {{ voter.vote_value }},
+            votedAtIso: '{{ voter.voted_at_iso }}',
+            localBadge: '{{ voter.local_badge }}',
+            globalBadge: '{{ voter.global_badge }}',
+            ageBadge: '{{ voter.age_badge }}',
+            
+            get timeAgo() {
+                const votedAt = new Date(this.votedAtIso);
+                const now = new Date();
+                const diffMs = now - votedAt;
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMs / 3600000);
+                const diffDays = Math.floor(diffMs / 86400000);
+                
+                if (diffMins < 1) return 'Just now';
+                if (diffMins < 60) return diffMins + ' min ago';
+                if (diffHours < 24) return diffHours + ' hr ago';
+                return diffDays + ' day' + (diffDays > 1 ? 's' : '') + ' ago';
+            }
+        }"
+                {# djlint:on #}
+                >
+                <div class="avatar indicator mb-2">
+                    <span class="indicator-item indicator-bottom indicator-center badge text-xs font-bold text-white !bottom-2 !py-0  px-2"
+                          :class="voteValue > 0 ? 'badge-success text-success-content' : 'badge-error text-error-content'"
+                          x-text="voteValue > 0 ? '+1' : '-1'"></span>
+                    <div class="rounded-full ring-4 size-18"
+                         :class="voteValue > 0 ? 'ring-success' : 'ring-error'">
+                        <img alt="{{ voter.username }}'s avatar" src="{{ voter.avatar_url }}" />
+                    </div>
+                </div>
+                <div class="list-col-grow flex flex-col gap-2">
+                    <div class="font-bold capitalize tracking-widest font-mono text-sm">{{ voter.username }}</div>
+                    <div class="text-xs uppercase font-semibold opacity-60" x-text="timeAgo"></div>
+                    <div class="flex flex-row flex-wrap gap-2 list-col-wrap items-start">
+                        {% comment %} Votes Here Badge {% endcomment %}
+                        <div class="badge badge-dash badge-primary flex-none text-xs"
+                             x-show="localBadge === 'Floating'">Floating</div>
+                        <div class="badge badge-soft badge-primary flex-none text-xs"
+                             x-show="localBadge === 'Settling'">Settling</div>
+                        <div class="badge badge-primary text-primary-content flex-none text-xs"
+                             x-show="localBadge === 'Resting'">Resting</div>
+                        {% comment %} Total Votes Badge {% endcomment %}
+                        <div class="badge badge-dash badge-secondary flex-none text-xs"
+                             x-show="globalBadge === 'Kindled'">Kindled</div>
+                        <div class="badge badge-soft badge-secondary flex-none text-xs"
+                             x-show="globalBadge === 'Burning'">Burning</div>
+                        <div class="badge badge-secondary text-secondary-content flex-none text-xs"
+                             x-show="globalBadge === 'Embered'">Embered</div>
+                        {% comment %} Account Age Badge {% endcomment %}
+                        <div class="badge badge-dash badge-base text-base-content flex-none text-xs"
+                             x-show="ageBadge === 'Leaf'">Leaf</div>
+                        <div class="badge badge-soft badge-base text-base-content flex-none text-xs"
+                             x-show="ageBadge === 'Branch'">Branch</div>
+                        <div class="badge badge-base text-base-content flex-none text-xs"
+                             x-show="ageBadge === 'Oak'">Oak</div>
+                    </div>
+                </div>
+            </li>
+        {% endfor %}
+    </ul>
+{% endif %}

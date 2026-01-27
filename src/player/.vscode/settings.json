@@ -1,0 +1,53 @@
+{
+    "files.watcherExclude": {
+        "**/routeTree.gen.ts": true
+    },
+    "search.exclude": {
+        "**/routeTree.gen.ts": true
+    },
+    "files.readonlyInclude": {
+        "**/routeTree.gen.ts": true
+    },
+    "python.terminal.activateEnvironment": false,
+    "[python]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "ms-python.black-formatter"
+    },
+    "[json]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "vscode.json-language-features"
+    },
+    "[jsonc]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "vscode.json-language-features"
+    },
+    "[django-html]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "monosans.djlint"
+    },
+    "auto-close-tag.activationOnLanguage": [
+        "markdown",
+        "django-html",
+        "html",
+    ],
+    "auto-rename-tag.activationOnLanguage": [
+        "markdown",
+        "django-html",
+        "html",
+    ],
+    "alpine-intellisense.settings.languageScopes": "html",
+    "emmet.includeLanguages": {
+        "django-html": "html",
+    },
+    "djlint.formatJs": true,
+    "djlint.formatCss": true,
+    "djlint.maxAttributeLength": 80,
+    "djlint.maxLineLength": 120,
+    "editor.suggest.showWords": false,
+    "editor.snippetSuggestions": "top",
+    "djlint.ignore": [
+        "H006",
+        "D018",
+        "H026",
+    ]
+}

@@ -50,7 +50,7 @@
                               avatar_url="{{ voter_data.avatar_url }}" />
         </div>
         {% if voter_data %}
-            <div class="max-w-96 intersect-once intersect:motion-preset-slide-up motion-delay-[900ms]">
+            <div class="max-w-96">
                 <c-voting-voter-card votes_here="{{ voter_data.votes_here }}"
                                      total_votes="{{ voter_data.total_votes }}"
                                      join_date_iso="{{ voter_data.join_date_iso }}"

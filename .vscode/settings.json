@@ -25,6 +25,9 @@
         "**/apps.py": true,
         "**/migrations/": true,
         "**/pyproject.toml": true,
+        "**/README.md": true,
+        "**/render.yaml": true,
+        "**/manifest.json": true
     },
     "files.watcherExclude": {
         "**/routeTree.gen.ts": true

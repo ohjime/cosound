@@ -20,11 +20,15 @@
 {% else %}
     <div class="flex flex-col justify-center items-center h-full gap-8">
         <div class="flex flex-col gap-4 w-full">
-            <c-voting-logo />
-            <c-voting-player-info player_name="{{ player.name }}" />
+            <div class="intersect-once intersect:motion-preset-slide-up motion-delay-700">
+                <c-voting-logo />
+            </div>
+            <div class="intersect-once intersect:motion-preset-slide-up motion-delay-1000">
+                <c-voting-player-info player_name="{{ player.name }}" />
+            </div>
         </div>
         {% if layers %}
-            <div class="py-0">
+            <div class="py-0 intersect-once intersect:motion-preset-slide-up motion-delay-700">
                 <c-voting-cosound>
                     {% for layer in layers %}
                         <c-voting-cosound-layer layer_id="{{ layer.id }}"
@@ -39,12 +43,14 @@
                 </c-voting-cosound>
             </div>
         {% endif %}
-        <c-voting-buttons upvote="{{ voter_data.vote_value }}"
-                          waiting_time="{{ voter_data.waiting_time }}"
-                          username=" {{ voter_data.username }}"
-                          avatar_url="{{ voter_data.avatar_url }}" />
+        <div class="intersect-once intersect:motion-preset-slide-up motion-delay-[800ms]">
+            <c-voting-buttons upvote="{{ voter_data.vote_value }}"
+                              waiting_time="{{ voter_data.waiting_time }}"
+                              username=" {{ voter_data.username }}"
+                              avatar_url="{{ voter_data.avatar_url }}" />
+        </div>
         {% if voter_data %}
-            <div class=" max-w-96">
+            <div class="max-w-96 intersect-once intersect:motion-preset-slide-up motion-delay-[900ms]">
                 <c-voting-voter-card votes_here="{{ voter_data.votes_here }}"
                                      total_votes="{{ voter_data.total_votes }}"
                                      join_date_iso="{{ voter_data.join_date_iso }}"

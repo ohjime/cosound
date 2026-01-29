@@ -2,7 +2,7 @@
     <ul class="list bg-base-100 max-w-96">
         <li class="p-4 pb-2 text-xs opacity-60 tracking-wide">Recent Voters at {{ player.name }}</li>
         {% for voter in recent_voters %}
-            <li class="list-row"
+            <li class="list-row intersect-once intersect:motion-preset-slide-up"
                 {# djlint:off #}
         x-data="{
             voteValue: {{ voter.vote_value }},

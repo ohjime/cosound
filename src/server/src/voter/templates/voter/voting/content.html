@@ -57,10 +57,10 @@
                                      local_badge="{{ voter_data.local_badge }}"
                                      global_badge="{{ voter_data.global_badge }}"
                                      age_badge="{{ voter_data.age_badge }}" />
+
             </div>
         {% endif %}
         <c-voting-other-voters />
-        <div class="divider max-w-96"></div>
         <c-voting-extra-buttons is_anonymous="{{ voter_data.is_anonymous }}" />
     </div>
 {% endif %}

@@ -33,15 +33,9 @@ dependencies = [
     "uvicorn-worker>=0.4.0",
     "gunicorn>=23.0.0",
     "honcho>=2.0.0",
+    "djlint>=1.36.4",
 ]
 
-[dependency-groups]
-dev = [
-    "djlint>=1.36.4",
-    "factory-boy>=3.3.3",
-    "honcho>=2.0.0",
-    "memory-profiler>=0.61.0",
-]
 
 [tool.djlint]
 ignore = ["D018","H006"]

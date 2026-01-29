@@ -354,3 +354,7 @@ UNFOLD = {
         ],
     },
 }
+
+COSOUND_CORE_PREDICTOR = "app.predict.predictor_v1"
+COSOUND_SOUND_CLASSIFIER = "app.classify.classifier_v1"
+COSOUND_SOUND_DIMENSION = "app.classify.dim_v1"

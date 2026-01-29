@@ -1,6 +1,6 @@
 <c-vars is_anonymous="True" />
 {% if is_anonymous %}
-    <div class="btn uppercase btn-wide btn-soft btn-secondary intersect-once intersect:motion-preset-slide-up">
+    <div class="btn uppercase btn-wide btn-soft btn-secondary">
         Save Voter ?
     </div>
 {% else %}
@@ -16,7 +16,7 @@
         </svg>
     </div>
 {% endif %}
-<a class="btn uppercase btn-wide btn-soft intersect-once intersect:motion-preset-slide-up"
+<a class="btn uppercase btn-wide btn-soft"
    href="{% url 'account_logout' %}">
     Sign Out
     <svg xmlns="http://www.w3.org/2000/svg"

@@ -203,7 +203,19 @@ def get_random_avatar_url(seed):
     bgs = [1, 2, 1, 1, 1]
     set = sets[(int(seed) % 4)]
     bg = bgs[(int(seed) % 5)]
-    return f"https://robohash.org/{seed}?bgset=bg{bg}&set=set{set}"
+    # Determine a random hex color for background
+    # Generate a random hex color based on the seed
+    colors = ["b6e3f4", "c0aede", "ffdfbf"]
+    color = colors[int(seed) % len(colors)]
+
+    # return f"https://api.dicebear.com/9.x/notionists/svg?seed={seed}&backgroundColor={color}&scale=120&translateY=-7"
+    return f"https://api.dicebear.com/9.x/micah/svg?seed={seed}&backgroundColor={color}&scale=110&translateY=-7"
+    # return f"https://api.dicebear.com/9.x/adventurer-neutral/svg?seed={seed}&scale=95&translateY=-7"
+    # return f"https://api.dicebear.com/9.x/avataaars-neutral/svg?seed={seed}&scale=95&translateY=-7"
+    # return f"https://api.dicebear.com/9.x/thumbs/svg?seed={seed}"
+    # return f"https://api.dicebear.com/9.x/big-ears-neutral/svg?seed={seed}&scale=95&translateY=-7"
+    # return f"https://api.dicebear.com/9.x/notionists-neutral/svg?seed={seed}&scale=95&translateY=-7"
+    # return f"https://robohash.org/{seed}?bgset=bg{bg}&set=set{set}"
 
 
 def check_throttle_timer(voter, player):

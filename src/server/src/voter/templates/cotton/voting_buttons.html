@@ -44,7 +44,7 @@
                  viewBox="0 -960 960 960"
                  width="24px"
                  fill="currentColor">
-                <path d="M200-360v-240h160l200-200v640L360-360H200Zm440 40v-322q45 21 72.5 65t27.5 97q0 53-27.5 96T640-320ZM480-606l-86 86H280v80h114l86 86v-252ZM380-480Z" />
+                <path d="M560-131v-82q90-26 145-100t55-168q0-94-55-168T560-749v-82q124 28 202 125.5T840-481q0 127-78 224.5T560-131ZM120-360v-240h160l200-200v640L280-360H120Zm440 40v-322q47 22 73.5 66t26.5 96q0 51-26.5 94.5T560-320ZM400-606l-86 86H200v80h114l86 86v-252ZM300-480Z" />
             </svg>
         </button>
         <div class="relative flex items-center justify-center w-28 h-28">
@@ -61,7 +61,7 @@
                           'fill-base-content': throttled && isWaiting,
                           'fill-secondary': throttled && !isWaiting,
                           'fill-success': !throttled && upvote === 1,
-                          'fill-error': !throttled && upvote === -1
+                          'fill-error': !throttled && upvote === 0
                       }"
                 {# djlint:on #}>
                 <textPath xlink:href="#circlePath" startOffset="25%" text-anchor="middle">
@@ -81,9 +81,11 @@
                     'ring-error': !throttled && upvote === 0
                  }"
                 {# djlint:on #}>
+                <div class="skeleton w-full h-full rounded-full absolute inset-0"></div>
                 <img src="{{ avatar_url }}"
-                     class="absolute inset-0 w-full h-full object-cover transition-all duration-700"
-                     :class="isWaiting ? 'brightness-[0.4] scale-105' : 'brightness-100 scale-100'"
+                     class="w-full h-full object-cover transition-all duration-700 relative"
+                     :class="isWaiting ? 'brightness-[0.55] scale-105' : 'brightness-100 scale-100'"
+                     onload="this.previousElementSibling.classList.add('hidden')"
                      alt="Avatar">
                 <div class="absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-300"
                      x-show="isWaiting"
@@ -105,8 +107,8 @@
             </div>
             <span x-show="!isWaiting && !throttled"
                   x-transition:enter="transition zoom-in duration-300 delay-100"
-                  class="absolute indicator-item badge badge-lg text-sm font-black text-white z-20 shadow-lg border-2 bottom-0.5"
-                  :class="upvote === 1 ? 'badge-success ring-2 ring-success/20' : 'badge-error ring-2 ring-error/20'"
+                  class="absolute indicator-item badge badge-lg text-sm font-black text-white z-20 border-2 bottom-0.5"
+                  :class="upvote === 1 ? 'badge-success' : 'badge-error'"
                   x-text="upvote === 1 ? '+1' : '-1'"></span>
         </div>
         <button class="flex h-17 w-17 items-center justify-center rounded-full text-base-300-content/80 transition-all active:scale-95 bg-base-300/90 hover:bg-base-300/80 active:bg-base-300/100">
@@ -116,7 +118,7 @@
                  viewBox="0 -960 960 960"
                  width="24px"
                  fill="currentColor">
-                <path d="M560-131v-82q90-26 145-100t55-168q0-94-55-168T560-749v-82q124 28 202 125.5T840-481q0 127-78 224.5T560-131ZM120-360v-240h160l200-200v640L280-360H120Zm440 40v-322q47 22 73.5 66t26.5 96q0 51-26.5 94.5T560-320ZM400-606l-86 86H200v80h114l86 86v-252ZM300-480Z" />
+                <path d="M240-80v-172q-57-52-88.5-121.5T120-520q0-150 105-255t255-105q125 0 221.5 73.5T827-615l52 205q5 19-7 34.5T840-360h-80v120q0 33-23.5 56.5T680-160h-80v80h-80v-160h160v-200h108l-38-155q-23-91-98-148t-172-57q-116 0-198 81t-82 197q0 60 24.5 114t69.5 96l26 24v208h-80Zm254-360Zm-14 120q17 0 28.5-11.5T520-360q0-17-11.5-28.5T480-400q-17 0-28.5 11.5T440-360q0 17 11.5 28.5T480-320Zm-30-128h61q0-25 6.5-40.5T544-526q18-20 35-40.5t17-53.5q0-42-32.5-71T483-720q-40 0-72.5 23T365-637l55 23q7-22 24.5-35.5T483-663q22 0 36.5 12t14.5 31q0 21-12.5 37.5T492-549q-20 21-31 42t-11 59Z" />
             </svg>
         </button>
     </div>
@@ -127,7 +129,7 @@
                  'badge-neutral': throttled && isWaiting, 
                  'badge-secondary': throttled && !isWaiting, 
                  'badge-success': !throttled && upvote === 1, 
-                 'badge-error': !throttled && upvote === -1 
+                 'badge-error': !throttled && upvote === 0 
              }"
             {# djlint:on #}>{{ username }}</div>
     </div>

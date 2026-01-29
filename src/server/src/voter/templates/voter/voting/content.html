@@ -60,8 +60,7 @@
             </div>
         {% endif %}
         <c-voting-other-voters />
-        <div class="pt-4">
-            <c-voting-extra-buttons is_anonymous="{{ voter_data.is_anonymous }}" />
-        </div>
+        <div class="divider"></div>
+        <c-voting-extra-buttons is_anonymous="{{ voter_data.is_anonymous }}" />
     </div>
 {% endif %}

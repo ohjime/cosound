@@ -2,29 +2,29 @@
     <ul class="list bg-base-100 max-w-96">
         <li class="p-4 pb-2 text-xs opacity-60 tracking-wide">Recent Voters at {{ player.name }}</li>
         {% for voter in recent_voters %}
-            <li class="list-row"
+            <li class="list-row opacity-0 intersect-once intersect:motion-preset-slide-up intersect:opacity-100"
                 {# djlint:off #}
-        x-data="{
-            voteValue: {{ voter.vote_value }},
-            votedAtIso: '{{ voter.voted_at_iso }}',
-            localBadge: '{{ voter.local_badge }}',
-            globalBadge: '{{ voter.global_badge }}',
-            ageBadge: '{{ voter.age_badge }}',
-            
-            get timeAgo() {
-                const votedAt = new Date(this.votedAtIso);
-                const now = new Date();
-                const diffMs = now - votedAt;
-                const diffMins = Math.floor(diffMs / 60000);
-                const diffHours = Math.floor(diffMs / 3600000);
-                const diffDays = Math.floor(diffMs / 86400000);
-                
-                if (diffMins < 1) return 'Just now';
-                if (diffMins < 60) return diffMins + ' min ago';
-                if (diffHours < 24) return diffHours + ' hr ago';
-                return diffDays + ' day' + (diffDays > 1 ? 's' : '') + ' ago';
-            }
-        }"
+                x-data="{
+                    voteValue: {{ voter.vote_value }},
+                    votedAtIso: '{{ voter.voted_at_iso }}',
+                    localBadge: '{{ voter.local_badge }}',
+                    globalBadge: '{{ voter.global_badge }}',
+                    ageBadge: '{{ voter.age_badge }}',
+                    
+                    get timeAgo() {
+                        const votedAt = new Date(this.votedAtIso);
+                        const now = new Date();
+                        const diffMs = now - votedAt;
+                        const diffMins = Math.floor(diffMs / 60000);
+                        const diffHours = Math.floor(diffMs / 3600000);
+                        const diffDays = Math.floor(diffMs / 86400000);
+                        
+                        if (diffMins < 1) return 'Just now';
+                        if (diffMins < 60) return diffMins + ' min ago';
+                        if (diffHours < 24) return diffHours + ' hr ago';
+                        return diffDays + ' day' + (diffDays > 1 ? 's' : '') + ' ago';
+                    }
+                }"
                 {# djlint:on #}
                 >
                 <div class="avatar indicator mb-2">

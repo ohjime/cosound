@@ -1,12 +1,12 @@
 databases:
   - name: cosound-db
-    plan: free
+    plan: basic
     databaseName: cosound
     user: cosound
 
 services:
   - type: web
-    plan: starter
+    plan: standard
     name: cosound-server
     runtime: python
     rootDir: src/server

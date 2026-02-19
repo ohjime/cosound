@@ -1,6 +1,6 @@
 databases:
   - name: cosound-db
-    plan: basic
+    plan: basic-256mb
     databaseName: cosound
     user: cosound
 

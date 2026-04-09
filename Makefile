@@ -45,7 +45,7 @@ ifeq ($(run),clean)
 		&& find . -type d -name "__pycache__" -exec rm -rf {} +
 	@echo "Deleting Django Migrations..."
 	@cd src/server/src \
-		&& find . -type f -path "*/migrations/*.py" ! -name "__init__.py" ! -name "0001*.py" -exec rm -f {} +
+		&& find . -type f -path "*/migrations/*.py" ! -name "__init__.py" ! -path "*/core/migrations/0001_initial.py" -exec rm -f {} +
 	@echo "Deleting Databases..."
 	@-dropdb --force cosounds > /dev/null 2>&1
 	@echo "Deleting Node Modules..."

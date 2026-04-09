@@ -10,8 +10,8 @@ services:
     name: cosound-server
     runtime: python
     rootDir: src/server
-    buildCommand: '../../bin/buildserver_prod.sh'
-    startCommand: '../../bin/runserver_prod.sh'
+    buildCommand: "../../bin/buildserver_prod.sh"
+    startCommand: "../../bin/runserver_prod.sh"
     envVars:
       - key: DEBUG
         value: false
@@ -41,4 +41,5 @@ services:
         sync: false
       - key: AWS_S3_REGION_NAME
         sync: false
-
+      - key: PROD_HOSTS
+        sync: false

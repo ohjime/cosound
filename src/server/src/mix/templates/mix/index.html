@@ -1,0 +1,238 @@
+{% extends "core/base.html" %}
+{% block content %}
+    <c-core-loader hx_get="{% url 'mix:check_auth' %}" />
+{% endblock content %}
+{% partialdef login_required %}
+<c-core-content>
+    <div class="motion-preset-blur-up-lg motion-duration-500 motion-delay-300 card max-w-96 bg-base-200 text-base-content w-full shadow mb-5">
+        <div class="card-body items-center text-center">
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 class="stroke-current shrink-0 h-14 w-14 text-warning mb-2"
+                 fill="none"
+                 viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            <h2 class="card-title">Login Required</h2>
+            <p class="text-sm opacity-80 mt-2">You must be logged in to create a mix.</p>
+        </div>
+    </div>
+</c-core-content>
+{% endpartialdef %}
+{% partialdef alert %}
+<c-mix-alert alert_msg="{{ alert_msg }}" alert_type="{{ alert_type }}" />
+{% endpartialdef %}
+{% partialdef mix_form %}
+<c-core-content>
+    <div class="h-fit w-full flex flex-col items-center transition-all duration-300 ease-out opacity-100 [&.htmx-added]:opacity-0">
+        <div id="mix_alerts" class="stack w-full max-w-sm px-4 pt-4"></div>
+        <form hx-post="{% url 'mix:save_mix' %}"
+              hx-target="#mix_alerts"
+              class="w-full max-w-sm px-4 pb-8">
+            {% csrf_token %}
+            <div class="text-center mb-5 motion-preset-blur-down-lg motion-duration-700">
+                <h2 class="text-xl font-bold">Mix These Sounds</h2>
+                <p class="text-xs text-base-content/50 mt-1">Adjust each track's volume to build your mix</p>
+            </div>
+            <!-- Carousel wrapper -->
+            <div class="relative"
+                {# djlint:off #}
+                 x-data="{
+                    type: '',
+                    sound: '',
+                    artist: '',
+                    soundId: '',
+                    activeItem: null,
+                    activeIndex: 0,
+                    totalSlides: {{ sounds|length }},
+                    audios: {},
+                    gainNodes: {},
+                    audioCtx: null,
+                    gains: {},
+                    started: false,
+
+                    initAudios() {
+                        const el = this.$refs.carousel;
+                        if (!el) return;
+                        const items = el.getElementsByClassName('carousel-item');
+                        for (const item of items) {
+                            const id = item.dataset.soundId;
+                            this.gains[id] = 0;
+                        }
+                    },
+
+                    startPlayback() {
+                        const Ctx = window.AudioContext || window.webkitAudioContext;
+                        if (!this.audioCtx) this.audioCtx = new Ctx();
+                        this.audioCtx.resume();
+                        const el = this.$refs.carousel;
+                        const items = el.getElementsByClassName('carousel-item');
+                        for (const item of items) {
+                            const id = item.dataset.soundId;
+                            const url = item.dataset.soundUrl;
+                            const audio = new Audio();
+                            audio.crossOrigin = 'anonymous';
+                            audio.loop = true;
+                            audio.preload = 'auto';
+                            audio.playsInline = true;
+                            audio.src = url;
+                            const source = this.audioCtx.createMediaElementSource(audio);
+                            const gainNode = this.audioCtx.createGain();
+                            gainNode.gain.value = 0;
+                            source.connect(gainNode);
+                            gainNode.connect(this.audioCtx.destination);
+                            this.audios[id] = audio;
+                            this.gainNodes[id] = gainNode;
+                            audio.play().catch(() => {});
+                        }
+                        this.started = true;
+                    },
+
+                    updateText() {
+                        const el = this.$refs.carousel;
+                        if (!el) return;
+                        const items = el.getElementsByClassName('carousel-item');
+                        const width = el.clientWidth;
+                        const scroll = el.scrollLeft;
+                        let index = Math.round(scroll / width);
+                        if (index < 0) index = 0;
+                        if (index >= items.length) index = items.length - 1;
+
+                        this.activeIndex = index;
+                        this.activeItem = items[index];
+
+                        if (this.activeItem) {
+                            this.type = this.activeItem.dataset.soundType;
+                            this.sound = this.activeItem.dataset.soundTitle;
+                            this.artist = this.activeItem.dataset.soundArtist;
+                            this.soundId = this.activeItem.dataset.soundId || '';
+                        }
+                    },
+
+                    setGain(id, val) {
+                        const v = Math.max(0, Math.min(1, parseFloat(val)));
+                        this.gains[id] = v;
+                        if (this.gainNodes[id]) {
+                            this.gainNodes[id].gain.value = v;
+                        }
+                    },
+
+                    toggleMute() {
+                        if (!this.soundId) return;
+                        const id = this.soundId;
+                        const next = (this.gains[id] || 0) > 0 ? 0 : 1;
+                        this.setGain(id, next);
+                    },
+
+                    init() {
+                        this.$nextTick(() => {
+                            const el = this.$refs.carousel;
+                            if (el) { el.scrollLeft = 0; this.updateText(); this.initAudios(); }
+                        });
+                    }
+                 }"
+                {# djlint:on #}
+                x-init="init()">
+                <!-- Inner relative wrapper for overlay positioning -->
+                <div class="relative">
+                    <!-- Overlay text + mute button -->
+                    <div class="absolute inset-0 z-10 pointer-events-none text-white text-shadow-lg font-bold p-4 flex flex-col justify-between">
+                        <div class="flex justify-between items-start">
+                            <div class="text-left">
+                                <h2 class="text-2xl" x-text="type"></h2>
+                            </div>
+                            <!-- Mute/unmute button -->
+                            <button @click="toggleMute()"
+                                    type="button"
+                                    class="pointer-events-auto p-2 transition-transform active:scale-90"
+                                    :aria-label="(gains[soundId] || 0) > 0 ? 'Mute' : 'Unmute'">
+                                <svg x-show="(gains[soundId] || 0) > 0"
+                                     xmlns="http://www.w3.org/2000/svg"
+                                     class="w-8 h-8 text-primary drop-shadow-lg"
+                                     viewBox="0 0 24 24"
+                                     fill="currentColor">
+                                    <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 00-2.5-4.03v8.05A4.5 4.5 0 0016.5 12zM14 3.23v2.06a7 7 0 010 13.42v2.06A9 9 0 0014 3.23z" />
+                                </svg>
+                                <svg x-show="(gains[soundId] || 0) === 0"
+                                     xmlns="http://www.w3.org/2000/svg"
+                                     class="w-8 h-8 text-white drop-shadow-lg"
+                                     viewBox="0 0 24 24"
+                                     fill="currentColor">
+                                    <path d="M16.5 12A4.5 4.5 0 0014 7.97v2.21l2.45 2.45a4.46 4.46 0 00.05-.63zM19 12c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.96 8.96 0 0021 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 003.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="text-right">
+                            <h2 class="text-2xl" x-text="sound"></h2>
+                            <h5 class="text-lg opacity-90" x-text="artist"></h5>
+                        </div>
+                    </div>
+                    <!-- Start-playback overlay -->
+                    <div x-show="!started"
+                         class="absolute inset-0 z-20 flex items-center justify-center bg-black/70 rounded-box cursor-pointer"
+                         @click="startPlayback()">
+                        <button type="button" class="btn btn-circle btn-lg btn-primary">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M8 5v14l11-7z" />
+                            </svg>
+                        </button>
+                    </div>
+                    <!-- Actual scrollable carousel -->
+                    <div x-ref="carousel"
+                         @scroll.debounce.5ms="updateText()"
+                         class="carousel max-w-sm aspect-square rounded-box">
+                        {% for sound in sounds %}
+                            <c-mix-player sound_id="{{ sound.id }}"
+                                          sound_url="{{ sound.file.url }}"
+                                          sound_title="{{ sound.title }}"
+                                          sound_artist="{{ sound.artist }}"
+                                          sound_type="{{ sound.type }}"
+                                          artwork_url="{{ sound.artwork_url }}" />
+                        {% endfor %}
+                    </div>
+                </div>
+                <!-- Dot indicators -->
+                <div class="flex justify-center gap-2 mt-3">
+                    {% for sound in sounds %}
+                        <div class="w-2 h-2 rounded-full transition-all duration-300"
+                             :class="activeIndex === {{ forloop.counter0 }} ? 'bg-primary w-6' : 'bg-base-content/20'">
+                        </div>
+                    {% endfor %}
+                </div>
+                <!-- Volume slider for current sound -->
+                <div class="mt-4 w-full">
+                    {% for sound in sounds %}
+                        <div x-show="activeIndex === {{ forloop.counter0 }}"
+                             class="w-full flex justify-center px-6">
+                            <input type="range"
+                                   min="0"
+                                   max="1"
+                                   step="0.01"
+                                   value="0"
+                                   name="gain_{{ sound.id }}"
+                                   class="range range-primary w-full"
+                                   @input="setGain('{{ sound.id }}', $event.target.value)"
+                                   :value="gains['{{ sound.id }}'] || 0" />
+                        </div>
+                    {% endfor %}
+                </div>
+                <!-- Submit mix -->
+                <div class="mt-6 ml-10 card card-side card-xs bg-base-100 shadow-md ring-1 ring-slate-900/5 overflow-visible">
+                    <div class="flex items-center -ml-10 drop-shadow-xl z-10">
+                        <div class="avatar">
+                            <div class="w-24 rounded-full">
+                                <img src="{{ avatar_url }}" alt="avatar" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body py-2 pl-5 pr-4 justify-center">
+                        <div class="badge badge-neutral text-xs font-bold capitalize tracking-widest font-mono px-3 py-3 max-w-full truncate">
+                            <span class="truncate">{{ username }}</span>
+                        </div>
+                        <button type="submit" class="btn btn-success btn-sm font-bold truncate">SAVE MIX</button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</c-core-content>
+{% endpartialdef %}

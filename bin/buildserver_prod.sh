@@ -53,10 +53,14 @@ import os
 
 User = get_user_model()
 
-# Strip quotes from environment variables
-email = os.getenv('FIRST_ADMIN_EMAIL', 'admin@example.com').strip("'\"")
-username = os.getenv('FIRST_ADMIN_USERNAME', 'Administrator').strip("'\"")
-password = os.getenv('FIRST_ADMIN_PASSWORD', 'changeme').strip("'\"")
+# Require admin credentials from environment — no insecure defaults
+email = os.getenv('FIRST_ADMIN_EMAIL', '').strip("'\"")
+username = os.getenv('FIRST_ADMIN_USERNAME', '').strip("'\"")
+password = os.getenv('FIRST_ADMIN_PASSWORD', '').strip("'\"")
+
+if not (email and username and password):
+    print("✗ Error: FIRST_ADMIN_EMAIL, FIRST_ADMIN_USERNAME, and FIRST_ADMIN_PASSWORD must be set.")
+    exit(1)
 
 # Check if user already exists
 if User.objects.filter(email=email).exists():

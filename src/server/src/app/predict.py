@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from django.tasks import task
 
 from core.models import Cosound, Sound, SoundLayer, Player
-from voter.models import Vote
+from vote.models import Vote
 
 
 @task

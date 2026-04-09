@@ -144,7 +144,7 @@ INSTALLED_APPS = [
     "django_file_form",
     "storages",
     "core",
-    "voter",
+    "vote",
     "allauth",
     "allauth.account",
 ]
@@ -249,9 +249,9 @@ ACCOUNT_LOGIN_METHODS = {"email"}
 ACCOUNT_SIGNUP_FIELDS = ["email*", "username*"]
 ACCOUNT_EMAIL_VERIFICATION = "optional"
 ACCOUNT_LOGIN_BY_CODE_ENABLED = True
-ACCOUNT_ADAPTER = "voter.adapters.UnifiedLoginAdapter"
+ACCOUNT_ADAPTER = "vote.adapters.UnifiedLoginAdapter"
 ACCOUNT_FORMS = {
-    "request_login_code": "voter.adapters.UnifiedRequestLoginCodeForm",
+    "request_login_code": "vote.adapters.UnifiedRequestLoginCodeForm",
 }
 AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
@@ -284,6 +284,10 @@ TASKS = {
         "BACKEND": "django_tasks.backends.database.DatabaseBackend",
     }
 }
+
+# Vote app
+# Seconds a listener must wait between consecutive votes.
+VOTE_THROTTLE_SECONDS = int(os.environ.get("VOTE_THROTTLE_SECONDS", 60))
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 UNFOLD = {
@@ -342,12 +346,12 @@ UNFOLD = {
                     {
                         "title": _("Registered Voters"),
                         "icon": "how_to_reg",
-                        "link": reverse_lazy("admin:voter_voter_changelist"),
+                        "link": reverse_lazy("admin:core_listener_changelist"),
                     },
                     {
                         "title": _("Recorded Votes"),
                         "icon": "instant_mix",
-                        "link": reverse_lazy("admin:voter_vote_changelist"),
+                        "link": reverse_lazy("admin:vote_vote_changelist"),
                     },
                 ],
             },

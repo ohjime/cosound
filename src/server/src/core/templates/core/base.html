@@ -1,0 +1,253 @@
+{% load django_vite %}
+{% load django_htmx %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <link rel="shortcut icon" type="image/png" href="{% static 'core/img/icon.png' %}">
+        <title>Vote | Cosound</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="X-UA-Compatible" content="ie=edge">
+        <meta name="description" content="A Django project using Tailwind CSS.">
+        <meta name="keywords" content="Django, Tailwind, CSS, Python, Web Development">
+        <meta name="htmx-config" content='{"globalViewTransitions": false}'>
+        <style>
+            /* Loader base layout */
+            #page-loader {
+                position: fixed;
+                inset: 0;
+                z-index: 9999;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: opacity 0.3s, background-color 0.3s, color 0.3s;
+                /* Fallback (will be immediately overridden by media queries in supporting browsers) */
+                background: #2a303c;
+                color: #d1d5db;
+            }
+
+            .base-loader {
+                animation: rotate 1s infinite;
+                height: 50px;
+                width: 50px;
+            }
+
+            .base-loader:before,
+            .base-loader:after {
+                border-radius: 50%;
+                content: "";
+                display: block;
+                height: 20px;
+                width: 20px;
+            }
+
+            .base-loader:before {
+                animation: ball1 1s infinite;
+                background-color: #fff;
+                box-shadow: 30px 0 0 #ff3d00;
+                margin-bottom: 10px;
+            }
+
+            .base-loader:after {
+                animation: ball2 1s infinite;
+                background-color: #ff3d00;
+                box-shadow: 30px 0 0 #fff;
+            }
+
+            @keyframes rotate {
+                0% {
+                    transform: rotate(0deg) scale(0.8);
+                }
+
+                50% {
+                    transform: rotate(360deg) scale(1.2);
+                }
+
+                100% {
+                    transform: rotate(720deg) scale(0.8);
+                }
+            }
+
+            @keyframes ball1 {
+                0% {
+                    box-shadow: 30px 0 0 #ff3d00;
+                    margin-bottom: 10px;
+                    transform: translate(0, 0);
+                    /* Explicitly added */
+                }
+
+                50% {
+                    box-shadow: 0 0 0 #ff3d00;
+                    margin-bottom: 0;
+                    transform: translate(15px, 15px);
+                }
+
+                100% {
+                    box-shadow: 30px 0 0 #ff3d00;
+                    margin-bottom: 10px;
+                    transform: translate(0, 0);
+                    /* Explicitly added */
+                }
+            }
+
+            @keyframes ball2 {
+                0% {
+                    box-shadow: 30px 0 0 #fff;
+                    margin-top: 0;
+                    /* Explicitly added */
+                    transform: translate(0, 0);
+                    /* Explicitly added */
+                }
+
+                50% {
+                    box-shadow: 0 0 0 #fff;
+                    margin-top: -20px;
+                    transform: translate(15px, 15px);
+                }
+
+                100% {
+                    box-shadow: 30px 0 0 #fff;
+                    margin-top: 0;
+                    /* Explicitly added */
+                    transform: translate(0, 0);
+                    /* Explicitly added */
+                }
+            }
+
+            /* Light mode (system preference) */
+            @media (prefers-color-scheme: light) {
+                #page-loader {
+                    background: #f3f4f6;
+                    /* light gray */
+                    color: #374151;
+                    /* slate-700 */
+                }
+            }
+
+            /* Dark mode (system preference) */
+            @media (prefers-color-scheme: dark) {
+                #page-loader {
+                    background: #1f2733;
+                    /* deep slate */
+                    color: #d1d5db;
+                    /* light gray */
+                }
+            }
+
+            /* High contrast / forced colors (optional accessibility tweak) */
+            @media (forced-colors: active) {
+                #page-loader {
+                    background: Canvas;
+                    color: CanvasText;
+                }
+            }
+        </style>
+        <script>
+            // Force scroll to top on page load (prevents browser scroll restoration)
+            if ('scrollRestoration' in history) {
+                history.scrollRestoration = 'manual';
+            }
+            window.scrollTo(0, 0);
+
+            window.addEventListener("DOMContentLoaded", function() {
+                window.scrollTo(0, 0);
+                var loader = document.getElementById("page-loader");
+                if (loader) {
+                    setTimeout(function() {
+                        loader.style.opacity = "0";
+                        setTimeout(function() {
+                            loader.style.display = "none";
+                        }, 300);
+                    }, 600); // Show loader for at least 600ms
+                }
+            });
+
+            // Reset scroll position before unload (for refresh button)
+            window.addEventListener("beforeunload", function() {
+                window.scrollTo(0, 0);
+            });
+        </script>
+        <style>
+            @keyframes fade-in {
+                from {
+                    opacity: 0;
+                }
+            }
+
+            @keyframes fade-out {
+                to {
+                    opacity: 0;
+                }
+            }
+
+            @keyframes slide-from-bottom {
+                from {
+                    transform: translateY(20px);
+                }
+            }
+
+            ::view-transition-old(root) {
+                animation: 200ms ease-out both fade-out;
+            }
+
+            ::view-transition-new(root) {
+                animation: 300ms ease-out both fade-in, 300ms ease-out both slide-from-bottom;
+            }
+        </style>
+        {% vite_hmr_client %}
+        {% vite_asset 'assets/js/main.js' %}
+        {% django_htmx_script %}
+        <script>
+            document.addEventListener('htmx:configRequest', (event) => {
+                const cookies = document.cookie.split(';');
+                for (const cookie of cookies) {
+                    const trimmed = cookie.trim();
+                    if (trimmed.startsWith('csrftoken=')) {
+                        event.detail.headers['X-CSRFToken'] = decodeURIComponent(trimmed.substring('csrftoken='.length));
+                        break;
+                    }
+                }
+            });
+        </script>
+    </head>
+    <body class="flex h-dvh w-full flex-col overscroll-y-none overflow-x-hidden font-sans">
+        <div id="page-loader">
+            <div class="base-loader" role="status" aria-label="Loading"></div>
+        </div>
+        <section class="bg-base flex-1 px-6">
+            <style>
+                .content-loader {
+                    width: 22px;
+                    height: 22px;
+                    border-radius: 50%;
+                    background: #FF3D00;
+                    position: relative;
+                }
+
+                .content-loader:before,
+                .content-loader:after {
+                    content: "";
+                    position: absolute;
+                    border-radius: 50%;
+                    inset: 0;
+                    background: #fff;
+                    transform: rotate(0deg) translate(30px);
+                    animation: surveyrotate 1s ease infinite;
+                }
+
+                .content-loader:after {
+                    animation-delay: 0.5s
+                }
+
+                @keyframes surveyrotate {
+                    100% {
+                        transform: rotate(360deg) translate(30px)
+                    }
+                }
+            </style>
+            {% block content %}
+            {% endblock content %}
+        </section>
+    </body>
+</html>

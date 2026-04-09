@@ -6,4 +6,5 @@ urlpatterns = [
     path("upload/", include("django_file_form.urls")),
     path("api/", include("core.urls")),
     path("vote/", include("vote.urls")),
+    path("rate/", include("rate.urls")),
 ]

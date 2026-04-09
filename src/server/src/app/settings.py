@@ -145,6 +145,7 @@ INSTALLED_APPS = [
     "storages",
     "core",
     "vote",
+    "rate",
     "allauth",
     "allauth.account",
 ]

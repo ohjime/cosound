@@ -38,6 +38,7 @@
     "files.readonlyInclude": {
         "**/routeTree.gen.ts": true
     },
+    "python.defaultInterpreterPath": "${workspaceFolder}/src/server/.venv/bin/python",
     "python.terminal.activateEnvironment": false,
     "[python]": {
         "editor.formatOnSave": true,
@@ -55,6 +56,10 @@
         "editor.formatOnSave": true,
         "editor.defaultFormatter": "monosans.djlint"
     },
+    "[css]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
     "auto-close-tag.activationOnLanguage": [
         "markdown",
         "django-html",
@@ -71,6 +76,8 @@
     },
     "djlint.formatJs": true,
     "djlint.formatCss": true,
+    "djlint.useVenv": true,
+    "djlint.pythonPath": "${workspaceFolder}/src/server/.venv/bin/python",
     "djlint.maxAttributeLength": 80,
     "djlint.maxLineLength": 120,
     "editor.suggest.showWords": false,
@@ -79,5 +86,6 @@
         "H006",
         "D018",
         "H026",
-    ]
+    ],
+    "python-envs.defaultEnvManager": "ms-python.python:venv"
 }

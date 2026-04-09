@@ -146,6 +146,7 @@ INSTALLED_APPS = [
     "core",
     "vote",
     "rate",
+    "mix",
     "allauth",
     "allauth.account",
 ]

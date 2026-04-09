@@ -10,7 +10,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('core', '0005_player_bio'),
+        ('core', '0002_player_bio_player_photo_user_avatar_manager_and_more'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

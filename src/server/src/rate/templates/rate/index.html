@@ -1,0 +1,250 @@
+{% extends "core/base.html" %}
+{% block content %}
+    <c-core-loader hx_get="{% url 'rate:check_auth' %}" />
+{% endblock content %}
+{% partialdef login_required %}
+<c-core-content>
+    <div class="motion-preset-blur-up-lg motion-duration-500 motion-delay-300 card max-w-96 bg-base-200 text-base-content w-full shadow mb-5">
+        <div class="card-body items-center text-center">
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 class="stroke-current shrink-0 h-14 w-14 text-warning mb-2"
+                 fill="none"
+                 viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            <h2 class="card-title">Login Required</h2>
+            <p class="text-sm opacity-80 mt-2">You must be logged in to participate in this survey.</p>
+        </div>
+    </div>
+</c-core-content>
+{% endpartialdef %}
+{% partialdef alert %}
+<c-rate-alert alert_msg="{{ alert_msg }}" alert_type="{{ alert_type }}" />
+{% endpartialdef %}
+{% partialdef rate_form %}
+<c-core-content>
+    <div class="h-fit w-full flex flex-col items-center transition-all duration-300 ease-out opacity-100 [&.htmx-added]:opacity-0">
+        <div id="rate_alerts" class="stack w-full max-w-sm px-4 pt-4"></div>
+        <form hx-post="{% url 'rate:rate_sounds' %}"
+              hx-target="#rate_alerts"
+              class="w-full max-w-sm px-4 pb-8">
+            {% csrf_token %}
+            <div class="text-center mb-5 motion-preset-blur-down-lg motion-duration-700">
+                <h2 class="text-xl font-bold">Rate These Sounds</h2>
+                <p class="text-xs text-base-content/50 mt-1">Swipe through, tap play, and rate each sound</p>
+            </div>
+            <!-- Carousel wrapper (same pattern as voting_cosound) -->
+            <div class="relative"
+                {# djlint:off #}
+                 x-data="{
+                    type: '',
+                    sound: '',
+                    artist: '',
+                    soundId: '',
+                    activeItem: null,
+                    audio: null,
+                    playingSoundUrl: '',
+                    isPlaying: false,
+                    progress: 0,
+                    currentTime: '0:00',
+                    duration: '0:00',
+                    activeIndex: 0,
+                    totalSlides: {{ sounds|length }},
+
+                    updateText() {
+                        const el = this.$refs.carousel;
+                        if (!el) return;
+                        const items = el.getElementsByClassName('carousel-item');
+                        const width = el.clientWidth;
+                        const scroll = el.scrollLeft;
+                        let index = Math.round(scroll / width);
+                        if (index < 0) index = 0;
+                        if (index >= items.length) index = items.length - 1;
+
+                        this.activeIndex = index;
+                        this.activeItem = items[index];
+
+                        if (this.activeItem) {
+                            this.type = this.activeItem.dataset.soundType;
+                            this.sound = this.activeItem.dataset.soundTitle;
+                            this.artist = this.activeItem.dataset.soundArtist;
+                            this.soundId = this.activeItem.dataset.soundId || '';
+                        }
+                    },
+
+                    togglePlay() {
+                        if (!this.activeItem) return;
+                        const currentUrl = this.activeItem.dataset.soundUrl || '';
+
+                        if (this.playingSoundUrl === currentUrl && this.audio) {
+                            if (this.isPlaying) {
+                                this.audio.pause();
+                                this.isPlaying = false;
+                            } else {
+                                this.audio.play().catch(() => {});
+                                this.isPlaying = true;
+                            }
+                            return;
+                        }
+
+                        if (this.audio) { this.audio.pause(); }
+                        this.isPlaying = false;
+                        this.progress = 0;
+                        this.currentTime = '0:00';
+                        this.duration = '0:00';
+                        this.playingSoundUrl = currentUrl;
+                        this.audio = new Audio(currentUrl);
+                        this.audio.addEventListener('timeupdate', () => {
+                            if (this.audio.duration) {
+                                this.progress = (this.audio.currentTime / this.audio.duration) * 100;
+                                this.currentTime = this.fmtTime(this.audio.currentTime);
+                            }
+                        });
+                        this.audio.addEventListener('loadedmetadata', () => {
+                            this.duration = this.fmtTime(this.audio.duration);
+                        });
+                        this.audio.addEventListener('ended', () => {
+                            this.isPlaying = false;
+                            this.progress = 0;
+                            this.currentTime = '0:00';
+                        });
+                        this.audio.play().catch(() => {});
+                        this.isPlaying = true;
+                    },
+
+                    fmtTime(seconds) {
+                        const m = Math.floor(seconds / 60);
+                        const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+                        return m + ':' + s;
+                    },
+
+                    init() {
+                        this.$nextTick(() => {
+                            const el = this.$refs.carousel;
+                            if (el) { el.scrollLeft = 0; this.updateText(); }
+                        });
+                    }
+                 }"
+                {# djlint:on #}
+                x-init="init()">
+                <!-- Inner relative wrapper for overlay positioning -->
+                <div class="relative">
+                    <!-- Overlay text + play button (pointer-events-none, button is pointer-events-auto) -->
+                    <div class="absolute inset-0 z-10 pointer-events-none text-white text-shadow-lg font-bold p-4 flex flex-col justify-between">
+                        <div class="flex justify-between items-start">
+                            <div class="text-left">
+                                <h2 class="text-2xl" x-text="type"></h2>
+                            </div>
+                            <!-- Play button (where the heart was) -->
+                            <button @click="togglePlay()"
+                                    type="button"
+                                    class="pointer-events-auto p-2 transition-transform active:scale-90"
+                                    :aria-label="isPlaying ? 'Pause' : 'Play'">
+                                <svg x-show="!(isPlaying && activeItem && activeItem.dataset.soundUrl === playingSoundUrl)"
+                                     xmlns="http://www.w3.org/2000/svg"
+                                     class="w-8 h-8 text-white drop-shadow-lg"
+                                     viewBox="0 0 24 24"
+                                     fill="currentColor">
+                                    <path d="M8 5v14l11-7z" />
+                                </svg>
+                                <svg x-show="isPlaying && activeItem && activeItem.dataset.soundUrl === playingSoundUrl"
+                                     xmlns="http://www.w3.org/2000/svg"
+                                     class="w-8 h-8 text-primary drop-shadow-lg"
+                                     viewBox="0 0 24 24"
+                                     fill="currentColor">
+                                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="text-right">
+                            <h2 class="text-2xl" x-text="sound"></h2>
+                            <h5 class="text-lg opacity-90" x-text="artist"></h5>
+                        </div>
+                    </div>
+                    <!-- Actual scrollable carousel -->
+                    <div x-ref="carousel"
+                         @scroll.debounce.5ms="updateText()"
+                         class="carousel max-w-sm aspect-square rounded-box">
+                        {% for sound in sounds %}
+                            <c-rate-player sound_id="{{ sound.id }}"
+                                           sound_url="{{ sound.file.url }}"
+                                           sound_title="{{ sound.title }}"
+                                           sound_artist="{{ sound.artist }}"
+                                           sound_type="{{ sound.type }}"
+                                           artwork_url="{{ sound.artwork_url }}" />
+                        {% endfor %}
+                    </div>
+                </div>
+                <!-- Dot indicators (inside x-data scope) -->
+                <div class="flex justify-center gap-2 mt-3">
+                    {% for sound in sounds %}
+                        <div class="w-2 h-2 rounded-full transition-all duration-300"
+                             :class="activeIndex === {{ forloop.counter0 }} ? 'bg-primary w-6' : 'bg-base-content/20'">
+                        </div>
+                    {% endfor %}
+                </div>
+                <!-- Stars for current sound (inside x-data scope) -->
+                <div class="mt-4 w-full">
+                    {% for sound in sounds %}
+                        <div x-show="activeIndex === {{ forloop.counter0 }}"
+                             class="w-full flex justify-center">
+                            <div class="rating rating-lg flex gap-2">
+                                <input type="radio"
+                                       name="rating_{{ sound.id }}"
+                                       value="1"
+                                       class="mask mask-star-2 bg-orange-400"
+                                       aria-label="1 star"
+                                       {% if sound.current_rating == 1 %}checked{% endif %} />
+                                <input type="radio"
+                                       name="rating_{{ sound.id }}"
+                                       value="2"
+                                       class="mask mask-star-2 bg-orange-400"
+                                       aria-label="2 star"
+                                       {% if sound.current_rating == 2 %}checked{% endif %} />
+                                <input type="radio"
+                                       name="rating_{{ sound.id }}"
+                                       value="3"
+                                       class="mask mask-star-2 bg-orange-400"
+                                       aria-label="3 star"
+                                       {% if sound.current_rating == 3 %}checked{% endif %} />
+                                <input type="radio"
+                                       name="rating_{{ sound.id }}"
+                                       value="4"
+                                       class="mask mask-star-2 bg-orange-400"
+                                       aria-label="4 star"
+                                       {% if sound.current_rating == 4 %}checked{% endif %} />
+                                <input type="radio"
+                                       name="rating_{{ sound.id }}"
+                                       value="5"
+                                       class="mask mask-star-2 bg-orange-400"
+                                       aria-label="5 star"
+                                       {% if sound.current_rating == 5 %}checked{% endif %} />
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+                <!-- Submit all ratings -->
+                <div class="mt-6 ml-10 card card-side card-xs bg-base-100 shadow-md ring-1 ring-slate-900/5 overflow-visible">
+                    <!-- Avatar Wrapper -->
+                    <!-- -ml-10 pulls the avatar outside the left edge. Drop-shadow applies a shadow to the image shape. -->
+                    <div class="flex items-center -ml-10 drop-shadow-xl z-10">
+                        <div class="avatar">
+                            <div class="w-24 rounded-full">
+                                <!-- Sample image resembling the one in the prompt -->
+                                <img src="{{ avatar_url }}" alt="Andrew Alfred" />
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Card Text Content -->
+                    <div class="card-body py-2 pl-5 pr-4 justify-center">
+                        <div class="badge badge-neutral text-xs font-bold capitalize tracking-widest font-mono px-3 py-3 max-w-full truncate">
+                            <span class="truncate">{{ username }}</span>
+                        </div>
+                        <button type="submit" class="btn btn-success btn-sm font-bold truncate">SAVE RATINGS</button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</c-core-content>
+{% endpartialdef %}

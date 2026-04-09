@@ -1,0 +1,57 @@
+{% load static %}
+<style>
+    .vote-url-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-start;
+    }
+
+    .vote-url-section-input {
+        padding: 6px 10px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        font-size: 14px;
+        min-width: 240px;
+    }
+
+    .vote-url-btn {
+        display: inline-block;
+        padding: 8px 16px;
+        margin-right: 8px;
+        border-radius: 6px;
+        color: #fff;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+    }
+
+    .vote-url-btn.up {
+        background: #16a34a;
+    }
+
+    .vote-url-btn.down {
+        background: #dc2626;
+    }
+</style>
+<div class="vote-url-wrap p-6"
+     data-base-url="{{ base_url }}"
+     data-player="{{ player_token }}">
+  These Urls are designed to be written on NFC tags. You can optionally specify a section to distinguish different tags for the same player (e.g. Upper Right Corner, or Living Room). Just enter the section name and click the buttons to copy the URLs to your clipboard.
+  <input type="text"
+         class="vote-url-section-input my-6"
+         placeholder="Player Section (optional)"
+         oninput="this.closest('.vote-url-wrap').dataset.section = this.value">
+  <div>
+    <button type="button"
+            class="vote-url-btn up"
+            onclick="(function(btn){ var w = btn.closest('.vote-url-wrap'); var section = encodeURIComponent(w.dataset.section || ''); var url = w.dataset.baseUrl + '?player=' + w.dataset.player + '&section=' + section + '&choice=1'; navigator.clipboard.writeText(url); btn.innerText = '✓ Copied Upvote'; setTimeout(function(){ btn.innerText = '📋 Copy Upvote URL'; }, 1500); })(this)">
+      📋 Copy Upvote URL
+    </button>
+    <button type="button"
+            class="vote-url-btn down"
+            onclick="(function(btn){ var w = btn.closest('.vote-url-wrap'); var section = encodeURIComponent(w.dataset.section || ''); var url = w.dataset.baseUrl + '?player=' + w.dataset.player + '&section=' + section + '&choice=0'; navigator.clipboard.writeText(url); btn.innerText = '✓ Copied Downvote'; setTimeout(function(){ btn.innerText = '📋 Copy Downvote URL'; }, 1500); })(this)">
+      📋 Copy Downvote URL
+    </button>
+  </div>
+</div>

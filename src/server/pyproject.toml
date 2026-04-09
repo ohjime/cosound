@@ -34,6 +34,7 @@ dependencies = [
     "gunicorn>=23.0.0",
     "honcho>=2.0.0",
     "djlint>=1.36.4",
+    "pillow>=12.2.0",
 ]
 
 

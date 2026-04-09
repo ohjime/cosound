@@ -1,0 +1,45 @@
+<div class="motion-preset-blur-right-sm motion-duration-150 w-full flex items-center justify-center flex-col">
+    <div class="divider divide-accent">EMAIL VERIFICATION</div>
+    <form class="w-full"
+          x-data="{ verifying: false }"
+          @submit="verifying = true"
+          @htmx:after-request="if($event.detail.xhr.getResponseHeader('HX-Retarget') === '#vote_alerts') { verifying = false }"
+          hx-post="{% url 'vote:check_code' %}?{{ request.GET.urlencode }}"
+          hx-target="#vote_card_body"
+          hx-swap="outerHTML swap:700ms settle:200ms">
+        {% csrf_token %}
+        <div class="join w-full">
+            <div class="w-full -mb-6">
+                <label class="input validator join-item w-full" :disabled="verifying">
+                    <svg class="h-[1em] opacity-50"
+                         xmlns="http://www.w3.org/2000/svg"
+                         viewBox="0 0 24 24">
+                        <g stroke-linejoin="round" stroke-linecap="round" stroke-width="2.5" fill="none" stroke="currentColor">
+                        <rect width="20" height="16" x="2" y="4" rx="2"></rect>
+                        <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
+                        </g>
+                    </svg>
+                    <input class="w-full"
+                           type="text"
+                           inputmode="numeric"
+                           name="code"
+                           placeholder="Enter Code"
+                           autocomplete="one-time-code"
+                           required />
+                </label>
+                <div class="validator-hint hidden">Code is not Valid.</div>
+            </div>
+            <button type="submit"
+                    class="btn btn-neutral join-item swap swap-rotate items-center justify-center"
+                    :class="{ 'swap-active btn-disabled': verifying,}">
+                <span class="swap-off text-xs w-full -mx-1">VERIFY</span>
+                <span class="swap-on loading loading-ring loading-lg w-full"></span>
+            </button>
+        </div>
+    </form>
+    <a hx-get="{% url 'vote:cancel_code' %}?{{ request.GET.urlencode }}"
+       hx-target="#login-subsection"
+       hx-swap="innerHTML swap:300ms settle:300ms"
+       @click="loading = false; $dispatch('cancel-code')"
+       class="link text-xs uppercase text-center pt-6 cursor-pointer select-none">Cancel</a>
+</div>

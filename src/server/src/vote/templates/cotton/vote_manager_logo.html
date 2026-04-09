@@ -1,0 +1,63 @@
+<c-vars manager_logo_url="" />
+<div x-data="voteManagerLogoData()"
+     x-init="init()"
+     class="motion-delay-400 motion-preset-pop motion-ease-in-cubic motion-duration-200 select-none absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 inline-flex rounded-full ring-4 ring-base-300 shadow-2xl transition-[width,height] duration-500"
+     :style="`width:${frameW}px;height:${frameH}px;`">
+    <div class="relative bg-white rounded-full flex items-center justify-center w-full h-full p-1.5 overflow-hidden [isolation:isolate] [-webkit-mask-image:-webkit-radial-gradient(white,black)]">
+        <div :class="loaded ? 'opacity-0' : 'opacity-100'"
+             class="skeleton absolute inset-1 z-10 rounded-full transition-opacity duration-500 motion-duration-500"
+             aria-hidden="true"></div>
+        <span :class="loaded ? 'opacity-0' : 'opacity-100'"
+              class="loading loading-infinity loading-lg absolute z-20 text-base-co transition-opacity duration-500 motion-duration-500"
+              aria-label="Loading logo"></span>
+        <img src="{{ manager_logo_url }}"
+             x-ref="managerLogo"
+             alt="Logo"
+             loading="eager"
+             decoding="async"
+             @load="onLogoLoad()"
+             @error="loaded = true"
+             :class="loaded ? 'opacity-100' : 'opacity-0'"
+             class="relative z-0 max-w-full max-h-full object-contain transition-opacity duration-500 motion-duration-500">
+    </div>
+</div>
+<script>
+    function voteManagerLogoData() {
+        return {
+            loaded: false,
+            frameW: 120,
+            frameH: 44,
+            maxW: 128,
+            maxH: 48,
+            init() {
+                this.$nextTick(() => {
+                    if (this.$refs.managerLogo && this.$refs.managerLogo.complete) {
+                        this.onLogoLoad();
+                    }
+                });
+            },
+            fitToLogo() {
+                const img = this.$refs.managerLogo;
+                if (!img || !img.naturalWidth || !img.naturalHeight) {
+                    return;
+                }
+
+                const ratio = img.naturalWidth / img.naturalHeight;
+                let w = this.maxW;
+                let h = w / ratio;
+
+                if (h > this.maxH) {
+                    h = this.maxH;
+                    w = h * ratio;
+                }
+
+                this.frameW = Math.round(Math.max(64, w));
+                this.frameH = Math.round(Math.max(24, h));
+            },
+            onLogoLoad() {
+                this.fitToLogo();
+                this.loaded = true;
+            },
+        };
+    }
+</script>

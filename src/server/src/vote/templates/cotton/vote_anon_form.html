@@ -1,0 +1,35 @@
+<style>
+    #vote_anon_form_loader {
+        width: 0;
+        opacity: 0;
+        overflow: hidden;
+        margin-left: 0;
+        transition: width 160ms ease, opacity 160ms ease, margin-left 160ms ease;
+    }
+
+    #vote_anon_form_loader.loading-active {
+        width: 1.75rem;
+        opacity: 1;
+        margin-left: 0.5rem;
+    }
+</style>
+<div id="login-subsection"
+     class="w-full flex items-center justify-center flex-col htmx-swapping:motion-opacity-out-0 htmx-swapping:motion-duration-300"
+     x-data="{ pressed: false }">
+    <div class="divider divide-accent select-none">OR</div>
+    <button id="anonymous_login_button"
+            hx-post="{% url 'vote:login_anonymously' %}?{{ request.GET.urlencode }}"
+            hx-target="#vote_card_body"
+            hx-swap="outerHTML swap:700ms settle:200ms"
+            @click="pressed = true; loading = true"
+            :disabled="loading"
+            type="button"
+            class="btn btn-neutral w-full mb-6">
+        <span id="anonymous_login_button_label">VOTE ANONYMOUSLY</span>
+        <span id="vote_anon_form_loader"
+              :class="{ 'loading-active': pressed }"
+              class="loading loading-infinity loading-lg"></span>
+    </button>
+    <a href="https://sites.google.com/ualberta.ca/lwtl/home"
+       class="link text-xs uppercase text-center select-none">What is Cosound?</a>
+</div>

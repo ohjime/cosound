@@ -2,7 +2,7 @@ from django_file_form.model_admin import FileFormAdmin
 from django_file_form.forms import FileFormMixin, UploadedFileField
 from django.forms import ModelForm
 from core.widgets import AudioUploadWidget
-from core.models import Sound
+from core.models import Sound, User
 
 
 class SoundForm(FileFormMixin, ModelForm):
@@ -16,3 +16,14 @@ class SoundForm(FileFormMixin, ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, s3_upload_dir="sounds", **kwargs)
+
+
+class UserAvatarForm(FileFormMixin, ModelForm):
+    avatar = UploadedFileField(required=False)
+
+    class Meta:
+        model = User
+        fields = ["avatar"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, s3_upload_dir="avatars", **kwargs)

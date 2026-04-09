@@ -6,7 +6,7 @@ from ninja.orm import ModelSchema
 from ninja.security import APIKeyHeader, HttpBasicAuth
 from ninja.throttling import AuthRateThrottle
 
-from core.models import Player, PlayerAccount, Sound, User
+from core.models import Player, Manager, Sound, User
 
 
 api = NinjaAPI()
@@ -21,45 +21,45 @@ class BasicAuth(HttpBasicAuth):
         )
 
 
-class PlayerAccountOut(ModelSchema):
-    """Output schema for PlayerAccount (was Client in old API)."""
+class ManagerOut(ModelSchema):
+    """Output schema for Manager (was Client in old API)."""
 
-    token: str  # We'll use the pk as a pseudo-token for PlayerAccount
+    token: str  # We'll use the pk as a pseudo-token for Manager
 
     class Meta:
-        model = PlayerAccount
+        model = Manager
         fields = ["name"]
 
     @staticmethod
-    def resolve_token(obj: PlayerAccount) -> str:
-        # Use pk as the identifier since PlayerAccount doesn't have a token field
+    def resolve_token(obj: Manager) -> str:
+        # Use pk as the identifier since Manager doesn't have a token field
         return f"account_{obj.pk}"
 
 
 @api.get(
     "/client/list",
-    response=List[PlayerAccountOut],
+    response=List[ManagerOut],
     auth=BasicAuth(),
     throttle=[AuthRateThrottle("10/m")],
 )
 def get_clients(request):
-    """Get all PlayerAccounts (clients) for the authenticated user."""
+    """Get all Managers (clients) for the authenticated user."""
     user: User = request.auth
-    return PlayerAccount.objects.filter(manager=user)
+    return Manager.objects.filter(user=user)
 
 
-class PlayerAccountTokenAuth(APIKeyHeader):
-    """Auth using PlayerAccount pseudo-token (account_{pk})."""
+class ManagerTokenAuth(APIKeyHeader):
+    """Auth using Manager pseudo-token (account_{pk})."""
 
     param_name = "X-API-Key"
 
     def authenticate(self, request, key):
-        # Check if it's a PlayerAccount pseudo-token
+        # Check if it's a Manager pseudo-token
         if key.startswith("account_"):
             try:
                 pk = int(key.replace("account_", ""))
-                return {"type": "account", "obj": PlayerAccount.objects.get(pk=pk)}
-            except (ValueError, PlayerAccount.DoesNotExist):
+                return {"type": "account", "obj": Manager.objects.get(pk=pk)}
+            except (ValueError, Manager.DoesNotExist):
                 return None
         # Otherwise, treat as a Player token
         try:
@@ -77,19 +77,19 @@ class PlayerOut(ModelSchema):
 @api.get(
     "/player/list",
     response=List[PlayerOut],
-    auth=PlayerAccountTokenAuth(),
+    auth=ManagerTokenAuth(),
     throttle=[AuthRateThrottle("10/m")],
 )
 def get_players(request):
-    """Get all Players for the authenticated PlayerAccount."""
+    """Get all Players for the authenticated Manager."""
     auth_info = request.auth
     if auth_info["type"] != "account":
         return api.create_response(
             request,
-            {"detail": "Invalid authentication. Use PlayerAccount token."},
+            {"detail": "Invalid authentication. Use Manager token."},
             status=401,
         )
-    account: PlayerAccount = auth_info["obj"]
+    account: Manager = auth_info["obj"]
     return Player.objects.filter(account=account)
 
 
@@ -118,12 +118,12 @@ class PlayerTokenAuth(APIKeyHeader):
     param_name = "X-API-Key"
 
     def authenticate(self, request, key):
-        # Check if it's a PlayerAccount pseudo-token (for backwards compat)
+        # Check if it's a Manager pseudo-token (for backwards compat)
         if key.startswith("account_"):
             try:
                 pk = int(key.replace("account_", ""))
-                return {"type": "account", "obj": PlayerAccount.objects.get(pk=pk)}
-            except (ValueError, PlayerAccount.DoesNotExist):
+                return {"type": "account", "obj": Manager.objects.get(pk=pk)}
+            except (ValueError, Manager.DoesNotExist):
                 return None
         # Otherwise, treat as a Player token
         try:
@@ -142,9 +142,9 @@ def get_player_library(request, player: str):
     """Get all sounds in a player's library."""
     auth_info = request.auth
 
-    # Get the PlayerAccount for authorization
+    # Get the Manager for authorization
     if auth_info["type"] == "account":
-        account: PlayerAccount = auth_info["obj"]
+        account: Manager = auth_info["obj"]
     else:
         # Player token provided, get the account from the player
         player_obj: Player = auth_info["obj"]
@@ -171,9 +171,9 @@ def get_cosound(request, player: str):
     """Get the current cosound configuration for a player."""
     auth_info = request.auth
 
-    # Get the PlayerAccount for authorization
+    # Get the Manager for authorization
     if auth_info["type"] == "account":
-        account: PlayerAccount = auth_info["obj"]
+        account: Manager = auth_info["obj"]
     else:
         # Player token provided, get the account from the player
         player_obj: Player = auth_info["obj"]

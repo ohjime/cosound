@@ -11,17 +11,16 @@ from unfold.admin import ModelAdmin, TabularInline, StackedInline
 from unfold.contrib.filters.admin import FieldTextFilter
 from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 
-from core.models import PlayerAccount, User, Sound, Player
+from core.models import Manager, User, Sound, Player, Listener
 from core.forms import SoundForm
-from voter.models import Voter
 
 
-class VoterInline(StackedInline):
-    model = Voter
+class ListenerInline(StackedInline):
+    model = Listener
 
 
-class PlayerAccountInline(StackedInline):
-    model = PlayerAccount
+class ManagerInline(StackedInline):
+    model = Manager
 
 
 class PlayerInline(TabularInline):
@@ -37,7 +36,7 @@ admin.site.unregister(Group)
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin, ModelAdmin):
-    inlines = [PlayerAccountInline, VoterInline]
+    inlines = [ManagerInline, ListenerInline]
 
     class Meta:
         model = User
@@ -60,12 +59,17 @@ class SoundAdmin(FileFormAdmin, ModelAdmin):  # type: ignore
 @admin.register(Player)
 class PlayerAdmin(ModelAdmin):
     list_display = ["name", "account"]
-    readonly_fields = ["token"]
+    exclude = ["playing", "token"]
     list_filter = [("name", FieldTextFilter)]
 
 
-@admin.register(PlayerAccount)
-class PlayerAccountAdmin(ModelAdmin):
-    list_display = ["name", "manager", "created_at"]
+@admin.register(Manager)
+class ManagerAdmin(ModelAdmin):
+    list_display = ["name", "user", "created_at"]
     list_filter = [("name", FieldTextFilter)]
     inlines = [PlayerInline]
+
+
+@admin.register(Listener)
+class ListenerAdmin(ModelAdmin):
+    list_display = ["user", "created_at"]

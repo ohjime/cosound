@@ -37,6 +37,12 @@
 /* 4. Configure the 'dark:' variant for Tailwind */
 @custom-variant dark (&:where([data-theme=dim], [data-theme=dim] *));
 
+/* 5. Configure HTMX lifecycle variants for Tailwind */
+@custom-variant htmx-settling (&:where(.htmx-settling, .htmx-settling *));
+@custom-variant htmx-request (&:where(.htmx-request, .htmx-request *));
+@custom-variant htmx-swapping (&:where(.htmx-swapping, .htmx-swapping *));
+@custom-variant htmx-added (&:where(.htmx-added, .htmx-added *));
+
 @utility no-scrollbar {
     @apply [scrollbar-width:none] [&::-webkit-scrollbar]:hidden;
 }

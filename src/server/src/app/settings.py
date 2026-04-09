@@ -67,6 +67,17 @@ if RENDER_EXTERNAL_HOSTNAME:
     CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_EXTERNAL_HOSTNAME}")
     CSRF_TRUSTED_ORIGINS.append(f"https://www.{RENDER_EXTERNAL_HOSTNAME}")
 
+# Add production hosts to CSRF trusted origins (with scheme)
+_prod_hosts_env = os.environ.get("PROD_HOSTS", "")
+if _prod_hosts_env:
+    for entry in _prod_hosts_env.split(","):
+        entry = entry.strip().rstrip("/")
+        if not entry:
+            continue
+        if "://" not in entry:
+            entry = f"https://{entry}"
+        CSRF_TRUSTED_ORIGINS.append(entry)
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -143,6 +154,7 @@ INSTALLED_APPS = [
     "widget_tweaks",
     "django_file_form",
     "storages",
+    "anymail",
     "core",
     "vote",
     "rate",
@@ -205,6 +217,18 @@ AWS_S3_SIGNATURE_VERSION = "s3v4"
 STORAGES = {
     "default": {
         "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "access_key": AWS_ACCESS_KEY_ID,
+            "secret_key": AWS_SECRET_ACCESS_KEY,
+            "bucket_name": AWS_STORAGE_BUCKET_NAME,
+            "region_name": AWS_S3_REGION_NAME,
+            "endpoint_url": (
+                f"https://s3.{AWS_S3_REGION_NAME}.amazonaws.com"
+                if AWS_S3_REGION_NAME
+                else None
+            ),
+            "signature_version": AWS_S3_SIGNATURE_VERSION,
+        },
     },
     "staticfiles": {
         "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
@@ -260,6 +284,18 @@ AUTHENTICATION_BACKENDS = [
     "allauth.account.auth_backends.AuthenticationBackend",
 ]
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+ANYMAIL = {
+    "AMAZON_SES_CLIENT_PARAMS": {
+        "aws_access_key_id": os.getenv("AWS_ACCESS_KEY_ID"),
+        "aws_secret_access_key": os.getenv("AWS_SECRET_ACCESS_KEY"),
+        "region_name": "us-east-1",
+    },
+}
+
+EMAIL_BACKEND = "anymail.backends.amazon_ses.EmailBackend"
+DEFAULT_FROM_EMAIL = "auth@cosound.ca"
+
 # Database configuration
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 DATABASES = {
@@ -290,7 +326,6 @@ TASKS = {
 # Vote app
 # Seconds a listener must wait between consecutive votes.
 VOTE_THROTTLE_SECONDS = int(os.environ.get("VOTE_THROTTLE_SECONDS", 60))
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 UNFOLD = {
     "SITE_TITLE": "Management Panel",
@@ -317,43 +352,24 @@ UNFOLD = {
                 "separator": True,  # Top border
                 "items": [
                     {
-                        "title": _("Cosound Players"),
-                        "icon": "motion_play",
+                        "title": _("Managers"),
+                        "icon": "shield_person",
+                        "link": reverse_lazy("admin:core_manager_changelist"),
+                    },
+                    {
+                        "title": _("Players"),
+                        "icon": "radio",
                         "link": reverse_lazy("admin:core_player_changelist"),
                     },
                     {
-                        "title": _("Sound Collection"),
-                        "icon": "track_changes",
+                        "title": _("Sounds"),
+                        "icon": "library_music",
                         "link": reverse_lazy("admin:core_sound_changelist"),
                     },
                     {
-                        "title": _("Player Accounts"),
-                        "icon": "apartment",
-                        "link": reverse_lazy("admin:core_playeraccount_changelist"),
-                    },
-                    {
-                        "title": _("User Accounts"),
-                        "icon": "group",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("admin:core_user_changelist"),
-                        "badge_variant": "info",  # info, success, warning, primary, danger
-                        "badge_style": "solid",  # background fill style
-                        "permission": lambda request: request.user.is_superuser,
-                    },
-                ],
-            },
-            {
-                "title": _("NFC Voters"),
-                "separator": True,  # Top border
-                "items": [
-                    {
-                        "title": _("Registered Voters"),
-                        "icon": "how_to_reg",
+                        "title": _("Listeners"),
+                        "icon": "ear_sound",
                         "link": reverse_lazy("admin:core_listener_changelist"),
-                    },
-                    {
-                        "title": _("Recorded Votes"),
-                        "icon": "instant_mix",
-                        "link": reverse_lazy("admin:vote_vote_changelist"),
                     },
                 ],
             },
@@ -362,5 +378,3 @@ UNFOLD = {
 }
 
 COSOUND_CORE_PREDICTOR = "app.predict.predictor_v1"
-COSOUND_SOUND_CLASSIFIER = "app.classify.classifier_v1"
-COSOUND_SOUND_DIMENSION = "app.classify.dim_v1"

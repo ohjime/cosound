@@ -6,9 +6,11 @@
 <c-core-content>
     <div class="h-fit w-full flex flex-col items-center transition-all duration-300 ease-out opacity-100 [&.htmx-added]:opacity-0">
         <div class="w-full max-w-sm pb-8">
-            <div class="text-center mb-5 motion-preset-blur-down-lg motion-duration-700">
-                <h2 class="text-xl font-bold">Mix These Sounds</h2>
-                <p class="text-xs text-base-content/50 mt-1">Adjust each track's volume to build your mix</p>
+            <div class="text-center mb-6 mt-4 motion-preset-blur-down-lg motion-duration-700">
+                <h2 class="text-xl font-bold">Personal Mixer</h2>
+                <p class="text-xs text-base-content/50 mt-1 px-5">
+                    Create your own personal cosounds, by adjust the gain and adding new layers
+                </p>
             </div>
             <!-- Carousel wrapper -->
             <div class="relative"
@@ -26,6 +28,8 @@
                     gainNodes: {},
                     audioCtx: null,
                     gains: {},
+                    lastGains: {},
+                    paused: {},
                     started: false,
 
                     initAudios() {
@@ -34,7 +38,8 @@
                         const items = el.getElementsByClassName('carousel-item');
                         for (const item of items) {
                             const id = item.dataset.soundId;
-                            this.gains[id] = 0;
+                            this.gains[id] = 0.35;
+                            this.paused[id] = true;
                         }
                     },
 
@@ -61,6 +66,9 @@
                             this.audios[id] = audio;
                             this.gainNodes[id] = gainNode;
                             audio.play().catch(() => {});
+                            if (!this.paused[id]) {
+                                this.rampGain(id, this.gains[id] || 0.35);
+                            }
                         }
                         this.started = true;
                     },
@@ -90,8 +98,15 @@
                     setGain(id, val) {
                         const v = Math.max(0, Math.min(1, parseFloat(val)));
                         this.gains[id] = v;
+                        const wasPaused = this.paused[id];
+                        if (wasPaused) this.paused[id] = false;
                         if (this.gainNodes[id]) {
-                            this.gainNodes[id].gain.value = v;
+                            if (wasPaused) {
+                                this.rampGain(id, v);
+                            } else {
+                                this.gainNodes[id].gain.cancelScheduledValues(this.audioCtx.currentTime);
+                                this.gainNodes[id].gain.value = v;
+                            }
                         }
                     },
 
@@ -102,11 +117,29 @@
                         el.scrollTo({ left: wrapped * el.clientWidth, behavior: 'smooth' });
                     },
 
+                    rampGain(id, target, duration = 0.6) {
+                        const g = this.gainNodes[id];
+                        if (!g || !this.audioCtx) return;
+                        g.gain.cancelScheduledValues(this.audioCtx.currentTime);
+                        g.gain.setValueAtTime(g.gain.value, this.audioCtx.currentTime);
+                        g.gain.linearRampToValueAtTime(target, this.audioCtx.currentTime + duration);
+                    },
+
                     toggleMute() {
                         if (!this.soundId) return;
                         const id = this.soundId;
-                        const next = (this.gains[id] || 0) > 0 ? 0 : 1;
-                        this.setGain(id, next);
+                        if (this.paused[id]) {
+                            this.paused[id] = false;
+                            if (this.gainNodes[id]) {
+                                this.rampGain(id, this.gains[id] || 0.35);
+                            }
+                        } else {
+                            this.paused[id] = true;
+                            if (this.gainNodes[id]) {
+                                this.gainNodes[id].gain.cancelScheduledValues(this.audioCtx.currentTime);
+                                this.gainNodes[id].gain.value = 0;
+                            }
+                        }
                     },
 
                     init() {
@@ -118,19 +151,11 @@
                  }"
                 {# djlint:on #}
                 x-init="init()">
-                <div class="mt-4 w-full">
+                <!-- Dot indicators -->
+                <div class="flex justify-center gap-2">
                     {% for sound in sounds %}
-                        <div x-show="activeIndex === {{ forloop.counter0 }}"
-                             class="w-full flex justify-center px-6">
-                            <input type="range"
-                                   min="0"
-                                   max="1"
-                                   step="0.01"
-                                   value="0"
-                                   name="gain_{{ sound.id }}"
-                                   class="range range-primary w-full"
-                                   @input="setGain('{{ sound.id }}', $event.target.value)"
-                                   :value="gains['{{ sound.id }}'] || 0" />
+                        <div class="w-2 h-2 rounded-full transition-all duration-300"
+                             :class="activeIndex === {{ forloop.counter0 }} ? 'bg-orange-600 w-6' : 'bg-amber-500'">
                         </div>
                     {% endfor %}
                 </div>
@@ -139,7 +164,7 @@
                     <div class="flex w-full flex-col gap-3 rounded-lg bg-amber-900 p-3 overflow-visible">
                         <!-- Inner relative wrapper for overlay positioning -->
                         <div class="relative -mt-[40%] sm:-mt-[60%]">
-                            <!-- Left/right navigation arrows -->
+                            <!-- Left/right navigation + play/pause -->
                             <div class="absolute inset-0 z-10 flex items-center justify-between px-2 pointer-events-none">
                                 <button @click="goTo(activeIndex - 1)"
                                         type="button"
@@ -151,6 +176,26 @@
                                          stroke="currentColor"
                                          stroke-width="2.5">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+                                    </svg>
+                                </button>
+                                <button @click="toggleMute()"
+                                        type="button"
+                                        class="pointer-events-auto btn btn-circle btn-lg btn-neutral opacity-50 shadow-lg"
+                                        :class="!paused[soundId] && 'btn-primary opacity-80'"
+                                        :aria-label="paused[soundId] ? 'Play' : 'Pause'">
+                                    <svg x-show="paused[soundId]"
+                                         xmlns="http://www.w3.org/2000/svg"
+                                         class="w-5 h-5"
+                                         viewBox="0 0 24 24"
+                                         fill="currentColor">
+                                        <path d="M8 5v14l11-7z" />
+                                    </svg>
+                                    <svg x-show="!paused[soundId]"
+                                         xmlns="http://www.w3.org/2000/svg"
+                                         class="w-5 h-5"
+                                         viewBox="0 0 24 24"
+                                         fill="currentColor">
+                                        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
                                     </svg>
                                 </button>
                                 <button @click="goTo(activeIndex + 1)"
@@ -166,32 +211,10 @@
                                     </svg>
                                 </button>
                             </div>
-                            <!-- Overlay text + mute button -->
+                            <!-- Overlay text -->
                             <div class="absolute inset-0 z-10 pointer-events-none text-white text-shadow-lg font-bold p-4 flex flex-col justify-between">
-                                <div class="flex justify-between items-start">
-                                    <div class="text-left">
-                                        <h2 class="text-2xl" x-text="type"></h2>
-                                    </div>
-                                    <!-- Mute/unmute button -->
-                                    <button @click="toggleMute()"
-                                            type="button"
-                                            class="pointer-events-auto p-2 transition-transform active:scale-90"
-                                            :aria-label="(gains[soundId] || 0) > 0 ? 'Mute' : 'Unmute'">
-                                        <svg x-show="(gains[soundId] || 0) > 0"
-                                             xmlns="http://www.w3.org/2000/svg"
-                                             class="w-8 h-8 text-primary drop-shadow-lg"
-                                             viewBox="0 0 24 24"
-                                             fill="currentColor">
-                                            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 00-2.5-4.03v8.05A4.5 4.5 0 0016.5 12zM14 3.23v2.06a7 7 0 010 13.42v2.06A9 9 0 0014 3.23z" />
-                                        </svg>
-                                        <svg x-show="(gains[soundId] || 0) === 0"
-                                             xmlns="http://www.w3.org/2000/svg"
-                                             class="w-8 h-8 text-white drop-shadow-lg"
-                                             viewBox="0 0 24 24"
-                                             fill="currentColor">
-                                            <path d="M16.5 12A4.5 4.5 0 0014 7.97v2.21l2.45 2.45a4.46 4.46 0 00.05-.63zM19 12c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.96 8.96 0 0021 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 003.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z" />
-                                        </svg>
-                                    </button>
+                                <div class="text-left">
+                                    <h2 class="text-2xl" x-text="type"></h2>
                                 </div>
                                 <div class="text-right">
                                     <h2 class="text-2xl" x-text="sound"></h2>
@@ -202,14 +225,7 @@
                             <div x-show="!started"
                                  class="absolute inset-0 z-20 flex items-center justify-center bg-black/70 rounded-box cursor-pointer"
                                  @click="startPlayback()">
-                                <button type="button" class="btn btn-circle btn-lg btn-primary">
-                                    <svg xmlns="http://www.w3.org/2000/svg"
-                                         class="w-10 h-10"
-                                         viewBox="0 0 24 24"
-                                         fill="currentColor">
-                                        <path d="M8 5v14l11-7z" />
-                                    </svg>
-                                </button>
+                                <button type="button" class="btn btn-lg btn-neutral font-bold text-lg">Create New Cosound</button>
                             </div>
                             <!-- Actual scrollable carousel -->
                             <div x-ref="carousel"
@@ -226,18 +242,29 @@
                                 {% endfor %}
                             </div>
                         </div>
-                        <!-- Flavor text + dot indicators -->
+                        <!-- Volume slider -->
+                        <div class="w-full">
+                            {% for sound in sounds %}
+                                <div x-show="activeIndex === {{ forloop.counter0 }}"
+                                     class="w-full flex justify-center px-2">
+                                    <input type="range"
+                                           min="0"
+                                           max="1"
+                                           step="0.01"
+                                           value="0.35"
+                                           name="gain_{{ sound.id }}"
+                                           class="range w-full transition-all duration-200"
+                                           :class="paused['{{ sound.id }}'] ? 'range-ghost opacity-40' : 'range-primary'"
+                                           @input="setGain('{{ sound.id }}', $event.target.value)"
+                                           :value="gains['{{ sound.id }}'] || 0" />
+                                </div>
+                            {% endfor %}
+                        </div>
+                        <!-- Flavor text  -->
                         <div class="w-full rounded-md bg-gray-300 p-2 opacity-35 flex flex-col gap-2">
                             <div x-show="flavor"
                                  x-text="flavor"
                                  class="h-20 overflow-y-auto text-sm font-bold text-gray-800"></div>
-                            <div class="flex justify-center gap-2">
-                                {% for sound in sounds %}
-                                    <div class="w-2 h-2 rounded-full transition-all duration-300"
-                                         :class="activeIndex === {{ forloop.counter0 }} ? 'bg-orange-600 w-6' : 'bg-amber-500'">
-                                    </div>
-                                {% endfor %}
-                            </div>
                         </div>
                     </div>
                 </div>

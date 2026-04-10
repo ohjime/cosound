@@ -5,7 +5,7 @@
 {% partialdef mix_player %}
 <c-core-content>
     <div class="h-fit w-full flex flex-col items-center transition-all duration-300 ease-out opacity-100 [&.htmx-added]:opacity-0">
-        <div class="w-full max-w-sm px-4 pb-8">
+        <div class="w-full max-w-sm pb-8">
             <div class="text-center mb-5 motion-preset-blur-down-lg motion-duration-700">
                 <h2 class="text-xl font-bold">Mix These Sounds</h2>
                 <p class="text-xs text-base-content/50 mt-1">Adjust each track's volume to build your mix</p>
@@ -95,6 +95,13 @@
                         }
                     },
 
+                    goTo(index) {
+                        const el = this.$refs.carousel;
+                        if (!el) return;
+                        const wrapped = ((index % this.totalSlides) + this.totalSlides) % this.totalSlides;
+                        el.scrollTo({ left: wrapped * el.clientWidth, behavior: 'smooth' });
+                    },
+
                     toggleMute() {
                         if (!this.soundId) return;
                         const id = this.soundId;
@@ -128,10 +135,37 @@
                     {% endfor %}
                 </div>
                 <!-- Card wrapper -->
-                <div class="w-full mt-[60%] rounded-2xl bg-gray-600 p-2 shadow-2xl overflow-visible">
+                <div class="w-full mt-[40%] sm:mt-[60%] rounded-2xl bg-gray-600 p-2 shadow-2xl overflow-visible">
                     <div class="flex w-full flex-col gap-3 rounded-lg bg-amber-900 p-3 overflow-visible">
                         <!-- Inner relative wrapper for overlay positioning -->
-                        <div class="relative -mt-[60%]">
+                        <div class="relative -mt-[40%] sm:-mt-[60%]">
+                            <!-- Left/right navigation arrows -->
+                            <div class="absolute inset-0 z-10 flex items-center justify-between px-2 pointer-events-none">
+                                <button @click="goTo(activeIndex - 1)"
+                                        type="button"
+                                        class="pointer-events-auto btn btn-circle btn-md btn-neutral opacity-50 shadow-lg">
+                                    <svg xmlns="http://www.w3.org/2000/svg"
+                                         class="w-4 h-4"
+                                         fill="none"
+                                         viewBox="0 0 24 24"
+                                         stroke="currentColor"
+                                         stroke-width="2.5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+                                    </svg>
+                                </button>
+                                <button @click="goTo(activeIndex + 1)"
+                                        type="button"
+                                        class="pointer-events-auto btn btn-circle btn-md btn-neutral opacity-50 shadow-lg">
+                                    <svg xmlns="http://www.w3.org/2000/svg"
+                                         class="w-4 h-4"
+                                         fill="none"
+                                         viewBox="0 0 24 24"
+                                         stroke="currentColor"
+                                         stroke-width="2.5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                                    </svg>
+                                </button>
+                            </div>
                             <!-- Overlay text + mute button -->
                             <div class="absolute inset-0 z-10 pointer-events-none text-white text-shadow-lg font-bold p-4 flex flex-col justify-between">
                                 <div class="flex justify-between items-start">
@@ -180,7 +214,7 @@
                             <!-- Actual scrollable carousel -->
                             <div x-ref="carousel"
                                  @scroll.debounce.5ms="updateText()"
-                                 class="carousel max-w-sm aspect-square rounded-box">
+                                 class="carousel w-full aspect-square rounded-box">
                                 {% for sound in sounds %}
                                     <c-mix-player sound_id="{{ sound.id }}"
                                                   sound_url="{{ sound.file.url }}"
@@ -196,7 +230,7 @@
                         <div class="w-full rounded-md bg-gray-300 p-2 opacity-35 flex flex-col gap-2">
                             <div x-show="flavor"
                                  x-text="flavor"
-                                 class="h-20 overflow-y-auto text-sm text-gray-800"></div>
+                                 class="h-20 overflow-y-auto text-sm font-bold text-gray-800"></div>
                             <div class="flex justify-center gap-2">
                                 {% for sound in sounds %}
                                     <div class="w-2 h-2 rounded-full transition-all duration-300"

@@ -90,3 +90,12 @@ superuser:
 		&& uv sync
 	@cd src/server \
 		&& uv run src/main.py createsuperuser
+
+import-sounds:
+	@echo "Importing sounds from $(CURDIR)/build/sounds/Looping Stems..."
+	@cd src/server \
+		&& uv sync
+	@cd src/server \
+		&& uv run src/main.py import_sounds \
+			--sounds-dir "$(CURDIR)/build/sounds/Looping Stems" \
+			$(args)

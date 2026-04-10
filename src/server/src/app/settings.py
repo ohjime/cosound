@@ -132,6 +132,7 @@ LOGGING = {
     },
 }
 INSTALLED_APPS = [
+    "import_export",
     "unfold",
     "unfold.contrib.filters",
     "unfold.contrib.forms",

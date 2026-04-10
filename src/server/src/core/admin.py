@@ -1,3 +1,5 @@
+from import_export.admin import ImportExportModelAdmin
+from unfold.contrib.import_export.forms import ExportForm, ImportForm
 import json
 from django.contrib import admin
 from django.apps import apps as django_apps
@@ -6,7 +8,6 @@ from django.template.loader import render_to_string
 from django_file_form.model_admin import FileFormAdmin
 from django.contrib.auth.models import Group
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-
 from unfold.admin import ModelAdmin, TabularInline, StackedInline
 from unfold.contrib.filters.admin import FieldTextFilter
 from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
@@ -50,8 +51,12 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
 
 
 @admin.register(Sound)
-class SoundAdmin(FileFormAdmin, ModelAdmin):  # type: ignore
+class SoundAdmin(FileFormAdmin, ModelAdmin, ImportExportModelAdmin):  # type: ignore
     form = SoundForm
+
+    # Add Unfold's styled forms for the import/export pages
+    import_form_class = ImportForm
+    export_form_class = ExportForm
 
     list_display = ["title", "artist", "type", "created_at", "updated_at"]
 

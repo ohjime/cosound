@@ -44,6 +44,8 @@ class Sound(db_models.Model):  # Database Class
     title = db_models.CharField(max_length=255)
     artist = db_models.CharField(max_length=255)
     type = db_models.CharField(choices=SoundType.choices)
+    art = db_models.ImageField(upload_to="sound_arts/", blank=True, null=True)
+    flavor = db_models.TextField(blank=True, null=True)
     embeddings = VectorField(
         null=True,
         dimensions=_get_sound_dimension(),

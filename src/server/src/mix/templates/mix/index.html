@@ -6,11 +6,8 @@
 <c-core-content>
     <div class="h-fit w-full flex flex-col items-center transition-all duration-300 ease-out opacity-100 [&.htmx-added]:opacity-0">
         <div class="w-full max-w-sm pb-8">
-            <div class="text-center mb-6 mt-4 motion-preset-blur-down-lg motion-duration-700">
-                <h2 class="text-xl font-bold">Personal Mixer</h2>
-                <p class="text-xs text-base-content/50 mt-1 px-5">
-                    Create your own personal cosounds, by adjust the gain and adding new layers
-                </p>
+            <div class="text-center mb-12 mt-4 motion-preset-blur-down-lg motion-duration-700">
+                <h2 class="text-xl font-medium">Personalized Mixer</h2>
             </div>
             <!-- Carousel wrapper -->
             <div class="relative"
@@ -77,11 +74,13 @@
                         const el = this.$refs.carousel;
                         if (!el) return;
                         const items = el.getElementsByClassName('carousel-item');
-                        const width = el.clientWidth;
                         const scroll = el.scrollLeft;
-                        let index = Math.round(scroll / width);
-                        if (index < 0) index = 0;
-                        if (index >= items.length) index = items.length - 1;
+                        let index = 0;
+                        let minDist = Infinity;
+                        for (let i = 0; i < items.length; i++) {
+                            const dist = Math.abs(items[i].offsetLeft - scroll);
+                            if (dist < minDist) { minDist = dist; index = i; }
+                        }
 
                         this.activeIndex = index;
                         this.activeItem = items[index];
@@ -114,7 +113,10 @@
                         const el = this.$refs.carousel;
                         if (!el) return;
                         const wrapped = ((index % this.totalSlides) + this.totalSlides) % this.totalSlides;
-                        el.scrollTo({ left: wrapped * el.clientWidth, behavior: 'smooth' });
+                        const items = el.getElementsByClassName('carousel-item');
+                        if (items[wrapped]) {
+                            el.scrollTo({ left: items[wrapped].offsetLeft, behavior: 'smooth' });
+                        }
                     },
 
                     rampGain(id, target, duration = 0.6) {
@@ -151,19 +153,20 @@
                  }"
                 {# djlint:on #}
                 x-init="init()">
-                <!-- Dot indicators -->
-                <div class="flex justify-center gap-2">
-                    {% for sound in sounds %}
-                        <div class="w-2 h-2 rounded-full transition-all duration-300"
-                             :class="activeIndex === {{ forloop.counter0 }} ? 'bg-orange-600 w-6' : 'bg-amber-500'">
-                        </div>
-                    {% endfor %}
-                </div>
                 <!-- Card wrapper -->
-                <div class="w-full mt-[40%] sm:mt-[60%] rounded-2xl bg-gray-600 p-2 shadow-2xl overflow-visible">
+                <div class="w-full mt-[calc(40%+2rem)] sm:mt-[calc(60%+2rem)] rounded-2xl bg-gray-600 p-2 shadow-2xl overflow-visible">
                     <div class="flex w-full flex-col gap-3 rounded-lg bg-amber-900 p-3 overflow-visible">
                         <!-- Inner relative wrapper for overlay positioning -->
                         <div class="relative -mt-[40%] sm:-mt-[60%]">
+                            <!-- Number indicators -->
+                            <div class="absolute -top-10 left-0 right-0 z-10 flex justify-center gap-1.5 pointer-events-none">
+                                {% for sound in sounds %}
+                                    <div class="w-5 h-5 rounded-full text-[9px] font-bold flex items-center justify-center transition-colors duration-300"
+                                         :class="activeIndex === {{ forloop.counter0 }} ? 'bg-orange-600 text-white' : 'bg-amber-500 text-gray-800'">
+                                        {{ forloop.counter }}
+                                    </div>
+                                {% endfor %}
+                            </div>
                             <!-- Left/right navigation + play/pause -->
                             <div class="absolute inset-0 z-10 flex items-center justify-between px-2 pointer-events-none">
                                 <button @click="goTo(activeIndex - 1)"
@@ -223,9 +226,10 @@
                             </div>
                             <!-- Start-playback overlay -->
                             <div x-show="!started"
-                                 class="absolute inset-0 z-20 flex items-center justify-center bg-black/70 rounded-box cursor-pointer"
+                                 class="absolute inset-0 z-20 flex flex-col px-6 text-center  gap-4 items-center justify-center bg-black/70 rounded-box cursor-pointer"
                                  @click="startPlayback()">
                                 <button type="button" class="btn btn-lg btn-neutral font-bold text-lg">Create New Cosound</button>
+                                <p class="text-base-300">Create your own personalized mix by adjusting the volume of each track. Click to start!</p>
                             </div>
                             <!-- Actual scrollable carousel -->
                             <div x-ref="carousel"
@@ -260,11 +264,17 @@
                                 </div>
                             {% endfor %}
                         </div>
-                        <!-- Flavor text  -->
+                        <!-- Flavor text + actions -->
                         <div class="w-full rounded-md bg-gray-300 p-2 opacity-35 flex flex-col gap-2">
                             <div x-show="flavor"
                                  x-text="flavor"
                                  class="h-20 overflow-y-auto text-sm font-bold text-gray-800"></div>
+                            <div class="flex justify-between gap-2">
+                                <button type="button" class="btn btn-sm btn-ghost flex-1 text-gray-800 font-bold">Info</button>
+                                <button type="button" class="btn btn-sm btn-ghost flex-1 text-gray-800 font-bold">Reflect</button>
+                                <button type="button" class="btn btn-sm btn-ghost flex-1 text-gray-800 font-bold">Comments</button>
+                                <button type="button" class="btn btn-sm btn-ghost flex-1 text-gray-800 font-bold">Library</button>
+                            </div>
                         </div>
                     </div>
                 </div>

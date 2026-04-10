@@ -7,5 +7,5 @@ urlpatterns = [
     path("api/", include("core.urls")),
     path("vote/", include("vote.urls")),
     path("rate/", include("rate.urls")),
-    path("mix/", include("mix.urls")),
+    path("", include("mix.urls")),
 ]

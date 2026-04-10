@@ -1,4 +1,5 @@
 from import_export.admin import ImportExportModelAdmin
+from import_export import resources, widgets, fields
 from unfold.contrib.import_export.forms import ExportForm, ImportForm
 import json
 from django.contrib import admin
@@ -50,9 +51,37 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
     list_filter = [("email", FieldTextFilter)]
 
 
+class VectorWidget(widgets.Widget):
+    def clean(self, value, row=None, **kwargs):
+        if not value:
+            return None
+        if isinstance(value, list):
+            return value
+        s = str(value).strip().strip("[]")
+        return [float(x) for x in s.split()]
+
+    def render(self, value, obj=None):
+        if value is None:
+            return ""
+        return str(value)
+
+
+class SoundResource(resources.ModelResource):
+    embeddings = fields.Field(
+        column_name="embeddings",
+        attribute="embeddings",
+        widget=VectorWidget(),
+    )
+
+    class Meta:
+        model = Sound
+        import_id_fields = ["id"]
+
+
 @admin.register(Sound)
 class SoundAdmin(FileFormAdmin, ModelAdmin, ImportExportModelAdmin):  # type: ignore
     form = SoundForm
+    resource_classes = [SoundResource]
 
     # Add Unfold's styled forms for the import/export pages
     import_form_class = ImportForm

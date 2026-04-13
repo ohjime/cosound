@@ -160,6 +160,7 @@ INSTALLED_APPS = [
     "vote",
     "rate",
     "mix",
+    "home",
     "allauth",
     "allauth.account",
 ]

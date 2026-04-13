@@ -1,0 +1,76 @@
+{% extends "core/base.html" %}
+{% block content %}
+    <c-core-loader hx_get="{% url 'core:card_example_initial' %}" />
+{% endblock content %}
+{% partialdef initial %}
+<c-core-content>
+    <div class="h-fit w-full flex flex-col items-center transition-all duration-300 ease-out opacity-100 htmx-added:opacity-0 gap-10 pt-4 pb-8">
+        <div class="max-w-72 w-full">
+            <c-core-subtitle />
+        </div>
+        <div class="flex flex-col items-center gap-10 w-full">
+            <!-- Card -->
+            <div class="card bg-base-300 max-w-80 w-full ring-8 ring-neutral/70 shadow-base-content/50 shadow-2xl transition-all duration-1000 ease-out">
+                <figure class="ring-7 ring-neutral-content/70 rounded-t-md mx-6 mt-7 overflow-visible">
+                    <div class="static aspect-square w-full rounded-t-md overflow-hidden ">
+                        <div class="absolute z-10 right-1/2 translate-x-1/2 -translate-y-1/2 ring-4 ring-neutral-content/70 w-min min-w-28 flex justify-center rounded-full overflow-hidden bg-white">
+                            <c-card-header>
+                                <div class="h-8 w-40 rounded-none skeleton"></div>
+                            </c-card-header>
+                        </div>
+                        <c-card-figure>
+                            <div class="text-center h-full w-full skeleton rounded-none"></div>
+                        </c-card-figure>
+                    </div>
+                </figure>
+                <input id="card-slider"
+                       type="range"
+                       min="0"
+                       max="100"
+                       x-model="cardSliderValue"
+                       class="px-6 py-6 range text-yellow-600 [--range-bg:orange] [--range-thumb:brown] [--range-fill:0]" />
+                <div class="card-body ring-5 ring-amber-600/60 mx-4 mb-4 rounded-xs bg-white/65 !p-0 text-black">
+                    <div class="h-30 overflow-y-scroll">
+                        <c-card-body>
+                            <div class="text-center h-full w-full skeleton rounded-none"></div>
+                        </c-card-body>
+                    </div>
+                </div>
+            </div>
+            <!-- Demo Buttons -->
+            <button hx-target="#card-figure"
+                    hx-swap="outerHTML swap:300ms"
+                    hx-get="{% url 'core:card_example_swap_figure' %}"
+                    class="btn btn-block btn-dash btn-primary max-w-32 mt-10">Swap Figure</button>
+            <button hx-target="#card-body"
+                    hx-swap="outerHTML swap:250ms"
+                    hx-get="{% url 'core:card_example_swap_body' %}"
+                    class="btn btn-block btn-dash btn-secondary max-w-32">Swap Body</button>
+            <button hx-target="#card-header"
+                    hx-swap="outerHTML swap:250ms"
+                    hx-get="{% url 'core:card_example_swap_header' %}"
+                    class="btn btn-block btn-dash btn-secondary max-w-32">Swap Header</button>
+        </div>
+    </div>
+</c-core-content>
+{% endpartialdef %}
+{% partialdef new-figure %}
+<c-card-figure>
+    <img src="https://uploads2.yugioh.com/card_images/257/detail/Dark-Magician.jpg?1375127294"
+         alt="Dark Magician">
+</c-card-figure>
+{% endpartialdef %}
+{% partialdef new-body %}
+<c-card-body>
+    <div class="p-2 italic font-serif font-extralight text-xs font-stretch-95%">
+        The Ultimate Wizard in Terms of Attack and Defense.
+    </div>
+</c-card-body>
+{% endpartialdef %}
+{% partialdef new-header %}
+<c-card-header>
+    <div class="flex flex-col w-max font-bold bg-gray-300/40 text-lg text-center text-black justify-center px-3 py-1 font-serif">
+        Dark Magician
+    </div>
+</c-card-header>
+{% endpartialdef %}

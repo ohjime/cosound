@@ -7,6 +7,7 @@ from core.views import (
     card_example_swap_figure,
     card_example_swap_body,
     card_example_swap_header,
+    card_example_swap_multiple,
 )
 
 app_name = "core"
@@ -39,6 +40,11 @@ htmx_urlpatterns = [
         "htmx/examples/card/swap-header",
         card_example_swap_header,
         name="card_example_swap_header",
+    ),
+    path(
+        "htmx/examples/card/swap-multiple",
+        card_example_swap_multiple,
+        name="card_example_swap_multiple",
     ),
 ]
 

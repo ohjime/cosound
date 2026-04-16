@@ -1,0 +1,141 @@
+{% extends "core/base.html" %}
+{% block content %}
+    <c-core-loader hx_get="{% url 'home:load' %}" />
+{% endblock content %}
+{% partialdef home_player %}
+<c-core-content>
+    <div class="h-fit w-full flex flex-col items-center transition-all duration-300 ease-out opacity-100 htmx-added:opacity-0 gap-10 pt-4 pb-8">
+        <div class="max-w-72 w-full">
+            <c-core-subtitle />
+        </div>
+        <!-- Server -> client data handoff. The view gives us sounds as Python dicts,
+        but Alpine lives in JS and needs them as a JSON object it can parse. We
+        can't just inline the sounds variable inside x- data attributes because a title 
+        containing script or a quote would break out of the attribute and potentially run 
+        arbitrary JS. json_script emits a script block with HTML entities escaped as Unicode 
+        sequences, which is safe. -->
+        {{ sounds|json_script:"soundLayers" }}
+        <div class="flex flex-col items-center gap-10 w-full"
+            {# djlint:off #}
+             x-data
+             x-init="
+                if (!Alpine.store('soundLayers')) {
+                    Alpine.store('soundLayers', {
+                        layers: JSON.parse(document.getElementById('soundLayers').textContent)
+                            .map(l => ({ ...l, gain: (l.sound_gain ?? 0) * 100 })),
+                        currentIndex: 0,
+                        tracksLoading: true,
+                        _players: [],
+                        get currentLayer() { return this.layers[this.currentIndex]; },
+                        get isFirst() { return this.currentIndex === 0; },
+                        get isLast() { return this.currentIndex === this.layers.length - 1; },
+                        registerPlayer(el) {
+                            if (this._players.includes(el)) return;
+                            this._players.push(el);
+                            if (this._players.length === this.layers.length) {
+                                this.tracksLoading = false;
+                                this._players.forEach(p => {
+                                    p.currentTime = 0;
+                                    p.play().catch(() => {});
+                                });
+                            }
+                        },
+                        playAll() {
+                            this._players.forEach(p => {
+                                p.currentTime = 0;
+                                p.play().catch(() => {});
+                            });
+                        },
+                    });
+                }
+             "
+            {# djlint:on #}
+            >
+            {# djlint:off #}
+            <template x-for="layer in $store.soundLayers.layers" :key="layer.sound_id">
+                <audio
+                    :src="layer.sound_file"
+                    preload="auto"
+                    loop
+                    class="hidden"
+                    x-effect="$el.volume = layer.mute ? 0 : (layer.gain / 100)"
+                    @canplaythrough.once="$store.soundLayers.registerPlayer($el)"
+                ></audio>
+            </template>
+            {# djlint:on #}
+            <!-- Card -->
+            <div class="card bg-green-900/60 max-w-80 w-full ring-8 ring-neutral/80 shadow-base-content/50 shadow-2xl transition-all duration-1000 ease-out pb-2 rounded-b-4xl">
+                <figure class="relative ring-7 ring-neutral-content/70 rounded-t-md mx-6 mt-7 overflow-visible bg-base-300">
+                    <div class="static aspect-square w-full rounded-t-md overflow-hidden ">
+                        <div class="absolute z-10 top-0 right-1/2 translate-x-1/2 -translate-y-1/2 ring-4 ring-neutral-content/70 w-min min-w-28 flex justify-center rounded-full overflow-hidden bg-white">
+                            <c-card-header>
+                                <c-sound-layer-indicator />
+                            </c-card-header>
+                        </div>
+                        {% partial carousel_view %}
+                    </div>
+                    <c-sound-carousel-arrows />
+                </figure>
+                <c-card-slider target="$store.soundLayers.currentLayer.gain"
+                               faded="$store.soundLayers.currentLayer.mute"
+                               on_tap="$store.soundLayers.currentLayer.mute = !$store.soundLayers.currentLayer.mute"
+                               on_change="$store.soundLayers.currentLayer.mute = false">
+                    <c-mute-icon />
+                </c-card-slider>
+                <div class="card-body ring-5 ring-amber-600/60 mx-4 mb-4 rounded-xs rounded-b-2xl bg-white/65 !p-0 text-black">
+                    <div class="relative">
+                        <div class="h-30 overflow-y-auto py-2 px-4 mb-2">
+                            <c-card-body>
+                                <div class="italic font-serif font-extralight text-xs font-stretch-95%">
+                                    <p class="py-1 not-italic font-bold font-serif text-xs font-stretch-95%"
+                                       x-text="'[ ' + $store.soundLayers.currentLayer.tags + ' ]'"></p>
+                                    <span x-text="$store.soundLayers.currentLayer.flavor"></span>
+                                </div>
+                            </c-card-body>
+                        </div>
+                        <div class="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-neutral-content/80 to-transparent rounded-b-2xl">
+                        </div>
+                    </div>
+                    <div class="absolute z-10 -bottom-4 right-1/2 translate-x-1/2 -translate-y-1/2 ring-6 drop-shadow-2xl ring-neutral-800/60 flex justify-center rounded-t-2xl overflow-hidden bg-white w-fit">
+                        <c-sound-layer-options />
+                    </div>
+                </div>
+            </div>
+            <button class="btn btn-neutral btn-sm"
+                    :disabled="$store.soundLayers.tracksLoading"
+                    @click="$store.soundLayers.playAll()">Play</button>
+        </div>
+    </div>
+</c-core-content>
+{% endpartialdef %}
+{% partialdef carousel_view %}
+<c-card-figure>
+    <c-sound-carousel />
+</c-card-figure>
+{% endpartialdef %}
+{% partialdef swap_view %}
+<c-card-figure>
+    <div class="w-full h-full bg-neutral/90 text-white p-5 pt-8 flex flex-col gap-2 overflow-y-auto font-serif italic">
+        <div class="text-lg leading-tight"
+             x-text="$store.soundLayers.currentLayer.sound_title"></div>
+        <div class="text-sm opacity-80"
+             x-text="'by ' + $store.soundLayers.currentLayer.sound_artist"></div>
+        <div class="divider my-1"></div>
+        <p class="text-sm opacity-90 leading-relaxed">
+            Every sound you hear is a layer that can be mixed, muted, or swapped
+            without losing the others. Drag the slider to change its volume, or
+            tap the mute icon to silence it while the rest keep playing.
+        </p>
+        <p class="text-sm opacity-90 leading-relaxed">
+            Every sound you hear is a layer that can be mixed, muted, or swapped
+            without losing the others. Drag the slider to change its volume, or
+            tap the mute icon to silence it while the rest keep playing.
+        </p>
+        <p class="text-sm opacity-90 leading-relaxed">
+            Every sound you hear is a layer that can be mixed, muted, or swapped
+            without losing the others. Drag the slider to change its volume, or
+            tap the mute icon to silence it while the rest keep playing.
+        </p>
+    </div>
+</c-card-figure>
+{% endpartialdef %}

@@ -43,3 +43,12 @@ def card_example_swap_header(request):
         request,
         "core/card-example.html#new-header",
     )
+
+
+def card_example_swap_multiple(request):
+    if not request.htmx:
+        return HttpResponse("Request Denied.")
+    return render(
+        request,
+        "core/card-example.html#new-multiple",
+    )

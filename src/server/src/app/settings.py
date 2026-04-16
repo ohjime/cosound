@@ -154,6 +154,7 @@ INSTALLED_APPS = [
     "django_cotton",
     "widget_tweaks",
     "django_file_form",
+    "taggit",
     "storages",
     "anymail",
     "core",

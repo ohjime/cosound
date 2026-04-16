@@ -1,0 +1,18 @@
+<button type="button"
+        x-data
+        @click="$dispatch('carousel-prev')"
+        :disabled="$store.soundLayers?.isFirst"
+        class="absolute z-10 -left-8 top-1/2 -translate-y-1/2 w-8.5 overflow-hidden inline-block border-l-3 border-gray-200 transform scale-x-[-1] cursor-pointer disabled:cursor-not-allowed"
+        :class="{ 'border-gray-600': $store.soundLayers?.isFirst }">
+    <div class="h-11 bg-amber-600 rotate-45 transform origin-top-left border-gray-50 border-3"
+         :class="{ 'bg-gray-700 border-gray-500 opacity-90': $store.soundLayers?.isFirst }"></div>
+</button>
+<button type="button"
+        x-data
+        @click="$dispatch('carousel-next')"
+        :disabled="$store.soundLayers?.isLast"
+        class="absolute z-10 -right-8 top-1/2 -translate-y-1/2 w-8.5 overflow-hidden inline-block border-l-3 border-gray-200 cursor-pointer disabled:cursor-not-allowed"
+        :class="{ 'border-gray-600': $store.soundLayers?.isLast }">
+    <div class="h-11 bg-amber-600 rotate-45 transform origin-top-left border-gray-50 border-3"
+         :class="{ 'bg-gray-700 border-gray-500 opacity-90': $store.soundLayers?.isLast }"></div>
+</button>

@@ -10,7 +10,7 @@
         </div>
         <div class="flex flex-col items-center gap-10 w-full">
             <!-- Card -->
-            <div class="card bg-base-300 max-w-80 w-full ring-8 ring-neutral/70 shadow-base-content/50 shadow-2xl transition-all duration-1000 ease-out">
+            <div class="card bg-amber-400/30 max-w-80 w-full ring-8 ring-neutral/70 shadow-base-content/50 shadow-2xl transition-all duration-1000 ease-out">
                 <figure class="ring-7 ring-neutral-content/70 rounded-t-md mx-6 mt-7 overflow-visible">
                     <div class="static aspect-square w-full rounded-t-md overflow-hidden ">
                         <div class="absolute z-10 right-1/2 translate-x-1/2 -translate-y-1/2 ring-4 ring-neutral-content/70 w-min min-w-28 flex justify-center rounded-full overflow-hidden bg-white">
@@ -23,12 +23,7 @@
                         </c-card-figure>
                     </div>
                 </figure>
-                <input id="card-slider"
-                       type="range"
-                       min="0"
-                       max="100"
-                       x-model="cardSliderValue"
-                       class="px-6 py-6 range text-yellow-600 [--range-bg:orange] [--range-thumb:brown] [--range-fill:0]" />
+                <c-card-slider name="cardSlider" on_change="console.log('slider =', $store.cardSlider.value)" />
                 <div class="card-body ring-5 ring-amber-600/60 mx-4 mb-4 rounded-xs bg-white/65 !p-0 text-black">
                     <div class="h-30 overflow-y-scroll">
                         <c-card-body>
@@ -36,6 +31,21 @@
                         </c-card-body>
                     </div>
                 </div>
+            </div>
+            <!-- Slider State Controls (external access via $store) -->
+            <div x-data class="flex flex-col items-center gap-3">
+                <div class="text-sm">
+                    value: <span x-text="$store.cardSlider.value"></span>
+                    / disabled: <span x-text="$store.cardSlider.disabled"></span>
+                </div>
+                <button class="btn btn-sm btn-outline"
+                        @click="$store.cardSlider.disabled = !$store.cardSlider.disabled">Toggle Disabled</button>
+                <input type="number"
+                       min="0"
+                       max="100"
+                       placeholder="Set value (e.g. 80)"
+                       class="input input-sm input-bordered max-w-40"
+                       @change="$store.cardSlider.value = Number($event.target.value)" />
             </div>
             <!-- Demo Buttons -->
             <button hx-target="#card-figure"
@@ -50,6 +60,10 @@
                     hx-swap="outerHTML swap:250ms"
                     hx-get="{% url 'core:card_example_swap_header' %}"
                     class="btn btn-block btn-dash btn-secondary max-w-32">Swap Header</button>
+            <button hx-get="{% url 'core:card_example_swap_multiple' %}"
+                    hx-swap="none swap:300ms"
+                    hx-on:htmx:before-swap="document.querySelectorAll('#card-header, #card-figure, #card-body').forEach(el => el.classList.add('htmx-swapping'))"
+                    class="btn btn-accent">Swap All</button>
         </div>
     </div>
 </c-core-content>
@@ -73,4 +87,21 @@
         Dark Magician
     </div>
 </c-card-header>
+{% endpartialdef %}
+{% partialdef new-multiple %}
+<c-card-header hx-swap-oob="outerHTML">
+    <div class="flex flex-col w-max font-bold bg-blue-300/40 text-lg text-center text-black justify-center px-3 py-1 font-serif">
+        Blue-Eyes White Dragon
+    </div>
+</c-card-header>
+<c-card-figure hx-swap-oob="outerHTML">
+    <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ7LhlSe4Epsx4ZbJPUnWZnSfnjKyh-TBfZtg&s"
+         alt="Blue-Eyes White Dragon"
+         class="w-full" />
+</c-card-figure>
+<c-card-body hx-swap-oob="outerHTML">
+    <div class="p-2 italic font-serif font-extralight text-xs font-stretch-95%">
+        This legendary dragon is a powerful engine of destruction.
+    </div>
+</c-card-body>
 {% endpartialdef %}

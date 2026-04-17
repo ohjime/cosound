@@ -59,8 +59,8 @@
             this._set(this._pctFromClientX(e.clientX, this.$refs.track.getBoundingClientRect()));
         }
      }"
-     x-init="display = ({{ disabled }}) ? 50 : (({{ target }}) ?? 0);"
-     x-effect="_animate({{ disabled }} ? 50 : (({{ target }}) ?? 0))"
+     x-init="display = ({{ disabled }}) ? 50 : (({{ target }}) ?? 50);"
+     x-effect="_animate({{ disabled }} ? 50 : (({{ target }}) ?? 50))"
     {# djlint:on #}
     >
     <div x-ref="track"

@@ -59,7 +59,7 @@ class Sound(db_models.Model):  # Database Class
         return self.title
 
     def save(self, *args, **kwargs):
-        if not self.embeddings:
+        if self.embeddings is None:
             classifier = _get_sound_classifier()
             self.embeddings = classifier(self.pk)
         super().save(*args, **kwargs)
@@ -142,7 +142,7 @@ class Listener(db_models.Model):  # Database Class
     updated_at = db_models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
-        if not self.embeddings:
+        if self.embeddings is None:
             classifier = _get_listener_classifier()
             self.embeddings = classifier(self.pk)
         super().save(*args, **kwargs)

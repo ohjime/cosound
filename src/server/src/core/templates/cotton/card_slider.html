@@ -1,0 +1,85 @@
+<c-vars target="" disabled="false" faded="false" duration="300" on_tap="" on_change="" />
+<div class="px-6 py-6 select-none touch-none"
+    {# djlint:off #}
+    x-data="{
+        display: 0,
+        dragging: false,
+        moved: false,
+        _startX: 0,
+        _startY: 0,
+        _isTouch: false,
+        _raf: null,
+        _animate(to) {
+            cancelAnimationFrame(this._raf);
+            if (Math.abs(to - this.display) < 0.1) { this.display = to; return; }
+            const start = this.display;
+            const t0 = performance.now();
+            const ease = t => 1 - Math.pow(1 - t, 3);
+            const step = (now) => {
+                const p = Math.min((now - t0) / {{ duration }}, 1);
+                this.display = start + (to - start) * ease(p);
+                if (p < 1) this._raf = requestAnimationFrame(step);
+            };
+            this._raf = requestAnimationFrame(step);
+        },
+        _pctFromClientX(clientX, rect) {
+            return Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
+        },
+        _set(v) {
+            cancelAnimationFrame(this._raf);
+            this.display = v;
+            {{ target }} = v;
+            {{ on_change }};
+        },
+        beginDrag(e) {
+            if ({{ disabled }}) return;
+            this.dragging = true;
+            this.moved = false;
+            this._startX = e.clientX;
+            this._startY = e.clientY;
+            this._isTouch = e.pointerType === 'touch';
+            e.currentTarget.setPointerCapture?.(e.pointerId);
+        },
+        dragMove(e) {
+            if (!this.dragging) return;
+            if (!this.moved) {
+                const threshold = this._isTouch ? 10 : 4;
+                if (Math.hypot(e.clientX - this._startX, e.clientY - this._startY) > threshold) this.moved = true;
+            }
+            if (this.moved) this._set(this._pctFromClientX(e.clientX, this.$refs.track.getBoundingClientRect()));
+        },
+        endDrag() {
+            if (!this.dragging) return;
+            const wasTap = !this.moved;
+            this.dragging = false;
+            if (wasTap) { {{ on_tap }}; }
+        },
+        trackTap(e) {
+            if ({{ disabled }}) return;
+            this._set(this._pctFromClientX(e.clientX, this.$refs.track.getBoundingClientRect()));
+        }
+     }"
+     x-init="display = ({{ disabled }}) ? 50 : (({{ target }}) ?? 50);"
+     x-effect="_animate({{ disabled }} ? 50 : (({{ target }}) ?? 50))"
+    {# djlint:on #}
+    >
+    <div x-ref="track"
+         class="relative h-2 rounded-full bg-orange-400 transition-[filter]"
+         :class="[({{ disabled }} || {{ faded }}) ? 'grayscale' : '', {{ disabled }} ? 'cursor-not-allowed' : 'cursor-pointer']"
+         @pointerdown="trackTap($event)">
+        <div class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 size-8 rounded-full bg-amber-800 ring-2 ring-amber-950/40 shadow-md flex items-center justify-center transition-[filter,scale] duration-300"
+             :class="[({{ disabled }} || {{ faded }}) ? 'grayscale' : '', {{ disabled }} ? 'scale-80 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing']"
+             :style="`left: ${display}%`"
+             @pointerdown.stop="beginDrag($event)"
+             @pointermove="dragMove($event)"
+             @pointerup="endDrag()"
+             @pointercancel="dragging = false; moved = false">
+            <template x-if="!({{ disabled }})">
+                <span class="contents">{{ slot }}</span>
+            </template>
+            <template x-if="{{ disabled }}">
+                <span class="loading loading-ring loading-xs text-amber-100"></span>
+            </template>
+        </div>
+    </div>
+</div>

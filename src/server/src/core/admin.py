@@ -60,7 +60,7 @@ class VectorWidget(widgets.Widget):
         s = str(value).strip().strip("[]")
         return [float(x) for x in s.split()]
 
-    def render(self, value, obj=None):
+    def render(self, value, obj=None, **kwargs):
         if value is None:
             return ""
         return str(value)

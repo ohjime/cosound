@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from pgvector.django import VectorField
 from django_pydantic_field import SchemaField
 from django.contrib.auth.models import AbstractUser
+from taggit.managers import TaggableManager
 from core.utils import (
     _get_sound_dimension,
     _get_sound_classifier,
@@ -46,6 +47,7 @@ class Sound(db_models.Model):  # Database Class
     type = db_models.CharField(choices=SoundType.choices)
     art = db_models.ImageField(upload_to="sound_arts/", blank=True, null=True)
     flavor = db_models.TextField(blank=True, null=True)
+    tags = TaggableManager(blank=True)
     embeddings = VectorField(
         null=True,
         dimensions=_get_sound_dimension(),
@@ -57,7 +59,7 @@ class Sound(db_models.Model):  # Database Class
         return self.title
 
     def save(self, *args, **kwargs):
-        if not self.embeddings:
+        if self.embeddings is None:
             classifier = _get_sound_classifier()
             self.embeddings = classifier(self.pk)
         super().save(*args, **kwargs)
@@ -140,7 +142,7 @@ class Listener(db_models.Model):  # Database Class
     updated_at = db_models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
-        if not self.embeddings:
+        if self.embeddings is None:
             classifier = _get_listener_classifier()
             self.embeddings = classifier(self.pk)
         super().save(*args, **kwargs)

@@ -1,0 +1,24 @@
+<dialog id="collect_login_modal"
+        class="modal modal-bottom lg:modal-middle"
+        x-data
+        @close="$refs.collectLoginAlerts.innerHTML = ''; $refs.collectLoginBody.innerHTML = $refs.collectLoginInitial.innerHTML; htmx.ajax('GET', '{% url 'home:collect_cancel' %}', { swap: 'none' })">
+    <div class="modal-box max-w-80 w-full">
+        <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
+                    aria-label="Close">✕</button>
+        </form>
+        <h3 class="font-bold text-lg mb-4">Login to Collect</h3>
+        <div x-ref="collectLoginAlerts" id="collect-login-alerts" class="stack w-full mb-3"></div>
+        <template x-ref="collectLoginInitial">
+            <c-collect-email-form />
+        </template>
+        <div id="collect-login-body"
+             x-ref="collectLoginBody"
+             class="flex flex-col gap-3 htmx-swapping:motion-opacity-out-0 htmx-swapping:motion-duration-300">
+            <c-collect-email-form />
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>

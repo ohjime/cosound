@@ -5,6 +5,7 @@ from django import forms
 
 from core.models import User, Listener
 from core.tasks import send_auth_email_task
+from vote.utils import generate_anon_username
 
 
 class UnifiedLoginAdapter(DefaultAccountAdapter):
@@ -44,6 +45,14 @@ class UnifiedRequestLoginCodeForm(forms.Form):
         ),
     )
 
+    @staticmethod
+    def _generate_unique_username():
+        for _ in range(10):
+            username = generate_anon_username()
+            if not User.objects.filter(username__iexact=username).exists():
+                return username
+        return f"user_{uuid.uuid4().hex[:12]}"
+
     def clean_email(self):
         email = self.cleaned_data.get("email", "").lower().strip()
 
@@ -53,7 +62,7 @@ class UnifiedRequestLoginCodeForm(forms.Form):
         except User.DoesNotExist:
             user = User.objects.create(
                 email=email,
-                username=f"{email.split('@')[0]}_{uuid.uuid4().hex[:8]}",
+                username=self._generate_unique_username(),
             )
             user.set_unusable_password()
             user.save()

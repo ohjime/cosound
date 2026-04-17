@@ -1,13 +1,25 @@
 <c-vars sounds />
-<li class="p-4 pt-8 pb-2 text-sm opacity-90 font-medium">Select Replacement Sound</li>
+{{ sounds|json_script:"swapCandidates" }}
+<li class="p-4 pt-8 pb-2 text-sm opacity-95 font-medium sticky top-0 z-10 bg-base-300">Select Replacement Sound</li>
 {% for sound in sounds %}
-    <li class="list-row">
+    <li class="list-row cursor-pointer hover:bg-base-200"
+        hx-get="{% url 'home:carousel' %}"
+        hx-swap="none swap:300ms"
+        hx-on:htmx:before-swap="document.querySelectorAll('#card-figure, #card-body').forEach(el => el.classList.add('htmx-swapping'))"
+        {# djlint:off #}
+        @click="(() => {
+            const candidates = JSON.parse(document.getElementById('swapCandidates').textContent);
+            const store = $store.soundLayers;
+            store.layers[store.currentIndex] = candidates[{{ forloop.counter0 }}];
+            store.swappingLayer = false;
+        })()"
+        {# djlint:on #}>
         <div>
             <img class="size-10 rounded-box" src="{{ sound.artwork_url }}" /alt="{{ sound.title }} artwork">
         </div>
         <div>
-            <div>{{ sound.title }}</div>
-            <div class="text-xs uppercase font-semibold opacity-60">{{ sound.artist }}</div>
+            <div class="text-sm font-semibold">{{ sound.title }}</div>
+            <div class="text-xs font-semibold opacity-60">{{ sound.artist }}</div>
         </div>
     </li>
 {% empty %}

@@ -2,7 +2,8 @@
         x-data
         @click="$dispatch('carousel-prev')"
         :disabled="$store.soundLayers?.isFirst"
-        class="w-20 absolute z-10 -left-12 top-1/2 -translate-y-1/2 flex items-center justify-center text-amber-600 stroke-white cursor-pointer disabled:cursor-not-allowed disabled:text-neutral-600 disabled:stroke-neutral-700">
+        :class="$store.soundLayers?.swappingLayer ? 'text-neutral opacity-30' : 'text-amber-600 stroke-white disabled:text-neutral-600 disabled:stroke-neutral-500'"
+        class="w-20 absolute z-10 -left-12 top-1/2 -translate-y-1/2 flex items-center justify-center cursor-pointer disabled:cursor-not-allowed">
     <svg xmlns="http://www.w3.org/2000/svg"
          class="w-full h-full"
          viewBox="0 -960 960 960"
@@ -14,7 +15,8 @@
         x-data
         @click="$dispatch('carousel-next')"
         :disabled="$store.soundLayers?.isLast"
-        class="w-20 absolute z-10 -right-12 top-1/2 -translate-y-1/2 flex items-center justify-center text-amber-600 stroke-white cursor-pointer disabled:cursor-not-allowed disabled:text-neutral-600 disabled:stroke-neutral-700">
+        :class="$store.soundLayers?.swappingLayer ? 'text-neutral opacity-30' : 'text-amber-600 stroke-white disabled:text-neutral-600 disabled:stroke-neutral-500'"
+        class="w-20 absolute z-10 -right-12 top-1/2 -translate-y-1/2 flex items-center justify-center cursor-pointer disabled:cursor-not-allowed">
     <svg xmlns="http://www.w3.org/2000/svg"
          class="w-full h-full"
          viewBox="0 -960 960 960"

@@ -1,0 +1,106 @@
+<c-vars sounds />
+<!-- Server -> client data handoff. The view gives us sounds as Python dicts,
+but Alpine lives in JS and needs them as a JSON object it can parse. We
+can't just inline the sounds variable inside x- data attributes because a title
+containing script or a quote would break out of the attribute and potentially run
+arbitrary JS. json_script emits a script block with HTML entities escaped as Unicode
+sequences, which is safe. -->
+{{ sounds|json_script:"soundLayers" }}
+<div class="contents"
+    {# djlint:off #}
+     x-data
+     x-init="
+        if (!Alpine.store('soundLayers')) {
+            Alpine.store('soundLayers', {
+                layers: JSON.parse(document.getElementById('soundLayers').textContent)
+                    .map(l => ({ ...l, gain: l.sound_gain != null ? l.sound_gain * 100 : 50 })),
+                currentIndex: 0,
+                tracksLoading: true,
+                swappingLayer: false,
+                started: false,
+                _players: [],
+                _fades: new WeakMap(),
+                FADE_MS: 5500,
+                get currentLayer() { return this.layers[this.currentIndex]; },
+                get isFirst() { return this.currentIndex === 0; },
+                get isLast() { return this.currentIndex === this.layers.length - 1; },
+                _targetFor(el) {
+                    const src = el.getAttribute('src');
+                    const layer = this.layers.find(l => l.sound_file === src);
+                    return layer && !layer.mute ? (Number(layer.gain) / 100 || 0) : 0;
+                },
+                _cancelFade(el) {
+                    const s = this._fades.get(el);
+                    if (s?.rafId) { cancelAnimationFrame(s.rafId); s.rafId = null; }
+                },
+                _fadeTo(el, from, target) {
+                    this._cancelFade(el);
+                    el.volume = Math.max(0, Math.min(1, from));
+                    const state = this._fades.get(el) || {};
+                    state.targetVolume = target;
+                    const t0 = performance.now();
+                    const tick = (now) => {
+                        const t = Math.max(0, Math.min(1, (now - t0) / this.FADE_MS));
+                        const newVol = from + (state.targetVolume - from) * t;
+                        el.volume = Math.max(0, Math.min(1, newVol));
+                        if (t < 1) state.rafId = requestAnimationFrame(tick);
+                        else state.rafId = null;
+                    };
+                    state.rafId = requestAnimationFrame(tick);
+                    this._fades.set(el, state);
+                },
+                applyVolume(el, layer) {
+                    const state = this._fades.get(el) || { lastMute: layer.mute };
+                    const wasMuted = state.lastMute;
+                    state.lastMute = layer.mute;
+                    this._fades.set(el, state);
+                    if (layer.mute) {
+                        this._cancelFade(el);
+                        el.volume = 0;
+                    } else {
+                        const target = Number(layer.gain) / 100 || 0;
+                        if (wasMuted) {
+                            this._fadeTo(el, 0, target);
+                        } else if (state.rafId) {
+                            state.targetVolume = target;
+                        } else {
+                            el.volume = target;
+                        }
+                    }
+                },
+                _playWithFade(el) {
+                    el.currentTime = 0;
+                    el.play().catch(() => {});
+                    const target = this._targetFor(el);
+                    if (target > 0) this._fadeTo(el, 0, target);
+                },
+                registerPlayer(el) {
+                    this._players = this._players.filter(p => p.isConnected);
+                    if (this._players.includes(el)) return;
+                    this._players.push(el);
+                    if (this.tracksLoading && this._players.length === this.layers.length) {
+                        this.tracksLoading = false;
+                    }
+                    if (this.started) this._playWithFade(el);
+                },
+                playAll() {
+                    this.started = true;
+                    this._players.forEach(p => this._playWithFade(p));
+                },
+            });
+        }
+     "
+    {# djlint:on #}>
+    {# djlint:off #}
+    <template x-for="layer in $store.soundLayers.layers" :key="layer.sound_id">
+        <audio :src="layer.sound_file"
+               preload="auto"
+               loop
+               class="hidden"
+               x-init="if ($el.readyState >= 3) $store.soundLayers.registerPlayer($el)"
+               x-effect="$store.soundLayers.applyVolume($el, layer)"
+               @canplaythrough="$store.soundLayers.registerPlayer($el)"
+               @loadeddata="$store.soundLayers.registerPlayer($el)"></audio>
+    </template>
+    {# djlint:on #}
+</div>

@@ -1,7 +1,7 @@
 <form class="w-full"
-    x-data="{ pressed: false, email: '', submittedEmail: '', loading: false }"
+      x-data="{ pressed: false, email: '', submittedEmail: '', loading: false }"
       @submit="submittedEmail = email; pressed = true; loading = true"
-    @htmx:after-request="if($event.detail.xhr.getResponseHeader('HX-Retarget') === '#collect-login-alerts') { loading = false; pressed = false }"
+      @htmx:after-request="if($event.detail.xhr.getResponseHeader('HX-Retarget') === '#collect-login-alerts') { loading = false; pressed = false }"
       hx-post="{% url 'home:collect_check_email' %}"
       hx-target="#collect-login-body"
       hx-swap="innerHTML swap:300ms settle:300ms">

@@ -10,9 +10,9 @@
         </div>
         <!-- Server -> client data handoff. The view gives us sounds as Python dicts,
         but Alpine lives in JS and needs them as a JSON object it can parse. We
-        can't just inline the sounds variable inside x- data attributes because a title 
-        containing script or a quote would break out of the attribute and potentially run 
-        arbitrary JS. json_script emits a script block with HTML entities escaped as Unicode 
+        can't just inline the sounds variable inside x- data attributes because a title
+        containing script or a quote would break out of the attribute and potentially run
+        arbitrary JS. json_script emits a script block with HTML entities escaped as Unicode
         sequences, which is safe. -->
         {{ sounds|json_script:"soundLayers" }}
         <div class="flex flex-col items-center gap-10 w-full"
@@ -25,6 +25,7 @@
                             .map(l => ({ ...l, gain: (l.sound_gain ?? 0) * 100 })),
                         currentIndex: 0,
                         tracksLoading: true,
+                        swappingLayer: false,
                         _players: [],
                         get currentLayer() { return this.layers[this.currentIndex]; },
                         get isFirst() { return this.currentIndex === 0; },
@@ -69,14 +70,17 @@
                     <div class="static aspect-square w-full rounded-t-md overflow-hidden ">
                         <div class="absolute z-10 top-0 right-1/2 translate-x-1/2 -translate-y-1/2 ring-4 ring-neutral-content/70 w-min min-w-28 flex justify-center rounded-full overflow-hidden bg-white">
                             <c-card-header>
-                                <c-sound-layer-indicator />
+                                {% partial carousel_header_content %}
                             </c-card-header>
                         </div>
-                        {% partial carousel_view %}
+                        <c-card-figure>
+                            {% partial carousel_figure_content %}
+                        </c-card-figure>
                     </div>
                     <c-sound-carousel-arrows />
                 </figure>
                 <c-card-slider target="$store.soundLayers.currentLayer.gain"
+                               disabled="$store.soundLayers.swappingLayer"
                                faded="$store.soundLayers.currentLayer.mute"
                                on_tap="$store.soundLayers.currentLayer.mute = !$store.soundLayers.currentLayer.mute"
                                on_change="$store.soundLayers.currentLayer.mute = false">
@@ -86,11 +90,7 @@
                     <div class="relative">
                         <div class="h-30 overflow-y-auto py-2 px-4 mb-2">
                             <c-card-body>
-                                <div class="italic font-serif font-extralight text-xs font-stretch-95%">
-                                    <p class="py-1 not-italic font-bold font-serif text-xs font-stretch-95%"
-                                       x-text="'[ ' + $store.soundLayers.currentLayer.tags + ' ]'"></p>
-                                    <span x-text="$store.soundLayers.currentLayer.flavor"></span>
-                                </div>
+                                {% partial carousel_body_content %}
                             </c-card-body>
                         </div>
                         <div class="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-neutral-content/80 to-transparent rounded-b-2xl">
@@ -101,41 +101,42 @@
                     </div>
                 </div>
             </div>
-            <button class="btn btn-neutral btn-sm"
+            <button class="btn btn-base btn-sm"
                     :disabled="$store.soundLayers.tracksLoading"
                     @click="$store.soundLayers.playAll()">Play</button>
         </div>
     </div>
 </c-core-content>
 {% endpartialdef %}
-{% partialdef carousel_view %}
-<c-card-figure>
-    <c-sound-carousel />
-</c-card-figure>
-{% endpartialdef %}
 {% partialdef swap_view %}
-<c-card-figure>
-    <div class="w-full h-full bg-neutral/90 text-white p-5 pt-8 flex flex-col gap-2 overflow-y-auto font-serif italic">
-        <div class="text-lg leading-tight"
-             x-text="$store.soundLayers.currentLayer.sound_title"></div>
-        <div class="text-sm opacity-80"
-             x-text="'by ' + $store.soundLayers.currentLayer.sound_artist"></div>
-        <div class="divider my-1"></div>
-        <p class="text-sm opacity-90 leading-relaxed">
-            Every sound you hear is a layer that can be mixed, muted, or swapped
-            without losing the others. Drag the slider to change its volume, or
-            tap the mute icon to silence it while the rest keep playing.
-        </p>
-        <p class="text-sm opacity-90 leading-relaxed">
-            Every sound you hear is a layer that can be mixed, muted, or swapped
-            without losing the others. Drag the slider to change its volume, or
-            tap the mute icon to silence it while the rest keep playing.
-        </p>
-        <p class="text-sm opacity-90 leading-relaxed">
-            Every sound you hear is a layer that can be mixed, muted, or swapped
-            without losing the others. Drag the slider to change its volume, or
-            tap the mute icon to silence it while the rest keep playing.
-        </p>
-    </div>
+<c-card-figure hx-swap-oob="outerHTML">
+    <c-sound-list :sounds="sounds" />
 </c-card-figure>
+<c-card-body hx-swap-oob="outerHTML">
+    <c-sound-search />
+</c-card-body>
+{% endpartialdef %}
+{% partialdef sound_list_items %}
+<c-sound-list-items :sounds="sounds" />
+{% endpartialdef %}
+{% partialdef carousel_view %}
+<c-card-figure hx-swap-oob="outerHTML">
+    {% partial carousel_figure_content %}
+</c-card-figure>
+<c-card-body hx-swap-oob="outerHTML">
+    {% partial carousel_body_content %}
+</c-card-body>
+{% endpartialdef %}
+{% partialdef carousel_header_content %}
+<c-sound-layer-indicator />
+{% endpartialdef %}
+{% partialdef carousel_figure_content %}
+<c-sound-carousel />
+{% endpartialdef %}
+{% partialdef carousel_body_content %}
+<div class="italic font-serif font-extralight text-xs font-stretch-95%">
+    <p class="py-1 not-italic font-bold font-serif text-xs font-stretch-95%"
+       x-text="'[ ' + $store.soundLayers.currentLayer.tags + ' ]'"></p>
+    <span x-text="$store.soundLayers.currentLayer.flavor"></span>
+</div>
 {% endpartialdef %}

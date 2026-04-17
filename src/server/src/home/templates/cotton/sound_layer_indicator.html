@@ -2,8 +2,8 @@
     <template x-for="(layer, index) in $store.soundLayers.layers" :key="layer.sound_id">
         <button type="button"
                 class="font-mono join-item btn-sm btn btn-neutral border-none w-7.5 h-7"
-                :class="$store.soundLayers.currentIndex === index ? '!text-white text-xl font-extrabold' : ' text-gray-300 text-xs font-light'"
-                :style="`opacity: ${(layer.mute ? 50 : 50 + (layer.gain || 0) * 0.5) / 100}; `"
+                :class="[ $store.soundLayers.currentIndex === index ? '!text-white text-xl font-extrabold' : ' text-gray-300 text-xs font-light', $store.soundLayers.currentIndex === index && $store.soundLayers.swappingLayer ? 'bg-neutral-content text-shadow-lg/30 motion-preset-pulse-sm btn-disabled' : '', $store.soundLayers.currentIndex !== index && $store.soundLayers.swappingLayer ? 'bg-neutral-content btn-disabled' : '' ]"
+                :style="`opacity: ${($store.soundLayers.swappingLayer ? 100 : (layer.mute ? 50 : 50 + (layer.gain || 0) * 0.5)) / 100}; `"
                 @click="$store.soundLayers.currentIndex === index ? (layer.mute = !layer.mute) : $dispatch('carousel-goto', index)"
                 x-text="index + 1"></button>
     </template>

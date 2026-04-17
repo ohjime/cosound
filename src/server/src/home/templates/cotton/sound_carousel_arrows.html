@@ -2,17 +2,23 @@
         x-data
         @click="$dispatch('carousel-prev')"
         :disabled="$store.soundLayers?.isFirst"
-        class="absolute z-10 -left-8 top-1/2 -translate-y-1/2 w-8.5 overflow-hidden inline-block border-l-3 border-gray-200 transform scale-x-[-1] cursor-pointer disabled:cursor-not-allowed"
-        :class="{ 'border-gray-600': $store.soundLayers?.isFirst }">
-    <div class="h-11 bg-amber-600 rotate-45 transform origin-top-left border-gray-50 border-3"
-         :class="{ 'bg-gray-700 border-gray-500 opacity-90': $store.soundLayers?.isFirst }"></div>
+        class="w-20 absolute z-10 -left-12 top-1/2 -translate-y-1/2 flex items-center justify-center text-amber-600 stroke-white cursor-pointer disabled:cursor-not-allowed disabled:text-neutral-600 disabled:stroke-neutral-700">
+    <svg xmlns="http://www.w3.org/2000/svg"
+         class="w-full h-full"
+         viewBox="0 -960 960 960"
+         fill="currentColor">
+        <path d="M560-280 360-480l200-200v400Z" stroke-width="40" stroke-linejoin="round" />
+    </svg>
 </button>
 <button type="button"
         x-data
         @click="$dispatch('carousel-next')"
         :disabled="$store.soundLayers?.isLast"
-        class="absolute z-10 -right-8 top-1/2 -translate-y-1/2 w-8.5 overflow-hidden inline-block border-l-3 border-gray-200 cursor-pointer disabled:cursor-not-allowed"
-        :class="{ 'border-gray-600': $store.soundLayers?.isLast }">
-    <div class="h-11 bg-amber-600 rotate-45 transform origin-top-left border-gray-50 border-3"
-         :class="{ 'bg-gray-700 border-gray-500 opacity-90': $store.soundLayers?.isLast }"></div>
+        class="w-20 absolute z-10 -right-12 top-1/2 -translate-y-1/2 flex items-center justify-center text-amber-600 stroke-white cursor-pointer disabled:cursor-not-allowed disabled:text-neutral-600 disabled:stroke-neutral-700">
+    <svg xmlns="http://www.w3.org/2000/svg"
+         class="w-full h-full"
+         viewBox="0 -960 960 960"
+         fill="currentColor">
+        <path d="M400-280v-400l200 200-200 200Z" stroke-width="40" stroke-linejoin="round" />
+    </svg>
 </button>

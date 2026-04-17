@@ -1,13 +1,14 @@
-<div class="join" x-data="{ showingSwap: false }">
-    <button class="btn btn-sm" x-data="{ saved: false }" @click="saved = !saved">
+<div class="join">
+    <button class="btn btn-sm"
+            x-show="!$store.soundLayers.swappingLayer"
+            x-data="{ saved: false }"
+            @click="saved = !saved">
         <span class="swap" :class="{ 'swap-active': saved }">
             <svg class="swap-on size-6 text-red-500"
                  xmlns="http://www.w3.org/2000/svg"
                  viewBox="0 0 24 24"
                  fill="currentColor">
-                <path fill-rule="evenodd"
-                      d="M6 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3V6a3 3 0 0 0-3-3H6Zm1.5 1.5a.75.75 0 0 0-.75.75V16.5a.75.75 0 0 0 1.085.67L12 15.089l4.165 2.083a.75.75 0 0 0 1.085-.671V5.25a.75.75 0 0 0-.75-.75h-9Z"
-                      clip-rule="evenodd" />
+                <path fill-rule="evenodd" d="M6 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3V6a3 3 0 0 0-3-3H6Zm1.5 1.5a.75.75 0 0 0-.75.75V16.5a.75.75 0 0 0 1.085.67L12 15.089l4.165 2.083a.75.75 0 0 0 1.085-.671V5.25a.75.75 0 0 0-.75-.75h-9Z" clip-rule="evenodd" />
             </svg>
             <svg class="swap-off size-6"
                  xmlns="http://www.w3.org/2000/svg"
@@ -15,42 +16,39 @@
                  viewBox="0 0 24 24"
                  stroke-width="1.5"
                  stroke="currentColor">
-                <path stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M16.5 3.75V16.5L12 14.25 7.5 16.5V3.75m9 0H18A2.25 2.25 0 0 1 20.25 6v12A2.25 2.25 0 0 1 18 20.25H6A2.25 2.25 0 0 1 3.75 18V6A2.25 2.25 0 0 1 6 3.75h1.5m9 0h-9" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 3.75V16.5L12 14.25 7.5 16.5V3.75m9 0H18A2.25 2.25 0 0 1 20.25 6v12A2.25 2.25 0 0 1 18 20.25H6A2.25 2.25 0 0 1 3.75 18V6A2.25 2.25 0 0 1 6 3.75h1.5m9 0h-9" />
             </svg>
         </span>
         <span class="px-1">Save</span>
     </button>
     <button class="btn btn-sm"
-            x-show="!showingSwap"
-            hx-get="{% url 'home:swap' %}"
-            hx-target="#card-figure"
-            hx-swap="outerHTML swap:300ms"
-            @click="showingSwap = true">
-        <span class="px-1">Swap</span>
-        <svg xmlns="http://www.w3.org/2000/svg"
-             height="24px"
-             viewBox="0 -960 960 960"
-             width="24px"
-             fill="currentColor">
-            <path d="m482-200 114-113-114-113-42 42 43 43q-28 1-54.5-9T381-381q-20-20-30.5-46T340-479q0-17 4.5-34t12.5-33l-44-44q-17 25-25 53t-8 57q0 38 15 75t44 66q29 29 65 43.5t74 15.5l-38 38 42 42Zm165-170q17-25 25-53t8-57q0-38-14.5-75.5T622-622q-29-29-65.5-43T482-679l38-39-42-42-114 113 114 113 42-42-44-44q27 0 55 10.5t48 30.5q20 20 30.5 46t10.5 52q0 17-4.5 34T603-414l44 44ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z" />
-        </svg>
-    </button>
-    <button class="btn btn-sm"
-            x-show="showingSwap"
+            x-show="$store.soundLayers.swappingLayer"
             x-cloak
             hx-get="{% url 'home:carousel' %}"
-            hx-target="#card-figure"
-            hx-swap="outerHTML swap:300ms"
-            @click="showingSwap = false">
+            hx-swap="none swap:300ms"
+            hx-on:htmx:before-swap="document.querySelectorAll('#card-figure, #card-body').forEach(el => el.classList.add('htmx-swapping'))"
+            @click="$store.soundLayers.swappingLayer = false">
+        <svg xmlns="http://www.w3.org/2000/svg"
+             viewBox="0 0 24 24"
+             fill="currentColor"
+             class="size-6">
+            <path fill-rule="evenodd" d="M11.03 3.97a.75.75 0 0 1 0 1.06l-6.22 6.22H21a.75.75 0 0 1 0 1.5H4.81l6.22 6.22a.75.75 0 1 1-1.06 1.06l-7.5-7.5a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" />
+        </svg>
+        <span class="px-1">Back</span>
+    </button>
+    <button class="btn btn-sm"
+            :class="{ 'btn-active pointer-events-none opacity-50': $store.soundLayers.swappingLayer }"
+            hx-get="{% url 'home:swap' %}"
+            hx-swap="none swap:300ms"
+            hx-on:htmx:before-swap="document.querySelectorAll('#card-figure, #card-body').forEach(el => el.classList.add('htmx-swapping'))"
+            hx-on:htmx:after-swap="document.getElementById('sound-search-input')?.focus()"
+            @click="$store.soundLayers.swappingLayer = true">
         <span class="px-1">Swap</span>
         <svg xmlns="http://www.w3.org/2000/svg"
              height="24px"
              viewBox="0 -960 960 960"
              width="24px"
-             fill="currentColor"
-             class="text-blue-500">
+             :class="{ 'fill-blue-400': $store.soundLayers.swappingLayer }">
             <path d="m482-200 114-113-114-113-42 42 43 43q-28 1-54.5-9T381-381q-20-20-30.5-46T340-479q0-17 4.5-34t12.5-33l-44-44q-17 25-25 53t-8 57q0 38 15 75t44 66q29 29 65 43.5t74 15.5l-38 38 42 42Zm165-170q17-25 25-53t8-57q0-38-14.5-75.5T622-622q-29-29-65.5-43T482-679l38-39-42-42-114 113 114 113 42-42-44-44q27 0 55 10.5t48 30.5q20 20 30.5 46t10.5 52q0 17-4.5 34T603-414l44 44ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z" />
         </svg>
     </button>

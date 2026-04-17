@@ -1,0 +1,15 @@
+<c-vars sounds />
+<li class="p-4 pt-8 pb-2 text-sm opacity-90 font-medium">Select Replacement Sound</li>
+{% for sound in sounds %}
+    <li class="list-row">
+        <div>
+            <img class="size-10 rounded-box" src="{{ sound.artwork_url }}" /alt="{{ sound.title }} artwork">
+        </div>
+        <div>
+            <div>{{ sound.title }}</div>
+            <div class="text-xs uppercase font-semibold opacity-60">{{ sound.artist }}</div>
+        </div>
+    </li>
+{% empty %}
+    <li class="p-4 text-xs opacity-60">No sounds found.</li>
+{% endfor %}

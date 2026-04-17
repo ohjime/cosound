@@ -59,22 +59,27 @@
             this._set(this._pctFromClientX(e.clientX, this.$refs.track.getBoundingClientRect()));
         }
      }"
-     x-init="
-        display = ({{ target }}) ?? 0;
-        $watch('{{ target }}', v => _animate(v));
-     "
+     x-init="display = ({{ disabled }}) ? 50 : (({{ target }}) ?? 0);"
+     x-effect="_animate({{ disabled }} ? 50 : (({{ target }}) ?? 0))"
     {# djlint:on #}
     >
     <div x-ref="track"
-         class="relative h-2 rounded-full bg-orange-400 transition-[filter] cursor-pointer"
-         :class="{{ faded }} ? 'grayscale' : ''"
+         class="relative h-2 rounded-full bg-orange-400 transition-[filter]"
+         :class="[({{ disabled }} || {{ faded }}) ? 'grayscale' : '', {{ disabled }} ? 'cursor-not-allowed' : 'cursor-pointer']"
          @pointerdown="trackTap($event)">
-        <div class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 size-8 rounded-full bg-amber-800 ring-2 ring-amber-950/40 shadow-md flex items-center justify-center cursor-grab active:cursor-grabbing transition-[filter]"
-             :class="{{ faded }} ? 'grayscale' : ''"
+        <div class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 size-8 rounded-full bg-amber-800 ring-2 ring-amber-950/40 shadow-md flex items-center justify-center transition-[filter,scale] duration-300"
+             :class="[({{ disabled }} || {{ faded }}) ? 'grayscale' : '', {{ disabled }} ? 'scale-80 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing']"
              :style="`left: ${display}%`"
              @pointerdown.stop="beginDrag($event)"
              @pointermove="dragMove($event)"
              @pointerup="endDrag()"
-             @pointercancel="dragging = false; moved = false">{{ slot }}</div>
+             @pointercancel="dragging = false; moved = false">
+            <template x-if="!({{ disabled }})">
+                <span class="contents">{{ slot }}</span>
+            </template>
+            <template x-if="{{ disabled }}">
+                <span class="loading loading-ring loading-xs text-amber-100"></span>
+            </template>
+        </div>
     </div>
 </div>

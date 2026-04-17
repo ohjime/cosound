@@ -57,7 +57,7 @@
          class="carousel w-full h-full">
         <template x-for="layer in $store.{{ name }}.layers" :key="layer.sound_id">
             <div class="carousel-item relative h-full w-full transition-[filter] duration-300 ease-out"
-                 :class="layer.mute ? 'grayscale' : ''">
+                 :style="`filter: grayscale(${layer.mute ? 100 : Math.max(0, Math.min(100, 100 - (layer.gain || 0)))}%)`">
                 <img :src="layer.artwork_url" class="w-full" :alt="layer.sound_title" />
                 <div class="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-black/80 to-transparent z-10">
                 </div>

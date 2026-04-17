@@ -1,0 +1,17 @@
+<fieldset class="fieldset">
+    <legend class="fieldset-legend flex items-center gap-2">
+        Search Collected Sounds
+        <span id="sound-search-indicator"
+              class="htmx-indicator loading loading-spinner loading-xs"></span>
+    </legend>
+    <input type="search"
+           id="sound-search-input"
+           name="q"
+           class="input"
+           placeholder="Type here"
+           hx-get="{% url 'home:search' %}"
+           hx-trigger="input changed delay:300ms, search"
+           hx-target="#sound-search-results"
+           hx-swap="innerHTML"
+           hx-indicator="#sound-search-indicator" />
+</fieldset>

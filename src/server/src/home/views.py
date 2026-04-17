@@ -1,5 +1,6 @@
 import random
 
+from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import render
 
@@ -34,10 +35,41 @@ def load(request):
     )
 
 
+def _serialize_sounds(sounds):
+    return [
+        {
+            "id": sound.id,
+            "title": sound.title,
+            "artist": sound.artist,
+            "artwork_url": generate_sound_artwork(sound),
+        }
+        for sound in sounds
+    ]
+
+
 def swap(request):
     if not request.htmx:
         return HttpResponse("Request Denied.")
-    return render(request, "home/index.html#swap_view")
+    sounds = _serialize_sounds(Sound.objects.order_by("?")[:5])
+    return render(request, "home/index.html#swap_view", {"sounds": sounds})
+
+
+def search(request):
+    if not request.htmx:
+        return HttpResponse("Request Denied.")
+    q = (request.GET.get("q") or "").strip()
+    qs = Sound.objects.all()
+    if q:
+        qs = qs.filter(
+            Q(title__icontains=q) | Q(artist__icontains=q)
+        ).order_by("title")[:20]
+    else:
+        qs = qs.order_by("?")[:5]
+    return render(
+        request,
+        "home/index.html#sound_list_items",
+        {"sounds": _serialize_sounds(qs)},
+    )
 
 
 def carousel(request):

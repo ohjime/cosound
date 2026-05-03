@@ -1,0 +1,22 @@
+<c-vars layers />
+<!-- json_script emits the layers list as JSON for the Alpine store -->
+{{ layers|json_script:"voteLayers" }}
+<div class="contents"
+    {# djlint:off #}
+     x-data
+     x-init="
+        const _voteLayersData = {
+                layers: JSON.parse(document.getElementById('voteLayers').textContent),
+                currentIndex: 0,
+                get currentLayer() { return this.layers[this.currentIndex]; },
+                get isFirst() { return this.currentIndex === 0; },
+                get isLast() { return this.currentIndex === this.layers.length - 1; },
+            };
+        if (!Alpine.store('voteLayers')) {
+            Alpine.store('voteLayers', _voteLayersData);
+        } else {
+            Object.assign(Alpine.store('voteLayers'), _voteLayersData);
+        }
+     "
+    {# djlint:on #}>
+</div>

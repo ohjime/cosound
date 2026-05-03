@@ -1,0 +1,51 @@
+<c-vars id="" showExit="true" bgColor="bg-green-900", ringColor="ring-base-content" />
+<div {% if id %}id="{{ id }}"{% endif %}
+    {# djlint:off #}
+     x-data="{
+         mounted: false,
+         removing: false,
+         depth: 0,
+     }"
+     x-init="
+         requestAnimationFrame(() =>
+             requestAnimationFrame(() => mounted = true)
+         )
+     "
+     @card:remove="removing = true; setTimeout(() => $el.remove(), exitMs + exitDelayMs + 50)"
+     x-effect="
+         cardCount;
+         const siblings = Array.from($el.parentElement?.children || []).filter(el => el.hasAttribute('data-core-card'));
+         depth = siblings.length - siblings.indexOf($el) - 1;
+     "
+     :style="`
+         transition-property: transform, opacity;
+         transition-timing-function: ease-out;
+         transition-duration: ${removing ? exitMs : enterMs}ms;
+         transition-delay: ${removing ? exitDelayMs : enterDelayMs}ms;
+         transform: translateY(${mounted && !removing
+             ? -depth * depthTranslateY + 'px'
+             : removing
+                 ? exitToY + 'px'
+                 : enterFromY + 'px'}) scale(${mounted && !removing
+             ? Math.max(0.75, 1 - depth * depthScale)
+             : removing
+                 ? exitToScale
+                 : enterFromScale});
+         opacity: ${mounted && !removing ? 1 : 0};
+    `"{# djlint:on #}
+    data-core-card
+    style="opacity: 0"
+    class="card {{ bgColor }} ring-8 {{ ringColor }} shadow-2xl shadow-base-content/30 transition-all ease-out z-0 col-start-1 row-start-1 w-full rounded-b-4xl pb-2 flex flex-col rounded-t-3xl relative overflow-hidden">
+    {% if showExit == "true" %}
+        <button class="absolute top-3 right-3 btn btn-sm btn-circle btn-ghost"
+                @click="$dispatch('card:remove')">
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 viewBox="0 0 24 24"
+                 fill="currentColor"
+                 class="size-4">
+                <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
+            </svg>
+        </button>
+    {% endif %}
+    {{ slot }}
+</div>

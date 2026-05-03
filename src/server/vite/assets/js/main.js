@@ -1,8 +1,9 @@
 import '../css/main.css';
 import Alpine from 'alpinejs';
-import 'htmx.org/dist/htmx.min.js';
+import htmx from 'htmx.org/dist/htmx.esm.js';
 import { Observer } from 'tailwindcss-intersect';
 
+window.htmx = htmx;
 window.Alpine = Alpine;
 Alpine.start();
 

@@ -87,3 +87,14 @@ src/player/media/WHPZWDOW298TNU.mp3
 src/player/media/Z1SNK864BQ4IA4.mp3
 src/player/media/ZWCON75R0VF8Z1.mp3
 .old/
+**/__pycache__/
+src/player/assets/1
+src/player/assets/2
+src/player/assets/3
+src/player/assets/4
+src/player/assets/5
+src/player/assets/6
+src/player/assets/7
+src/player/assets/8
+.gitignore
+src/player/cosound.json

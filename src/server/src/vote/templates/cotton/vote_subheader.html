@@ -1,0 +1,16 @@
+<div class="w-full px-4" x-data="{ loaded: false }">
+    {% if player and player.manager and player.manager.logo %}
+        <div class="relative w-full h-12 bg-white rounded-md flex items-center justify-center overflow-hidden shadow-sm" x-init="if ($refs.logo.complete) loaded = true">
+            <!-- Skeleton Loader -->
+            <div x-show="!loaded" class="absolute inset-0 skeleton w-full h-full rounded-none"></div>
+            
+            <!-- Manager Logo -->
+            <img x-ref="logo"
+                 src="{{ player.manager.logo.url }}" 
+                 alt="{{ player.manager.name }} Logo" 
+                 class="relative z-10 max-h-full max-w-full object-contain p-2 transition-opacity duration-300"
+                 :class="loaded ? 'opacity-100' : 'opacity-0'"
+                 @load="loaded = true" />
+        </div>
+    {% endif %}
+</div>

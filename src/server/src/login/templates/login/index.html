@@ -1,0 +1,114 @@
+{% partialdef card %}
+    <c-core-card bgColor="bg-secondary">
+        <div class="flex flex-col flex-1 items-center justify-center gap-6 px-6 py-8">
+            <h2 class="text-primary-content font-serif text-xl font-semibold tracking-wide">Login</h2>
+            {# allow_anonymous toggles the "Continue Anonymously" affordance for callers like vote #}
+            {# Email form — pressed stays true after send; cancel-login resets it #}
+            {# djlint:off #}
+            <form class="w-full"
+                  x-data="{ pressed: false, email: '', submittedEmail: '' }"
+                  @login-cancel.window="pressed = false"
+                  @submit="submittedEmail = email; pressed = true"
+                  hx-post="{% url 'login:check_email' %}"
+                  hx-target="#login-code-section"
+                  hx-swap="innerHTML swap:250ms">
+            {# djlint:on #}
+            {% csrf_token %}
+            <input type="hidden" name="email" :value="submittedEmail || email" />
+            <div class="join w-full">
+                <div class="w-full -mb-6">
+                    <label class="input validator join-item w-full" :disabled="pressed">
+                        <svg class="h-[1em] opacity-50"
+                             xmlns="http://www.w3.org/2000/svg"
+                             viewBox="0 0 24 24">
+                            <g stroke-linejoin="round" stroke-linecap="round" stroke-width="2.5" fill="none" stroke="currentColor">
+                            <rect width="20" height="16" x="2" y="4" rx="2"></rect>
+                            <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
+                            </g>
+                        </svg>
+                        <input class="w-full"
+                               type="email"
+                               x-model="email"
+                               placeholder="Enter Email Address"
+                               :disabled="pressed"
+                               required />
+                    </label>
+                    <div class="validator-hint hidden">Email address is not valid.</div>
+                </div>
+                <button type="submit"
+                        class="btn btn-neutral join-item swap items-center justify-center"
+                        :class="{ 'swap-active': pressed, 'btn-disabled': pressed }">
+                    <span class="swap-off w-full">Enter</span>
+                    <span class="swap-on loading loading-infinity loading-lg w-full"></span>
+                </button>
+            </div>
+        </form>
+        {# Code section — empty until email is sent #}
+        <div id="login-code-section" class="w-full"></div>
+        {% if allow_anonymous %}<c-login-anon-form />{% endif %}
+    </div>
+</c-core-card>
+{% endpartialdef %}
+
+{% partialdef code_form %}
+    <div class="w-full flex flex-col gap-4">
+        <div class="divider divider-neutral text-xs text-neutral-content/60 uppercase tracking-widest my-0">
+            Check your email
+        </div>
+        {% if error %}<div class="alert alert-error text-sm py-2">{{ error }}</div>{% endif %}
+        {# djlint:off #}
+    <form class="w-full"
+          x-data="{ pressed: false }"
+          @submit="pressed = true"
+          hx-post="{% url 'login:verify_code' %}"
+          hx-target="#login-code-section"
+          hx-swap="innerHTML swap:250ms">
+        {# djlint:on #}
+        {% csrf_token %}
+        <div class="join w-full">
+            <input class="input join-item w-full"
+                   type="text"
+                   name="code"
+                   inputmode="numeric"
+                   pattern="[0-9]*"
+                   placeholder="Enter code"
+                   autocomplete="one-time-code"
+                   required />
+            <button type="submit"
+                    class="btn btn-neutral join-item swap items-center justify-center"
+                    :class="{ 'swap-active': pressed, 'btn-disabled': pressed }">
+                <span class="swap-off w-full">Verify</span>
+                <span class="swap-on loading loading-infinity loading-lg w-full"></span>
+            </button>
+        </div>
+    </form>
+    <button class="btn btn-ghost btn-sm text-neutral-content/60 w-full"
+            hx-get="{% url 'login:cancel_code' %}"
+            hx-target="#login-code-section"
+            hx-swap="innerHTML swap:250ms"
+            @click="$dispatch('login-cancel')">Cancel</button>
+</div>
+{% endpartialdef %}
+
+{% partialdef logout_modal %}
+    <c-core-modal title="Log Out">
+        <p class="py-3 text-sm opacity-70">Are you sure you want to log out?</p>
+        <div class="modal-action gap-2">
+            <form method="dialog">
+                <button class="btn btn-ghost btn-sm">Cancel</button>
+            </form>
+            <button hx-post="{% url 'login:logout' %}" hx-swap="none" class="btn btn-error btn-sm">Log Out</button>
+        </div>
+    </c-core-modal>
+{% endpartialdef %}
+
+{% partialdef post_logout %}
+    <div id="subheading" hx-swap-oob="outerHTML">
+        <c-core-subheader />
+    </div>
+    <div id="feed" hx-swap-oob="outerHTML" class="text-xs text-neutral-content/50"></div>
+{% endpartialdef %}
+
+{% partialdef post_login %}
+    <c-core-user-details oob="true" />
+{% endpartialdef %}

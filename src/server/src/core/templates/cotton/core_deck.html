@@ -1,0 +1,29 @@
+{# djlint:off #}
+<c-vars id="" />
+<div {% if id %}id="{{ id }}"{% endif %}
+    class="grid w-full max-w-80"
+     x-data="{
+        enterMs: 200,
+        exitMs: 150,
+        enterDelayMs: 0,
+        exitDelayMs: 0,
+        enterFromY: 60,
+        enterFromScale: 1.0,
+        exitToY: 20,
+        exitToScale: 1.0,
+        depthTranslateY: 24,
+        depthScale: 0.07,
+        cardCount: 0,
+    }"
+    x-init="
+        const countCards = () => $el.querySelectorAll(':scope > [data-core-card]').length;
+        cardCount = countCards();
+        new MutationObserver(() => {
+            cardCount = countCards();
+        }).observe($el, {
+            childList: true,
+        });
+    "
+    >
+    {{ slot }}
+</div> {# djlint:on #}

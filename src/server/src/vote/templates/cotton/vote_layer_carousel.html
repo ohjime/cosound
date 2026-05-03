@@ -1,0 +1,81 @@
+<div class="relative w-full h-full"
+    {# djlint:off #}
+     x-data="{
+        title: '',
+        artist: '',
+        gain: null,
+        kind: 'player',
+        updateActive() {
+            const el = this.$refs.carousel;
+            if (!el) return;
+            const items = el.getElementsByClassName('carousel-item');
+            const scroll = el.scrollLeft;
+            let index = 0;
+            let minDist = Infinity;
+            for (let i = 0; i < items.length; i++) {
+                const dist = Math.abs(items[i].offsetLeft - scroll);
+                if (dist < minDist) { minDist = dist; index = i; }
+            }
+            const store = Alpine.store('voteLayers');
+            const layer = store.layers[index];
+            if (!layer) return;
+            store.currentIndex = index;
+            this.title = layer.sound_title;
+            this.artist = layer.sound_artist;
+            this.gain = layer.gain;
+            this.kind = layer.kind;
+        },
+        move(delta) {
+            const el = this.$refs.carousel;
+            if (!el) return;
+            const items = el.getElementsByClassName('carousel-item');
+            const store = Alpine.store('voteLayers');
+            const next = Math.max(0, Math.min(items.length - 1, store.currentIndex + delta));
+            el.scrollTo({ left: items[next].offsetLeft, behavior: 'smooth' });
+        },
+        goto(index) {
+            const el = this.$refs.carousel;
+            if (!el) return;
+            const items = el.getElementsByClassName('carousel-item');
+            const target = Math.max(0, Math.min(items.length - 1, index));
+            el.scrollTo({ left: items[target].offsetLeft, behavior: 'smooth' });
+        }
+     }"
+     @carousel-prev.window="move(-1)"
+     @carousel-next.window="move(1)"
+     @carousel-goto.window="goto($event.detail)"
+     x-init="$nextTick(() => {
+        const store = Alpine.store('voteLayers');
+        const el = $refs.carousel;
+        const items = el?.getElementsByClassName('carousel-item');
+        if (items && items[store.currentIndex]) {
+            el.scrollTo({ left: items[store.currentIndex].offsetLeft, behavior: 'instant' });
+        }
+        updateActive();
+     })"
+    {# djlint:on #}
+    >
+    <div x-ref="carousel"
+         @scroll.debounce.5ms="updateActive()"
+         class="carousel w-full h-full">
+        <template x-for="layer in $store.voteLayers.layers" :key="layer.kind + ':' + (layer.sound_id ?? 'player')">
+            <div class="carousel-item relative h-full w-full">
+                <c-core-image bind_src="layer.artwork_url" bind_alt="layer.sound_title" class="w-full" />
+                <div class="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-black/80 to-transparent z-10">
+                </div>
+                <div class="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/60 to-transparent z-10">
+                </div>
+            </div>
+        </template>
+    </div>
+    <div class="pointer-events-none absolute inset-0 z-20 p-3 pt-8 font-serif italic flex flex-col justify-between text-white font-thin text-shadow-lg">
+        <div class="text-left text-lg leading-tight pr-12 flex items-start gap-2">
+            <span x-text="title"></span>
+            <span x-show="kind === 'layer' && gain !== null"
+                  x-cloak
+                  class="not-italic font-mono text-[10px] tracking-widest leading-none mt-1 px-1.5 py-0.5 rounded bg-white/15 backdrop-blur-sm text-white/90"
+                  x-text="gain + '%'"></span>
+        </div>
+        <div class="text-right pb-1 pr-1 text-sm opacity-90" x-text="artist"></div>
+    </div>
+</div>

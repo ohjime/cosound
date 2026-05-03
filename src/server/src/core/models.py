@@ -1,8 +1,10 @@
 import datetime
+import hashlib
 import secrets
+from decimal import ROUND_UP, Decimal
 from typing import List
 from datetime import datetime, timezone
-from django.db import models as db_models
+from django.db import models as DjangoDB, transaction
 from pydantic import BaseModel, Field
 from pgvector.django import VectorField
 from django_pydantic_field import SchemaField
@@ -11,49 +13,23 @@ from taggit.managers import TaggableManager
 from core.utils import (
     _get_sound_dimension,
     _get_sound_classifier,
-    _get_listener_dimension,
-    _get_listener_classifier,
+    generate_layers_string,
 )
+from core.predict import Prediction
 
 
-class SoundType(db_models.TextChoices):  # Data Class
-
-    SOUNDSCAPE = "Soundscape"
-    INSTRUMENTAL = "Instrumental"
-
-
-class SoundLayer(BaseModel):  # Data Class
-
-    sound_id: str
-    sound_file: str
-    sound_title: str = Field(max_length=100)
-    sound_artist: str
-    sound_type: str
-    sound_gain: float = Field(default=1.0, ge=0.0, le=1.0)
-
-
-class Cosound(BaseModel):  # Data Class
-
-    meta: dict = Field(default_factory=dict)
-    layers: List[SoundLayer] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-
-class Sound(db_models.Model):  # Database Class
-
-    file = db_models.FileField(upload_to="sounds/")
-    title = db_models.CharField(max_length=255)
-    artist = db_models.CharField(max_length=255)
-    type = db_models.CharField(choices=SoundType.choices)
-    art = db_models.ImageField(upload_to="sound_arts/", blank=True, null=True)
-    flavor = db_models.TextField(blank=True, null=True)
+class Sound(DjangoDB.Model):
+    file = DjangoDB.FileField(upload_to="sounds/")
+    title = DjangoDB.CharField(max_length=255)
+    artist = DjangoDB.CharField(max_length=255)
     tags = TaggableManager(blank=True)
-    embeddings = VectorField(
-        null=True,
-        dimensions=_get_sound_dimension(),
+    art = DjangoDB.ImageField(
+        upload_to="sound_arts/", blank=True, null=True, max_length=255
     )
-    created_at = db_models.DateTimeField(auto_now_add=True)
-    updated_at = db_models.DateTimeField(auto_now=True)
+    flavor = DjangoDB.TextField(blank=True, null=True, max_length=200)
+    embeddings = VectorField(null=True, dimensions=_get_sound_dimension())
+    created_at = DjangoDB.DateTimeField(auto_now_add=True)
+    updated_at = DjangoDB.DateTimeField(auto_now=True)
 
     def __str__(self):
         return self.title
@@ -64,51 +40,139 @@ class Sound(db_models.Model):  # Database Class
             self.embeddings = classifier(self.pk)
         super().save(*args, **kwargs)
 
-    def asLayer(self, with_gain: float = 1.0) -> SoundLayer:
-        return SoundLayer(
-            sound_id=str(self.pk),
-            sound_file=self.file.url,
-            sound_title=self.title,
-            sound_artist=self.artist,
-            sound_type=self.type,
-            sound_gain=with_gain,
-        )
+    def asLayer(self, with_gain=1.0):
+        return {
+            "sound_id": self.pk,
+            "sound_file": self.file.url,
+            "sound_gain": with_gain,
+            "sound_title": self.title,
+            "sound_artist": self.artist,
+        }
 
 
-class User(AbstractUser):  # Database Class
+class SoundLayer(DjangoDB.Model):
+    sound = DjangoDB.ForeignKey(Sound, on_delete=DjangoDB.CASCADE)
+    mix = DjangoDB.ForeignKey("Cosound", on_delete=DjangoDB.CASCADE)
+    gain = DjangoDB.DecimalField(max_digits=3, decimal_places=2)
 
-    email = db_models.EmailField(unique=True)
-    username = db_models.CharField(max_length=255, unique=True)
-    avatar = db_models.ImageField(upload_to="avatars/", blank=True, null=True)
-    created_at = db_models.DateTimeField(auto_now_add=True)
-    updated_at = db_models.DateTimeField(auto_now=True)
+    def __str__(self):
+        return f"{self.sound.pk}@{self.gain}"
+
+
+class Cosound(DjangoDB.Model):
+
+    layers = DjangoDB.ManyToManyField(Sound, through=SoundLayer)
+    hashset = DjangoDB.CharField(max_length=64, editable=False, db_index=True)
+    created_at = DjangoDB.DateTimeField(auto_now_add=True)
+    hashid = DjangoDB.CharField(
+        max_length=64, unique=True, editable=False, db_index=True
+    )
+
+    @classmethod
+    def normalize_layers(cls, layers):
+        normalized = []
+        for sound_id, gain in layers:
+            gain = Decimal(str(gain))
+            rounded = (gain * 2).quantize(Decimal("0.1"), rounding=ROUND_UP) / 2
+            normalized.append((sound_id, rounded))
+        normalized.sort(key=lambda t: t[0])
+        return normalized
+
+    @staticmethod
+    def compute_hashid(layers):
+        normalized = Cosound.normalize_layers(layers)
+        key = generate_layers_string(normalized)
+        hashid = hashlib.sha256(key.encode()).hexdigest()
+        return hashid
+
+    @staticmethod
+    def compute_hashset(layers):
+        normalized = Cosound.normalize_layers(layers)
+        key = generate_layers_string(normalized, with_gain=False)
+        hashset = hashlib.sha256(key.encode()).hexdigest()
+        return hashset
+
+    @classmethod
+    def get_or_create_from_layers(cls, layers):
+        hashid = cls.compute_hashid(layers)
+        hashset = cls.compute_hashset(layers)
+        normalized = cls.normalize_layers(layers)
+        with transaction.atomic():
+            cosound, created = cls.objects.get_or_create(
+                hashid=hashid, defaults={"hashset": hashset}
+            )
+            if created:
+                SoundLayer.objects.bulk_create(
+                    [
+                        SoundLayer(sound_id=sid, mix=cosound, gain=g)
+                        for sid, g in normalized
+                    ]
+                )
+        return cosound
+
+    @classmethod
+    def with_sound_set(cls, sound_ids):
+        """Cosounds whose layer sound set exactly matches `sound_ids` (gain-agnostic)."""
+        ids = list({int(sid) for sid in sound_ids})
+        if not ids:
+            return cls.objects.none()
+        return cls.objects.filter(hashset=cls.compute_hashset(ids))
+
+    def __str__(self):
+        layers = []
+        for layer in self.soundlayer_set.all():  # type: ignore
+            layers.append(tuple([layer.sound.pk, layer.gain]))
+        return generate_layers_string(layers)
+
+
+class User(AbstractUser):
+    email = DjangoDB.EmailField(unique=True)
+    username = DjangoDB.CharField(max_length=255, unique=True)
+    avatar = DjangoDB.ImageField(
+        upload_to="avatars/", blank=True, null=True, max_length=255
+    )
+    created_at = DjangoDB.DateTimeField(auto_now_add=True)
+    updated_at = DjangoDB.DateTimeField(auto_now=True)
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["username"]
 
 
-class Manager(db_models.Model):  # Database Class
+class Listener(DjangoDB.Model):
+    user = DjangoDB.OneToOneField(User, on_delete=DjangoDB.CASCADE)
+    collection = DjangoDB.ManyToManyField(Sound, blank=True, related_name="saved_by")
+    created_at = DjangoDB.DateTimeField(auto_now_add=True)
+    updated_at = DjangoDB.DateTimeField(auto_now=True)
 
-    user = db_models.ForeignKey(User, on_delete=db_models.CASCADE)
-    name = db_models.CharField(max_length=255)
-    logo = db_models.ImageField(upload_to="logos/", blank=True, null=True)
-    bio = db_models.TextField(blank=True)
-    created_at = db_models.DateTimeField(auto_now_add=True)
-    updated_at = db_models.DateTimeField(auto_now=True)
+    def __str__(self):
+        return str(self.user)
+
+
+class Manager(DjangoDB.Model):
+    user = DjangoDB.ForeignKey(User, on_delete=DjangoDB.CASCADE)
+    name = DjangoDB.CharField(max_length=255)
+    logo = DjangoDB.ImageField(
+        upload_to="logos/", blank=True, null=True, max_length=255
+    )
+    bio = DjangoDB.TextField(blank=True)
+    created_at = DjangoDB.DateTimeField(auto_now_add=True)
+    updated_at = DjangoDB.DateTimeField(auto_now=True)
 
     def __str__(self):
         return self.name
 
 
-class Player(db_models.Model):  # Database Class
-
-    library = db_models.ManyToManyField(Sound, blank=True)
-    playing: Cosound = SchemaField(default=Cosound)
-    account = db_models.ForeignKey(Manager, on_delete=db_models.CASCADE)
-    token = db_models.CharField(max_length=64, unique=True, editable=False)
-    name = db_models.CharField(max_length=255)
-    photo = db_models.ImageField(upload_to="photos/", blank=True, null=True)
-    bio = db_models.TextField(blank=True)
+class Player(DjangoDB.Model):
+    sounds = DjangoDB.ManyToManyField(Sound, blank=True)
+    playing: Prediction = SchemaField(default=Prediction)
+    manager = DjangoDB.ForeignKey(Manager, on_delete=DjangoDB.CASCADE)
+    token = DjangoDB.CharField(max_length=64, unique=True, editable=False)
+    name = DjangoDB.CharField(max_length=255)
+    photo = DjangoDB.ImageField(
+        upload_to="photos/", blank=True, null=True, max_length=255
+    )
+    bio = DjangoDB.TextField(blank=True, max_length=200)
+    location = DjangoDB.CharField(max_length=255, blank=True)
 
     def __str__(self):
         return self.name
@@ -117,35 +181,3 @@ class Player(db_models.Model):  # Database Class
         if not self.token:
             self.token = secrets.token_hex(32)
         super().save(*args, **kwargs)
-
-    def summary(self):
-        string = ""
-        for i, layer in enumerate(self.playing.layers):
-            sound = Sound.objects.get(id=layer.sound_id)
-            string += f"\t  {layer.sound_type} Layer {i+1}: {sound.title}\n"
-            string += f"\t\t-> Global Gain: {layer.sound_gain:.2f}\n"
-        string.strip()
-        return string
-
-
-class Listener(db_models.Model):  # Database Class
-
-    user = db_models.OneToOneField(
-        User,
-        on_delete=db_models.CASCADE,
-    )
-    embeddings = VectorField(
-        null=True,
-        dimensions=_get_listener_dimension(),
-    )
-    created_at = db_models.DateTimeField(auto_now_add=True)
-    updated_at = db_models.DateTimeField(auto_now=True)
-
-    def save(self, *args, **kwargs):
-        if self.embeddings is None:
-            classifier = _get_listener_classifier()
-            self.embeddings = classifier(self.pk)
-        super().save(*args, **kwargs)
-
-    def __str__(self):
-        return str(self.user)

@@ -1,0 +1,81 @@
+<c-vars throttle_seconds_left="0" />
+<script>
+    (function registerVoteOverlayStore() {
+        if (!window.Alpine) {
+            document.addEventListener('alpine:init', registerVoteOverlayStore, {
+                once: true
+            });
+            return;
+        }
+        if (Alpine.store('voteOverlay')) return;
+        Alpine.store('voteOverlay', {
+            state: 'cta',
+            secondsLeft: 0,
+            visible: true,
+            _timer: null,
+            init(seconds) {
+                this.secondsLeft = seconds || 0;
+                this.state = this.secondsLeft > 0 ? 'throttle' : 'cta';
+                if (this.secondsLeft > 0) this.startTimer();
+            },
+            fmt() {
+                const m = Math.floor(this.secondsLeft / 60);
+                const s = this.secondsLeft % 60;
+                return m > 0 ? `${m}:${s.toString().padStart(2, '0')}` : `${s}s`;
+            },
+            startTimer() {
+                if (this._timer) clearInterval(this._timer);
+                this._timer = setInterval(() => {
+                    this.secondsLeft = Math.max(0, this.secondsLeft - 1);
+                    if (this.secondsLeft === 0) {
+                        this.state = 'cta';
+                        clearInterval(this._timer);
+                        this._timer = null;
+                    }
+                }, 1000);
+            },
+            throttle(seconds) {
+                this.state = 'throttle';
+                this.secondsLeft = seconds || 60;
+                this.visible = true;
+                this.startTimer();
+            },
+            success() {
+                this.visible = false;
+            },
+        });
+    })();
+</script>
+<div x-data
+     x-init="$store.voteOverlay.init({{ throttle_seconds_left|default:0 }})"
+     @vote-success.window="$store.voteOverlay.success()"
+     @vote-throttled.window="$store.voteOverlay.throttle($event.detail.seconds_left)"
+     x-show="$store.voteOverlay.visible"
+     x-transition.opacity.duration.300ms
+     class="absolute inset-0 z-20 flex items-center justify-center px-6">
+    <div class="absolute inset-0 bg-neutral-900/70 backdrop-blur-[2px]"></div>
+    <div class="relative text-center text-white">
+        <template x-if="$store.voteOverlay.state === 'cta'">
+            <div class="text-xl font-serif motion-preset-blur-up motion-duration-500">
+                <div>Press the button</div>
+                <svg class="mx-auto mt-2 h-6 w-6 text-white/80"
+                     viewBox="0 0 24 24"
+                     fill="none"
+                     stroke="currentColor"
+                     stroke-width="2"
+                     stroke-linecap="round"
+                     stroke-linejoin="round"
+                     aria-hidden="true">
+                    <path d="M12 5v14"></path>
+                    <path d="M19 12l-7 7-7-7"></path>
+                </svg>
+            </div>
+        </template>
+        <template x-if="$store.voteOverlay.state === 'throttle'">
+            <div class="motion-preset-blur-up motion-duration-500">
+                <p class="text-lg font-serif italic">You can vote again in</p>
+                <p class="text-3xl font-bold tabular-nums mt-2" x-text="$store.voteOverlay.fmt()"></p>
+            </div>
+        </template>
+    </div>
+</div>

@@ -27,7 +27,9 @@
         "**/pyproject.toml": true,
         "**/README.md": true,
         "**/render.yaml": true,
-        "**/manifest.json": true
+        "**/manifest.json": true,
+        "**/tmp": true,
+        "**/cosound.json": true,
     },
     "files.watcherExclude": {
         "**/routeTree.gen.ts": true
@@ -86,6 +88,16 @@
         "H006",
         "D018",
         "H026",
+        "H021",
     ],
-    "python-envs.defaultEnvManager": "ms-python.python:venv"
+    "python-envs.defaultEnvManager": "ms-python.python:venv",
+    "vscode-color-picker.languages": [
+        "javascript",
+        "javascriptreact",
+        "typescript",
+        "typescriptreact",
+        "postcss",
+        "xml",
+        "django-html"
+    ],
 }

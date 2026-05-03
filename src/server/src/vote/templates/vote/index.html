@@ -1,133 +1,101 @@
 {% extends "core/base.html" %}
 {% block content %}
-    <c-core-loader hx_get="{% url 'vote:check_auth' %}?{{ request.GET.urlencode }}" />
+    <c-core-loader hx_get="{% url 'vote:vote_initial' %}?{{ request.GET.urlencode }}" />
 {% endblock content %}
 {% partialdef initial %}
-<c-core-content>
-    <c-vote-content>
-        <div class="motion-preset-blur-down-lg motion-duration-700 motion-delay-500 h-fit min-h-30 flex flex-col items-center justify-center w-full">
-            <div id="vote_alerts" class="stack w-full max-w-72 -mt-8">
-                <c-core-subtitle />
+    <c-core-content>
+        <div data-core-content-hero class="w-full flex flex-col items-center py-10 gap-10">
+            <div class="motion-preset-blur-down-lg motion-duration-700 motion-delay-700 w-full flex flex-col items-center">
+                <c-core-header />
+            </div>
+            <div class="motion-preset-blur-down motion-duration-700 motion-delay-500 w-full flex flex-col items-center gap-10">
+            {% if player %}<c-vote-player :layers="layers" />{% endif %}
+            <div x-data="{ voted:
+                {% if user.is_authenticated %}
+                    true
+                {% else %}
+                    false
+                {% endif %}
+                }" @vote-success.window="voted = true" @auth-success.window="voted = true" class="h-fit w-full flex flex-col items-center transition-all duration-300 ease-out opacity-100 htmx-added:opacity-0 -mt-2">
+                <div x-cloak class="grid -mt-18 place-items-center w-full">
+                    <div :class="!voted ? 'opacity-100' : 'opacity-0 pointer-events-none'"
+                         class="[grid-area:1/1] transition-opacity duration-500 ease-in-out flex justify-center w-full max-w-70 -mb-3">
+                        <c-core-subheader />
+                    </div>
+                    <div :class="voted ? 'opacity-100' : 'opacity-0 pointer-events-none'"
+                         class="[grid-area:1/1] transition-opacity duration-500 ease-in-out w-full max-w-72 flex flex-col gap-1.5 py-6 pt-12 items-center justify-center">
+                        <c-core-user-details />
+                    </div>
+                </div>
+                <div class="flex flex-col items-center gap-10 w-full">
+                    <c-core-deck id="deck">
+                        {% if player %}
+                            {% include "vote/index.html#card" %}
+                        {% else %}
+                            {% include "vote/index.html#help" %}
+                        {% endif %}
+                    </c-core-deck>
+                </div>
+            </div>
             </div>
         </div>
-        <div class="relative max-w-80 w-full mb-5">
-            <div class="motion-preset-blur-up-lg motion-duration-500 motion-delay-300 card overflow-hidden bg-base-200 text-base-content w-full shadow">
-                <c-vote-player-detail :player_name="player_name"
-                                      :player_photo_url="player_photo_url"
-                                      :manager_name="manager_name"
-                                      :section="section"
-                                      :choice="choice" />
-                {% include card_body %}
-            </div>
-            <c-vote-manager-logo :manager_logo_url="manager_logo_url" />
-        </div>
-    </c-vote-content>
-</c-core-content>
+    </c-core-content>
 {% endpartialdef %}
-{% partialdef login_options %}
-<c-vote-card-body>
-    <fieldset class="fieldset {% if is_swapped %}motion-delay-[400ms] motion-duration-500 motion-opacity-in-0{% endif %}">
-        <c-vote-email-form />
-        <c-vote-anon-form />
-    </fieldset>
-</c-vote-card-body>
-{% endpartialdef %}
-{% partialdef enter_code %}
-<c-vote-code-form />
-{% endpartialdef %}
-{% partialdef cancel_code %}
-<style>
-    #vote_anon_form_loader {
-        width: 0;
-        opacity: 0;
-        overflow: hidden;
-        margin-left: 0;
-        transition: width 160ms ease, opacity 160ms ease, margin-left 160ms ease;
-    }
 
-    #vote_anon_form_loader.loading-active {
-        width: 1.75rem;
-        opacity: 1;
-        margin-left: 0.5rem;
-    }
-</style>
-<div class="motion-preset-blur-left-sm motion-duration-150 w-full flex items-center justify-center flex-col"
-     x-data="{ pressed: false }">
-    <div class="divider divide-accent select-none">OR</div>
-    <button id="anonymous_login_button"
-            hx-post="{% url 'vote:login_anonymously' %}?{{ request.GET.urlencode }}"
-            hx-target="#vote_card_body"
-            hx-swap="outerHTML swap:700ms"
-            @click="pressed = true; loading = true"
-            :disabled="loading"
-            type="button"
-            class="btn btn-neutral w-full mb-6">
-        <span id="anonymous_login_button_label">VOTE ANONYMOUSLY</span>
-        <span id="vote_anon_form_loader"
-              :class="{ 'loading-active': pressed }"
-              class="loading loading-infinity loading-lg"></span>
-    </button>
-    <a href="https://cosound.com"
-       class="link text-xs uppercase text-center select-none">What is Cosound?</a>
-</div>
+{% partialdef card %}
+    <c-core-card showExit="false" bgColor="bg-[#1f3f23]" ringColor="ring-[#2d2d2d]">
+        <figure class="relative ring-7 ring-neutral-content/70 rounded-t-md mx-6 mt-7 overflow-visible bg-base-300">
+            <div class="static aspect-square w-full rounded-t-md overflow-hidden">
+                <div class="absolute z-10 top-0 right-1/2 translate-x-1/2 -translate-y-1/2 ring-4 ring-neutral-content/70 flex justify-center rounded-md overflow-hidden bg-white">
+                    <c-vote-card-header>
+                        <c-vote-layer-indicator />
+                    </c-vote-card-header>
+                </div>
+                <c-vote-card-figure>
+                    <c-vote-layer-carousel />
+                </c-vote-card-figure>
+            </div>
+            <c-vote-arrows />
+        </figure>
+        <c-vote-player-logo />
+        <div class="relative ring-5 ring-amber-600/60 mx-4 mt-4 mb-4 rounded-xs rounded-b-2xl bg-white/65 text-black">
+            <div class="h-30 overflow-y-auto py-2 px-4">
+                <c-vote-card-body>
+                    {# djlint:off #}
+                        <template x-if="$store.voteLayers.currentIndex === 0">
+                            <div class="italic font-serif font-extralight text-[8pt] font-stretch-95%">
+                                <p class="py-1 not-italic font-bold font-serif text-xs font-stretch-95%"
+                                   x-text="'[ ' + $store.voteLayers.currentLayer.location + ' ]'"></p>
+                                <span x-text="$store.voteLayers.currentLayer.bio"></span>
+                            </div>
+                        </template>
+                        <template x-if="$store.voteLayers.currentIndex !== 0">
+                            <div class="italic font-serif font-extralight text-[8pt] font-stretch-95%">
+                                <p class="py-1 not-italic font-bold font-serif text-xs font-stretch-95%"
+                                   x-text="'[ ' + $store.voteLayers.currentLayer.tags + ' ]'"></p>
+                                <span x-text="$store.voteLayers.currentLayer.flavor"></span>
+                            </div>
+                        </template>
+                    {# djlint:on #}
+                </c-vote-card-body>
+            </div>
+            <div class="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-neutral-content/80 to-transparent rounded-b-2xl">
+            </div>
+        </div>
+        <c-vote-overlay :throttle_seconds_left="throttle_seconds_left" />
+        <div class="absolute z-30 bottom-0 left-1/2 -translate-x-1/2 ring-6 ring-[#2d2d2d]/60 drop-shadow-2xl flex justify-center rounded-t-2xl overflow-hidden bg-base-100 w-fit">
+            <c-vote-button :choice="choice" />
+        </div>
+    </c-core-card>
 {% endpartialdef %}
-{% partialdef vote_ready %}
-<c-vote-card-body>
-    <c-vote-user-detail :avatar_url="avatar_url"
-                        :username="username"
-                        :welcome_text="welcome_text"
-                        :choice="choice"
-                        wrapper_class="{% if is_swapped %}motion-delay-[400ms] motion-duration-500 motion-opacity-in-0{% endif %}" />
-    <fieldset class="mt-10 fieldset {% if is_swapped %}motion-delay-[400ms] motion-duration-500 motion-opacity-in-0{% endif %}">
-        <div class="divider divide-accent select-none"></div>
-        <button id="submit_vote_button"
-                hx-post="{% url 'vote:submit_vote' %}?{{ request.GET.urlencode }}"
-                hx-target="#content"
-                hx-swap="outerHTML swap:2000ms"
-                hx-indicator="#submit_vote_form_loader"
-                hx-disabled-elt="this"
-                type="button"
-                class="btn btn-neutral w-full mb-6">
-            <span id="submit_vote_button_label">SUBMIT VOTE</span>
-            <span id="submit_vote_form_loader"
-                  class="htmx-indicator loading loading-infinity loading-lg"></span>
-        </button>
-        <button hx-post="{% url 'vote:logout_session' %}?{{ request.GET.urlencode }}"
-                hx-swap="none"
-                type="button"
-                class="btn btn-ghost btn-sm w-full -mt-3">LOG OUT</button>
-    </fieldset>
-</c-vote-card-body>
-{% endpartialdef %}
-{% partialdef user_throttled %}
-<c-vote-card-body>
-    <c-vote-user-detail :avatar_url="avatar_url"
-                        :username="username"
-                        :welcome_text="welcome_text"
-                        :choice="choice"
-                        wrapper_class="{% if is_swapped %}motion-delay-[400ms] motion-duration-500 motion-opacity-in-0{% endif %}" />
-    <div class="mt-10 flex flex-col items-center justify-center select-none {% if is_swapped %}motion-delay-[400ms] motion-duration-500 motion-opacity-in-0{% endif %}"
-         x-data="{ seconds: {{ time_left }} }"
-         x-init="$nextTick(() => { const id = setInterval(() => { seconds--; if (seconds <= 0) { clearInterval(id); htmx.ajax('GET', '{% url 'vote:check_auth' %}?{{ request.GET.urlencode }}', { target: '#vote_card_body', swap: 'outerHTML swap:700ms settle:200ms' }); } }, 1000); })">
-        <div class="divider divide-accent select-none"></div>
-        <span class="text-[10px] uppercase tracking-widest opacity-70 leading-none">You can vote again in</span>
-        <span class="font-mono text-2xl font-bold tabular-nums mt-2"
-              x-text="String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0')"></span>
-        <button hx-post="{% url 'vote:logout_session' %}?{{ request.GET.urlencode }}"
-                hx-swap="none"
-                type="button"
-                class="btn btn-ghost btn-xs mt-4">LOG OUT</button>
-    </div>
-</c-vote-card-body>
-{% endpartialdef %}
-{% partialdef vote_submitted %}
-<c-vote-content>
-    <div class="motion-delay-700 motion-opacity-in-0">Vote Submitted</div>
-</c-vote-content>
-{% endpartialdef %}
-{% partialdef alert %}
-<c-vote-alert alert_msg="{{ alert_msg }}" alert_type="{{ alert_type }}" />
-{% endpartialdef %}
+
 {% partialdef help %}
-How Voting Works.
+    <c-core-card showExit="false">
+        <div class="p-6 text-base-content">
+            <h2 class="text-xl font-serif">How voting works</h2>
+            <p class="mt-3 text-sm opacity-80">
+                Visit a player URL with <code>?player=&lt;token&gt;&amp;choice=1</code> to upvote, or <code>choice=0</code> to downvote.
+            </p>
+        </div>
+    </c-core-card>
 {% endpartialdef %}

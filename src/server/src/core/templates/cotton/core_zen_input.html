@@ -1,0 +1,38 @@
+<c-vars placeholder="start typing..." size="text-3xl" placeholderOpacity="opacity-30" id="" maxWords="" />
+<div x-data="{ hasValue: false{% if maxWords %}, maxWords: {{ maxWords }}, wordCount: 0{% endif %} }"
+     class="relative flex items-center justify-center w-full">
+    <textarea {% if id %}id="{{ id }}"{% endif %}
+              @input="
+                {% if maxWords %}
+                const words = $el.value.split(/\s+/).filter(Boolean);
+                if (words.length > maxWords) {
+                    const trailing = /\s$/.test($el.value) ? ' ' : '';
+                    $el.value = words.slice(0, maxWords).join(' ') + trailing;
+                }
+                wordCount = $el.value.split(/\s+/).filter(Boolean).length;
+                {% endif %}
+                $el.style.height='auto'; $el.style.height=$el.scrollHeight+'px'; hasValue = $el.value.length > 0"
+              @focus="setTimeout(() => $el.setSelectionRange($el.value.length, $el.value.length))"
+              @click="setTimeout(() => $el.setSelectionRange($el.value.length, $el.value.length))"
+              rows="1"
+              spellcheck="false"
+              placeholder="{{ placeholder }}"
+              class="w-full bg-transparent border-none outline-none focus:outline-none focus:ring-0 resize-none overflow-hidden {{ size }} text-center leading-relaxed tracking-wide placeholder:{{ placeholderOpacity }}"></textarea>
+    <span x-show="!hasValue"
+          x-cloak
+          class="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none {{ placeholderOpacity }} transition-opacity duration-200">
+        <svg xmlns="http://www.w3.org/2000/svg"
+             viewBox="0 -960 960 960"
+             fill="currentColor"
+             class="w-[1.35em] h-[1.35em] py-3">
+            <path d="M80 0v-160h800V0H80Zm160-320h56l312-311-29-29-28-28-311 312v56Zm-80 80v-170l448-447q11-11 25.5-17t30.5-6q16 0 31 6t27 18l55 56q12 11 17.5 26t5.5 31q0 15-5.5 29.5T777-687L330-240H160Zm560-504-56-56 56 56ZM608-631l-29-29-28-28 57 57Z" />
+        </svg>
+    </span>
+    {% if maxWords %}
+        <span x-show="hasValue"
+              x-cloak
+              class="absolute -bottom-5 right-0 text-[9pt] opacity-50 font-mono">
+            <span x-text="wordCount"></span>/{{ maxWords }}
+        </span>
+    {% endif %}
+</div>

@@ -1,14 +1,65 @@
-from django.contrib import admin
-from django.urls import path, include
-from core.api import api as core_api
+from django.urls import path
 
+from app.views import (
+    example_card_page,
+    example_card_initial,
+    example_card_swap_figure,
+    example_card_swap_body,
+    example_card_swap_header,
+    example_card_swap_multiple,
+    home_page,
+    home_initial,
+)
+
+app_name = "app"
 
 urlpatterns = [
-    path("", include("home.urls")),
-    path("vote/", include("vote.urls")),
-    path("rate/", include("rate.urls")),
-    path("core/", include("core.urls")),
-    path("api/core/", core_api.urls),
-    path("admin/", admin.site.urls, name="admin"),
-    path("upload/", include("django_file_form.urls")),
+    path(
+        "",
+        home_page,
+        name="home_page",
+    ),
 ]
+
+example_urlpatterns = [
+    path(
+        "examples/card",
+        example_card_page,
+        name="example_card_page",
+    ),
+]
+
+htmx_urlpatterns = [
+    path(
+        "htmx/examples/card/initial",
+        example_card_initial,
+        name="example_card_initial",
+    ),
+    path(
+        "htmx/examples/card/swap-figure",
+        example_card_swap_figure,
+        name="example_card_swap_figure",
+    ),
+    path(
+        "htmx/examples/card/swap-body",
+        example_card_swap_body,
+        name="example_card_swap_body",
+    ),
+    path(
+        "htmx/examples/card/swap-header",
+        example_card_swap_header,
+        name="example_card_swap_header",
+    ),
+    path(
+        "htmx/examples/card/swap-multiple",
+        example_card_swap_multiple,
+        name="example_card_swap_multiple",
+    ),
+    path(
+        "htmx/home/initial",
+        home_initial,
+        name="home_initial",
+    ),
+]
+
+urlpatterns += htmx_urlpatterns + example_urlpatterns

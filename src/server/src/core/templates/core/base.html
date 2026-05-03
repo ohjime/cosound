@@ -5,7 +5,11 @@
 <html lang="en">
     <head>
         <link rel="shortcut icon" type="image/png" href="{% static 'core/img/icon.png' %}">
-        <title>Vote | Cosound</title>
+        <title>
+            {% block title %}
+                Vote
+            {% endblock title %}
+        | Cosound</title>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="X-UA-Compatible" content="ie=edge">
@@ -215,7 +219,7 @@
         <div id="page-loader">
             <div class="base-loader" role="status" aria-label="Loading"></div>
         </div>
-        <section class="bg-base flex-1 px-6">
+        <section class="bg-base flex-1 px-6 overflow-y-auto min-h-0">
             <style>
                 .content-loader {
                     width: 22px;
@@ -249,5 +253,36 @@
             {% block content %}
             {% endblock content %}
         </section>
+        <dialog id="core_modal" class="modal">
+            <div id="core_modal_content" class="modal-box"></div>
+            <form method="dialog" class="modal-backdrop">
+                <button>close</button>
+            </form>
+        </dialog>
+        <script>
+            document.addEventListener('show-modal', function() {
+                document.getElementById('core_modal').showModal();
+            });
+            document.addEventListener('close-modal', function() {
+                document.getElementById('core_modal').close();
+            });
+            // Auth resume: when the server gates an action behind login, it fires
+            // `auth-required` on the originating element. We capture that element
+            // and re-click it once `auth-success` fires after a successful login,
+            // so the user resumes the action they were attempting.
+            (function () {
+                let pendingEl = null;
+                document.body.addEventListener('auth-required', function (e) {
+                    pendingEl = e.target;
+                });
+                document.body.addEventListener('auth-success', function () {
+                    const el = pendingEl;
+                    pendingEl = null;
+                    if (el && document.contains(el)) {
+                        setTimeout(function () { el.click(); }, 50);
+                    }
+                });
+            })();
+        </script>
     </body>
 </html>

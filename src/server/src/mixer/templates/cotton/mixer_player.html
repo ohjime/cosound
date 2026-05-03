@@ -1,0 +1,147 @@
+<c-vars sounds />
+<!-- Server -> client data handoff. The view gives us sounds as Python dicts,
+but Alpine lives in JS and needs them as a JSON object it can parse. We
+can't just inline the sounds variable inside x- data attributes because a title
+containing script or a quote would break out of the attribute and potentially run
+arbitrary JS. json_script emits a script block with HTML entities escaped as Unicode
+sequences, which is safe. -->
+{{ sounds|json_script:"soundLayers" }}
+<div class="contents"
+    {# djlint:off #}
+     x-data
+     x-init="
+        const _soundLayersData = {
+                layers: JSON.parse(document.getElementById('soundLayers').textContent)
+                    .map(l => ({ ...l, gain: l.sound_gain != null ? l.sound_gain * 100 : 50, saved: l.saved || false, isolated: false })),
+                currentIndex: 0,
+                tracksLoading: true,
+                loadedCount: 0,
+                swappingLayer: false,
+                started: false,
+                paused: false,
+                _players: [],
+                _fades: new WeakMap(),
+                FADE_MS: 5500,
+                get currentLayer() { return this.layers[this.currentIndex]; },
+                get isFirst() { return this.currentIndex === 0; },
+                get isLast() { return this.currentIndex === this.layers.length - 1; },
+                anyIsolated() { return this.layers.some(l => l.isolated); },
+                isSilenced(layer) { return layer.mute || (this.anyIsolated() && !layer.isolated); },
+                clearIsolation() { this.layers.forEach(l => { l.isolated = false; }); },
+                setGain(layer, v) {
+                    layer.gain = v;
+                    layer.mute = false;
+                    if (!layer.isolated && this.anyIsolated()) this.clearIsolation();
+                },
+                toggleMute(layer) {
+                    const wasMuted = layer.mute;
+                    layer.mute = !layer.mute;
+                    if (wasMuted && !layer.isolated && this.anyIsolated()) this.clearIsolation();
+                },
+                toggleIsolate(layer) {
+                    if (layer.isolated) { layer.isolated = false; return; }
+                    this.layers.forEach(l => { if (l !== layer && l.isolated) { l.isolated = false; l.mute = true; } });
+                    layer.mute = false;
+                    layer.isolated = true;
+                },
+                _targetFor(el) {
+                    const src = el.getAttribute('src');
+                    const layer = this.layers.find(l => l.sound_file === src);
+                    return layer && !this.isSilenced(layer) ? (Number(layer.gain) / 100 || 0) : 0;
+                },
+                _cancelFade(el) {
+                    const s = this._fades.get(el);
+                    if (s?.rafId) { cancelAnimationFrame(s.rafId); s.rafId = null; }
+                },
+                _fadeTo(el, from, target) {
+                    this._cancelFade(el);
+                    el.volume = Math.max(0, Math.min(1, from));
+                    const state = this._fades.get(el) || {};
+                    state.targetVolume = target;
+                    const t0 = performance.now();
+                    const tick = (now) => {
+                        const t = Math.max(0, Math.min(1, (now - t0) / this.FADE_MS));
+                        const newVol = from + (state.targetVolume - from) * t;
+                        el.volume = Math.max(0, Math.min(1, newVol));
+                        if (t < 1) state.rafId = requestAnimationFrame(tick);
+                        else state.rafId = null;
+                    };
+                    state.rafId = requestAnimationFrame(tick);
+                    this._fades.set(el, state);
+                },
+                applyVolume(el, layer) {
+                    const silenced = this.isSilenced(layer);
+                    const state = this._fades.get(el) || { lastSilenced: silenced };
+                    const wasSilenced = state.lastSilenced;
+                    state.lastSilenced = silenced;
+                    this._fades.set(el, state);
+                    if (silenced) {
+                        this._cancelFade(el);
+                        el.volume = 0;
+                    } else {
+                        const target = Number(layer.gain) / 100 || 0;
+                        if (wasSilenced) {
+                            this._fadeTo(el, 0, target);
+                        } else if (state.rafId) {
+                            state.targetVolume = target;
+                        } else {
+                            el.volume = target;
+                        }
+                    }
+                },
+                _playWithFade(el) {
+                    el.currentTime = 0;
+                    el.play().catch(() => {});
+                    const target = this._targetFor(el);
+                    if (target > 0) this._fadeTo(el, 0, target);
+                },
+                registerPlayer(el) {
+                    this._players = this._players.filter(p => p.isConnected);
+                    if (this._players.includes(el)) return;
+                    this._players.push(el);
+                    this.loadedCount = this._players.length;
+                    if (this.tracksLoading && this._players.length === this.layers.length) {
+                        setTimeout(() => { this.tracksLoading = false; }, 500);
+                    }
+                    if (this.started) this._playWithFade(el);
+                },
+                playAll() {
+                    this.started = true;
+                    this.paused = false;
+                    this._players.forEach(p => this._playWithFade(p));
+                },
+                pause() {
+                    this.paused = true;
+                    this._players.forEach(p => p.pause());
+                },
+                resume() {
+                    this.paused = false;
+                    this._players.forEach(p => p.play().catch(() => {}));
+                },
+                masterVolumeUp() {
+                    this.layers.forEach(l => { l.gain = Math.min(100, l.gain + 10); });
+                },
+                masterVolumeDown() {
+                    this.layers.forEach(l => { l.gain = Math.max(0, l.gain - 10); });
+                },
+            };
+        if (!Alpine.store('soundLayers')) {
+            Alpine.store('soundLayers', _soundLayersData);
+        } else {
+            Object.assign(Alpine.store('soundLayers'), _soundLayersData);
+        }
+     "
+    {# djlint:on #}>
+    {# djlint:off #}
+    <template x-for="layer in $store.soundLayers.layers" :key="layer.sound_id">
+        <audio :src="layer.sound_file"
+               preload="auto"
+               loop
+               class="hidden"
+               x-init="if ($el.readyState >= 3) $store.soundLayers.registerPlayer($el)"
+               x-effect="$store.soundLayers.applyVolume($el, layer)"
+               @canplaythrough="$store.soundLayers.registerPlayer($el)"
+               @loadeddata="$store.soundLayers.registerPlayer($el)"></audio>
+    </template>
+    {# djlint:on #}
+</div>

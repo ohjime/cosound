@@ -1,0 +1,161 @@
+import json
+
+from django.contrib.auth import login, logout
+from django.http import HttpResponse, Http404
+from django.shortcuts import render
+
+from core.models import Listener, User
+from core.utils import add_card, close_modal, pop_card, show_modal
+from login.adapters import UnifiedRequestLoginCodeForm
+from login.utils import (
+    clear_login_state,
+    generate_anon_email,
+    generate_anon_username,
+    get_login_state,
+    send_login_code,
+)
+
+
+def login_card(request):
+
+    if request.htmx:
+        return add_card(
+            target_deck="deck",
+            template="login/index.html#card",
+            request=request,
+        )
+    return Http404("Page not found.")
+
+
+def check_email(request):
+    if not request.htmx:
+        return HttpResponse("Request Denied.")
+
+    form = UnifiedRequestLoginCodeForm(request.POST or None)
+
+    if request.method == "POST" and form.is_valid():
+        email = form.cleaned_data["email"]
+        try:
+            send_login_code(request, email)
+        except Exception:
+            return render(
+                request,
+                "login/index.html#code_form",
+                {"error": "Failed to send login code. Please try again later."},
+            )
+        return render(request, "login/index.html#code_form")
+
+    email_errors = form.errors.get("email")
+    return render(
+        request,
+        "login/index.html#code_form",
+        {
+            "error": (
+                email_errors[0]
+                if email_errors
+                else "This email address can not be used with cosound."
+            )
+        },
+    )
+
+
+def verify_code(request):
+    if not request.htmx:
+        return HttpResponse("Request Denied.")
+
+    email, correct_code = get_login_state(request)
+
+    if not email or not correct_code:
+        return render(
+            request,
+            "login/index.html#code_form",
+            {"error": "Login session expired. Please request a new code."},
+        )
+
+    if request.method == "POST":
+        input_code = request.POST.get("code", "").strip()
+
+        if input_code == str(correct_code):
+            try:
+                user = User.objects.get(email__iexact=email)
+                Listener.objects.get_or_create(user=user)
+                login(
+                    request, user, backend="django.contrib.auth.backends.ModelBackend"
+                )
+                clear_login_state(request)
+                response = pop_card(
+                    request, template="login/index.html#post_login"
+                )
+                response["HX-Trigger"] = json.dumps(
+                    {"card:remove": True, "auth-success": True}
+                )
+                return response
+            except User.DoesNotExist:
+                return render(
+                    request,
+                    "login/index.html#code_form",
+                    {"error": "No account found for this email."},
+                )
+
+        return render(
+            request,
+            "login/index.html#code_form",
+            {"error": "Invalid code. Please try again."},
+        )
+
+    return HttpResponse("Request Denied.")
+
+
+def login_anonymously(request):
+    if not request.htmx or request.method != "POST":
+        return HttpResponse("Request Denied.")
+
+    try:
+        username = generate_anon_username()
+        user = User.objects.create_user(
+            username=username,
+            email=generate_anon_email(username),
+            password=None,
+        )
+        user.set_unusable_password()
+        user.save()
+        Listener.objects.get_or_create(user=user)
+        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+    except Exception:
+        return show_modal(
+            request,
+            "core/modal_alert.html",
+            {
+                "alert_msg": "Failed to continue anonymously. Please try again later.",
+                "alert_type": "alert-warning",
+            },
+        )
+
+    response = pop_card(request, template="login/index.html#post_login")
+    response["HX-Trigger"] = json.dumps(
+        {"card:remove": True, "auth-success": True}
+    )
+    return response
+
+
+def cancel_code(request):
+    if not request.htmx:
+        return HttpResponse("Request Denied.")
+
+    clear_login_state(request)
+    return HttpResponse("")
+
+
+def logout_modal(request):
+    if not request.htmx:
+        return HttpResponse("Request Denied.")
+    return show_modal(request, "login/index.html#logout_modal")
+
+
+def perform_logout(request):
+    if not request.htmx or request.method != "POST":
+        return HttpResponse("Request Denied.")
+    logout(request)
+    response = HttpResponse("")
+    response["HX-Refresh"] = "true"
+    return response

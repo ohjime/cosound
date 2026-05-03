@@ -1,0 +1,149 @@
+{% extends "core/base.html" %}
+{% block content %}
+    <c-core-loader hx_get="{% url 'app:card_example_initial' %}" />
+{% endblock content %}
+{% partialdef initial %}
+    <c-core-content>
+        <div data-core-content-hero class="w-full flex flex-col items-center py-10">
+            <div class="motion-preset-blur-down-lg motion-duration-700 motion-delay-700">
+                <c-core-header />
+            </div>
+            <div class="motion-preset-blur-down motion-duration-700 motion-delay-500 w-full flex flex-col items-center">
+                <div class="h-fit w-full flex flex-col items-center transition-all duration-300 ease-out opacity-100 htmx-added:opacity-0 gap-10 pt-4 pb-8">
+                    <div class="max-w-72 w-full">
+                        <c-core-subheader />
+                    </div>
+                    <div class="flex flex-col items-center gap-10 w-full"
+                         x-data="{ stacked: false, mainMs: 700, miniMs: 600, miniDelay: 120 }">
+                        <!-- Stacking Animation Controls -->
+                        <div class="flex flex-col items-center gap-2 w-full max-w-80">
+                            <button class="btn btn-primary w-full"
+                                    @click="stacked = !stacked"
+                                    x-text="stacked ? 'Unstack' : 'Stack'"></button>
+                            <div class="flex gap-2 w-full text-xs">
+                                <label class="flex-1 flex flex-col">
+                                    main ms
+                                    <input type="number" class="input input-xs input-bordered" x-model.number="mainMs" />
+                                </label>
+                                <label class="flex-1 flex flex-col">
+                                    mini ms
+                                    <input type="number" class="input input-xs input-bordered" x-model.number="miniMs" />
+                                </label>
+                                <label class="flex-1 flex flex-col">
+                                    mini delay
+                                    <input type="number" class="input input-xs input-bordered" x-model.number="miniDelay" />
+                                </label>
+                            </div>
+                        </div>
+                        <!-- Stacking Card Demo -->
+                        <div class="relative max-w-80 w-full">
+                            <!-- Card -->
+                            <div class="card bg-amber-400/30 max-w-80 w-full ring-8 ring-neutral/70 shadow-base-content/50 shadow-2xl transition-all ease-out relative z-0"
+                                 :style="`transition-duration: ${mainMs}ms;`"
+                                 :class="stacked ? 'scale-85 -translate-y-7' : 'scale-100'">
+                                <figure class="ring-7 ring-neutral-content/70 rounded-t-md mx-6 mt-7 overflow-visible">
+                                    <div class="static aspect-square w-full rounded-t-md overflow-hidden ">
+                                        <div class="absolute z-10 right-1/2 translate-x-1/2 -translate-y-1/2 ring-4 ring-neutral-content/70 w-min min-w-28 flex justify-center rounded-full overflow-hidden bg-white">
+                                            <c-card-header>
+                                                <div class="h-8 w-40 rounded-none skeleton"></div>
+                                            </c-card-header>
+                                        </div>
+                                        <c-card-figure>
+                                            <div class="text-center h-full w-full skeleton rounded-none"></div>
+                                        </c-card-figure>
+                                    </div>
+                                </figure>
+                                <c-card-slider name="cardSlider" on_change="console.log('slider =', $store.cardSlider.value)" />
+                                <div class="card-body ring-5 ring-amber-600/60 mx-4 mb-4 rounded-xs bg-white/65 !p-0 text-black">
+                                    <div class="h-30 overflow-y-scroll">
+                                        <c-card-body>
+                                            <div class="text-center h-full w-full skeleton rounded-none"></div>
+                                        </c-card-body>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Mini card (overlaps bottom portion of main card) -->
+                            <div class="card bg-base-300 mx-2 h-1/3 rounded-2xl transition-all ease-out origin-top"
+                                 :style="`transition-duration: ${miniMs}ms; transition-delay: ${stacked ? miniDelay : 0}ms;`"
+                                 :class="stacked ? 'opacity-100 -translate-y-7/6' : 'opacity-0 translate-y-0 scale-90'">
+                            </div>
+                        </div>
+                        <!-- Slider State Controls (external access via $store) -->
+                        <div x-data class="flex flex-col items-center gap-3">
+                            <div class="text-sm">
+                                value: <span x-text="$store.cardSlider.value"></span>
+                                / disabled: <span x-text="$store.cardSlider.disabled"></span>
+                            </div>
+                            <button class="btn btn-sm btn-outline"
+                                    @click="$store.cardSlider.disabled = !$store.cardSlider.disabled">
+                                Toggle Disabled
+                            </button>
+                            <input type="number"
+                                   min="0"
+                                   max="100"
+                                   placeholder="Set value (e.g. 80)"
+                                   class="input input-sm input-bordered max-w-40"
+                                   @change="$store.cardSlider.value = Number($event.target.value)" />
+                        </div>
+                        <!-- Demo Buttons -->
+                        <div class="grid grid-cols-2 gap-2 w-full max-w-80">
+                            <button hx-target="#card-figure"
+                                    hx-swap="outerHTML swap:300ms"
+                                    hx-get="{% url 'app:card_example_swap_figure' %}"
+                                    class="btn btn-sm btn-dash btn-primary">Swap Figure</button>
+                            <button hx-target="#card-body"
+                                    hx-swap="outerHTML swap:250ms"
+                                    hx-get="{% url 'app:card_example_swap_body' %}"
+                                    class="btn btn-sm btn-dash btn-secondary">Swap Body</button>
+                            <button hx-target="#card-header"
+                                    hx-swap="outerHTML swap:250ms"
+                                    hx-get="{% url 'app:card_example_swap_header' %}"
+                                    class="btn btn-sm btn-dash btn-secondary">Swap Header</button>
+                            <button hx-get="{% url 'app:card_example_swap_multiple' %}"
+                                    hx-swap="none swap:300ms"
+                                    hx-on:htmx:before-swap="document.querySelectorAll('#card-header, #card-figure, #card-body').forEach(el => el.classList.add('htmx-swapping'))"
+                                    class="btn btn-sm btn-accent">Swap All</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </c-core-content>
+{% endpartialdef %}
+{% partialdef new-figure %}
+    <c-card-figure>
+        <img src="https://uploads2.yugioh.com/card_images/257/detail/Dark-Magician.jpg?1375127294"
+             alt="Dark Magician">
+    </c-card-figure>
+{% endpartialdef %}
+{% partialdef new-body %}
+    <c-card-body>
+        <div class="p-2 italic font-serif font-extralight text-xs font-stretch-95%">
+            The Ultimate Wizard in Terms of Attack and Defense.
+        </div>
+    </c-card-body>
+{% endpartialdef %}
+{% partialdef new-header %}
+    <c-card-header>
+        <div class="flex flex-col w-max font-bold bg-gray-300/40 text-lg text-center text-black justify-center px-3 py-1 font-serif">
+            Dark Magician
+        </div>
+    </c-card-header>
+{% endpartialdef %}
+{% partialdef new-multiple %}
+    <c-card-header hx-swap-oob="outerHTML">
+        <div class="flex flex-col w-max font-bold bg-blue-300/40 text-lg text-center text-black justify-center px-3 py-1 font-serif">
+            Blue-Eyes White Dragon
+        </div>
+    </c-card-header>
+    <c-card-figure hx-swap-oob="outerHTML">
+        <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ7LhlSe4Epsx4ZbJPUnWZnSfnjKyh-TBfZtg&s"
+             alt="Blue-Eyes White Dragon"
+             class="w-full" />
+    </c-card-figure>
+    <c-card-body hx-swap-oob="outerHTML">
+        <div class="p-2 italic font-serif font-extralight text-xs font-stretch-95%">
+            This legendary dragon is a powerful engine of destruction.
+        </div>
+    </c-card-body>
+{% endpartialdef %}

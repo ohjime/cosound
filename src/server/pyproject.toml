@@ -42,5 +42,11 @@ dependencies = [
 
 
 [tool.djlint]
-ignore = ["D018","H006"]
+ignore = ["D018","H006","H021"]
 custom_html = "c-[\\w-]+"
+custom_blocks="buttons,endbuttons,fragment,component_title,component_navinfo,component_alert_global__acting_for,partialdef,component_box_nexus_activated_service"
+max_attribute_length=200
+preserve_blank_lines=true
+extend_exclude = "itou/templates/utils/widgets/duet_date_picker_widget.html"
+format_css = true
+format_js = true

@@ -1,0 +1,28 @@
+<c-vars oob="" />
+{% if user.is_authenticated %}
+    <div id="user-details"
+         {% if oob %}hx-swap-oob="outerHTML"{% endif %}
+         class="flex w-full max-w-80 items-center justify-between gap-3">
+        <div class="flex flex-col gap-1">
+            <div class="text-sm">Welcome Back,</div>
+            <div class="badge badge-soft font-mono badge-xl font-bold badge-primary">{{ user.username }}</div>
+        </div>
+        <button type="button"
+                class="btn btn-sm btn-ghost"
+                hx-get="{% url 'login:logout_modal' %}"
+                hx-swap="none">Log out</button>
+    </div>
+{% else %}
+    <div id="user-details"
+         {% if oob %}hx-swap-oob="outerHTML"{% endif %}
+         class="flex w-full max-w-80 items-center justify-between gap-3">
+        <div class="flex flex-col gap-1">
+            <div class="text-sm">Hello Stranger,</div>
+            <div class="badge badge-soft font-mono badge-xl font-bold badge-neutral">Anonymous</div>
+        </div>
+        <button type="button"
+                class="btn btn-sm btn-primary"
+                hx-get="{% url 'login:login_card' %}"
+                hx-swap="none">Sign in</button>
+    </div>
+{% endif %}

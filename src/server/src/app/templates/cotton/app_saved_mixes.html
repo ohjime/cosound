@@ -1,0 +1,41 @@
+<c-vars mixes />
+{{ mixes|json_script:"userMixes" }}
+<div {# djlint:off #}
+     x-data="{
+        mixes: JSON.parse(document.getElementById('userMixes').textContent),
+        loadMix(mix) {
+            const store = Alpine.store('soundLayers');
+            store._players.forEach(p => { try { p.pause(); } catch (e) {} });
+            store.tracksLoading = true;
+            store.loadedCount = 0;
+            store._players = [];
+            store.currentIndex = 0;
+            store.layers = mix.layers.map(l => ({
+                ...l,
+                gain: l.sound_gain != null ? l.sound_gain * 100 : (l.gain ?? 50),
+                isolated: false,
+                mute: false,
+                saved: l.saved ?? true,
+            }));
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+                document.querySelectorAll('audio').forEach(el => {
+                    const src = el.getAttribute('src');
+                    if (!store.layers.some(l => l.sound_file === src)) return;
+                    if (el.readyState >= 3) store.registerPlayer(el);
+                });
+            }));
+        }
+     }"
+{# djlint:on #}
+class="flex flex-col items-center gap-2 w-full max-w-80">
+<ul class="list w-full">
+    <li class=" pb-2 text-xs opacity-60 tracking-wide">Your Mixes</li>
+    <li id="saved-mixes-anchor" class="hidden"></li>
+    <template x-if="mixes.length === 0">
+        <li class="pb-3 text-xs opacity-50">No saved mixes yet.</li>
+    </template>
+    <template x-for="mix in mixes" :key="mix.id">
+        <c-app-saved-mix-tile />
+    </template>
+</ul>
+</div>

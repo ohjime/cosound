@@ -1,4 +1,6 @@
-<div id="vote_card_body"
-     class="card-body relative overflow-visible h-60 transition-all ease-in-out duration-700 delay-100 motion-duration-700/scale motion-duration-1000/translate motion-duration-300/opacity motion-ease-in-out-back/scale htmx-swapping:motion-scale-out-90 htmx-swapping:-motion-translate-y-out-[8%] htmx-swapping:motion-opacity-out-0 htmx-swapping:h-0">
+<c-vars hx-swap-oob="" />
+<div id="vote-card-body"
+     {% if hx_swap_oob %}hx-swap-oob="{{ hx_swap_oob }}"{% endif %}
+     class="w-full h-full htmx-added:opacity-0 motion-preset-blur-up motion-duration-200 htmx-swapping:motion-duration-100 htmx-swapping:motion-opacity-out-0">
     {{ slot }}
 </div>

@@ -1,8 +1,3 @@
-<div class="h-full w-full flex items-center justify-center flex-col motion-delay-200 motion-preset-expand">
-    <div class="h-fit w-full flex items-center justify-between flex-col">
-        <div class="motion-preset-blur-down-lg motion-duration-700 motion-delay-500">
-            <c-core-title />
-        </div>
-        {{ slot }}
-    </div>
-</div>
+<div x-data
+     x-init=" const hero = $el.querySelector('[data-core-content-hero]'); if (!hero) return; const update = () => { const h = hero.offsetHeight; hero.style.marginTop = `calc(50svh - ${h / 2}px)`; }; const ro = new ResizeObserver(update); ro.observe(hero); $nextTick(update); "
+     class="motion-delay-200 motion-preset-expand min-h-[100svh] w-full flex flex-col items-center">{{ slot }}</div>

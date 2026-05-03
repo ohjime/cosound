@@ -1,0 +1,10 @@
+<c-vars title="" show_close="true" />
+{% if show_close == "true" %}
+    <form method="dialog">
+        <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+    </form>
+{% endif %}
+{% if title %}
+    <h3 class="text-lg font-bold">{{ title }}</h3>
+{% endif %}
+{{ slot }}

@@ -1,42 +1,3 @@
-player:
-ifeq ($(run),clean)
-	@echo "Cleaning Player Build..."
-	@rm -rf build/player.app/
-	@rm -rf src/player/build/
-	@rm -rf src/player/src/build/
-	@rm -rf src/player/media/
-	@echo "Deleting Python Cache..."
-	@cd src/player \
-		&& find . -type d -name "__pycache__" -exec rm -rf {} +
-	@echo "Player cleaned!"
-else ifdef build
-	@echo "Building Player for $(build)..."
-	@cd src/player \
-		&& uv sync
-	@rm -rf src/player/media/
-	@if [ "$(build)" = "macos" ]; then \
-			cd src/player && uv run flet build macos --arch arm64 x64; \
-			rm -rf build/player.app; \
-			mkdir -p build; \
-			cp -R src/player/build/macos/player.app build/; \
-			rm -rf src/player/build; \
-			rm -rf src/player/src/build; \
-			fi
-	@echo "Build completed in ./build/"
-else ifdef run
-	@echo "Running command in Player Environment..."
-	@cd src/player \
-		&& $(run)
-else
-	@reset
-	@cd src/player \
-		&& uv sync \
-		&& uv pip install pip -q
-	@echo "Starting Player..."
-	@cd src/player \
-		&& uv run flet run src/main.py
-endif
-
 server:
 ifeq ($(run),clean)
 	@echo "Cleaning Server..."
@@ -54,6 +15,8 @@ ifeq ($(run),clean)
 	@echo "Deleting Vite Builds..."
 	@cd src/server/vite \
 		&& find . -type d -name "static" -exec rm -rf {} +	
+	@echo "Deleting Virtual Environments..."
+	@find . -type d -name ".venv" -exec rm -rf {} +
 else ifdef run
 	@echo "Running command in Server Environment..."
 	@cd src/server \
@@ -76,6 +39,9 @@ else
 	@cd src/server \
 		&& uv run src/main.py makemigrations \
 		&& uv run src/main.py migrate
+	@echo "Creating cache table..."
+	@cd src/server \
+		&& uv run src/main.py createcachetable
 	@echo "Running tests..."
 	@echo "All tests passed!"
 	@echo "Server is ready!"
@@ -91,11 +57,26 @@ superuser:
 	@cd src/server \
 		&& uv run src/main.py createsuperuser
 
-import-sounds:
-	@echo "Importing sounds from $(CURDIR)/build/sounds/Looping Stems..."
-	@cd src/server \
+player:
+ifeq ($(run),clean)
+	@echo "Cleaning Player Environment..."
+	@echo "Deleting cosound.json..."
+	@rm -f src/player/cosound.json
+	@echo "Deleting tmp folder..."
+	@rm -rf src/player/tmp
+	@echo "Deleting Virtual Environments..."
+	@rm -rf src/player/.venv
+	@echo "Deleting Python Cache..."
+	@cd src/player/src \
+		&& find . -type d -name "__pycache__" -exec rm -rf {} +
+else ifdef run
+	@echo "Running command in Player Environment..."
+	@cd src/player \
+		&& $(run)
+else
+	@reset
+	@cd src/player \
 		&& uv sync
-	@cd src/server \
-		&& uv run src/main.py import_sounds \
-			--sounds-dir "$(CURDIR)/build/sounds/Looping Stems" \
-			$(args)
+	@cd src/player \
+		&& uv run src/main.py
+endif

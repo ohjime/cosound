@@ -43,3 +43,5 @@ services:
         sync: false
       - key: PROD_HOSTS
         sync: false
+      - key: SERVER_REFRESH_INTERVAL
+        sync: false

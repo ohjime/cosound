@@ -80,14 +80,14 @@ def mixer_save_confirm(request):
     if not created:
         return close_modal(request)
 
-    return close_modal(
-        request,
-        template="app/home.html#mix_saved_oob",
-        context={
-            "mix_json": json.dumps(serialize_mix(sound_mix)),
-            "mix_dom_id": f"newMix-{sound_mix.pk}",
-        },
+    response = close_modal(request)
+    response["HX-Trigger"] = json.dumps(
+        {
+            "close-modal": True,
+            "mix-saved": {"mix": serialize_mix(sound_mix)},
+        }
     )
+    return response
 
 
 def mixer_keep_sound(request):

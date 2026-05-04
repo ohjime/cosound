@@ -1,7 +1,39 @@
+import random
+
 from django.conf import settings
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.utils.module_loading import import_string
+
+
+WELCOME_PHRASES = [
+    "They're Back",
+    "Welcome Back",
+    "Look Who's Here",
+    "Good To See You",
+    "Hey Stranger",
+    "Long Time No See",
+    "The Legend Returns",
+    "Right On Time",
+]
+
+STRANGER_PHRASES = [
+    "Hello Stranger",
+    "Who Goes There",
+    "New Face",
+    "Just Passing Through",
+    "First Time?",
+    "Welcome In",
+    "Step Right Up",
+]
+
+
+def generate_random_welcome():
+    return random.choice(WELCOME_PHRASES)
+
+
+def generate_random_stranger():
+    return random.choice(STRANGER_PHRASES)
 
 
 def add_card(target_deck, template, request, context=None):
@@ -127,6 +159,16 @@ def _get_sound_classifier():
     from core.classify import random_sound_classifier
 
     return random_sound_classifier
+
+
+def get_random_avatar_url(seed):
+    """Deterministic dicebear avatar URL keyed by user pk (or any seed)."""
+    colors = ["b6e3f4", "c0aede", "ffdfbf"]
+    color = colors[int(seed) % len(colors)]
+    return (
+        f"https://api.dicebear.com/9.x/micah/svg?seed={seed}"
+        f"&backgroundColor={color}&scale=110&translateY=-7"
+    )
 
 
 def generate_layers_string(layers: list[tuple[int, float]], with_gain=True) -> str:

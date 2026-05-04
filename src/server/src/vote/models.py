@@ -19,6 +19,7 @@ class Vote(db_models.Model):  # Database Class
         on_delete=db_models.CASCADE,
     )
     value = db_models.IntegerField()
+    section = db_models.CharField(max_length=255, blank=True, default="")
     created_at = db_models.DateTimeField(auto_now_add=True)
     updated_at = db_models.DateTimeField(auto_now=True)
 

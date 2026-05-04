@@ -1,6 +1,7 @@
 <c-vars mixes />
 {{ mixes|json_script:"userMixes" }}
 <div {# djlint:off #}
+     @mix-saved.window="mixes.unshift($event.detail.mix)"
      x-data="{
         mixes: JSON.parse(document.getElementById('userMixes').textContent),
         loadMix(mix) {

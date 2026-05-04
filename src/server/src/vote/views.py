@@ -6,7 +6,7 @@ from django.shortcuts import render
 from core.models import Cosound, Listener
 from core.utils import add_card
 from vote.models import Vote
-from vote.utils import build_vote_context, get_throttle_seconds_left
+from vote.utils import build_vote_context, get_throttle_seconds_left, serialize_recent_votes
 
 
 def voter_index(request):
@@ -35,6 +35,7 @@ def submit_vote(request):
         return response
 
     if not request.user.is_authenticated:
+        request.session["post_login_partial"] = "vote/index.html#post_login"
         response = add_card(
             target_deck="deck",
             template="login/index.html#card",
@@ -55,13 +56,20 @@ def submit_vote(request):
 
     layers = [(layer.sound_id, layer.sound_gain) for layer in player.playing.layers]
     cosound = Cosound.get_or_create_from_layers(layers)
+    value = int(choice)
     Vote.objects.create(
         voter=listener,
         player=player,
         cosound=cosound,
-        value=int(choice),
+        value=value,
+        section=context.get("section") or "",
     )
 
+    if value == 1 and layers:
+        listener.collection.add(*[sound_id for sound_id, _ in layers])
+
     response = HttpResponse("")
-    response["HX-Trigger"] = "vote-success"
+    response["HX-Trigger"] = json.dumps(
+        {"vote-success": {"voters": serialize_recent_votes(player)}}
+    )
     return response

@@ -21,7 +21,7 @@ def build_vote_context(request):
             Player.objects.select_related("manager").filter(token=token).first()
         )
 
-    layers = serialize_player_for_carousel(player) if player else []
+    layers = serialize_player_for_carousel(player, request.user, choice) if player else []
 
     throttle_seconds_left = 0
     if request.user.is_authenticated:
@@ -38,8 +38,9 @@ def build_vote_context(request):
     }
 
 
-def serialize_player_for_carousel(player):
+def serialize_player_for_carousel(player, user=None, choice=None):
     """Carousel layer list. Index 0 = player info; 1..N = sound layers."""
+    is_upvote = str(choice) == "1"
     items = [
         {
             "kind": "player",
@@ -54,6 +55,8 @@ def serialize_player_for_carousel(player):
             "flavor": "",
             "tags": "",
             "location": player.location or "Unknown",
+            "player_name": player.name,
+            "collection_state": 0,
         }
     ]
 
@@ -63,10 +66,26 @@ def serialize_player_for_carousel(player):
         s.pk: s
         for s in Sound.objects.filter(pk__in=sound_ids).prefetch_related("tags")
     }
+
+    saved_ids = set()
+    if user is not None and user.is_authenticated:
+        listener = Listener.objects.filter(user=user).first()
+        if listener is not None:
+            saved_ids = set(
+                listener.collection.filter(pk__in=sound_ids).values_list("pk", flat=True)
+            )
+
     for l in layer_objs:
         sound = sounds.get(l.sound_id)
         if sound is None:
             continue
+        in_collection = l.sound_id in saved_ids
+        if in_collection:
+            collection_state = 1
+        elif is_upvote:
+            collection_state = 2
+        else:
+            collection_state = 0
         items.append(
             {
                 "kind": "layer",
@@ -77,6 +96,8 @@ def serialize_player_for_carousel(player):
                 "tags": " / ".join(sound.tags.names()) or "Unknown",
                 "bio": "",
                 "location": "",
+                "player_name": player.name,
+                "collection_state": collection_state,
             }
         )
     return items
@@ -91,6 +112,34 @@ def get_throttle_seconds_left(listener, window: timedelta = VOTE_THROTTLE_WINDOW
     if now - last_vote_at >= window:
         return 0
     return math.ceil((last_vote_at + window - now).total_seconds())
+
+
+def serialize_recent_votes(player, limit=10):
+    """Most recent votes at this player, newest first."""
+    from vote.models import Vote
+
+    if player is None:
+        return []
+    votes = (
+        Vote.objects.filter(player=player)
+        .select_related("voter__user", "player")
+        .order_by("-created_at")[:limit]
+    )
+    now = timezone.now()
+    out = []
+    for v in votes:
+        out.append(
+            {
+                "id": v.id,
+                "voter_username": v.voter.user.username,
+                "voter_avatar_url": v.voter.user.avatar_url,
+                "player_name": v.player.name,
+                "value": v.value,
+                "section": v.section or "",
+                "seconds_ago": int((now - v.created_at).total_seconds()),
+            }
+        )
+    return out
 
 
 def _last_vote_at(listener):

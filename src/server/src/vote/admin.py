@@ -33,8 +33,8 @@ class PlayerAdmin(CorePlayerAdmin):
     )
     fieldsets = list(CorePlayerAdmin.fieldsets) + [
         (
-            "NFC",
-            {"fields": ["vote_urls"]},
+            "Player Utilities",
+            {"fields": ["token_display", "vote_urls"]},
         ),
     ]
 

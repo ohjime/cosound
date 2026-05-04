@@ -14,6 +14,7 @@ from core.utils import (
     _get_sound_dimension,
     _get_sound_classifier,
     generate_layers_string,
+    get_random_avatar_url,
 )
 from core.predict import Prediction
 
@@ -136,6 +137,16 @@ class User(AbstractUser):
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["username"]
+
+    @property
+    def avatar_url(self):
+        if self.avatar:
+            return self.avatar.url
+        return get_random_avatar_url(self.pk)
+
+    @property
+    def is_anonymous_account(self):
+        return bool(self.email) and self.email.endswith("@anon.cosound.ca")
 
 
 class Listener(DjangoDB.Model):

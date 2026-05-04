@@ -216,6 +216,7 @@
         </script>
     </head>
     <body class="flex h-dvh w-full flex-col overscroll-y-none overflow-x-hidden font-sans">
+        {% csrf_token %}
         <div id="page-loader">
             <div class="base-loader" role="status" aria-label="Loading"></div>
         </div>

@@ -1,28 +1,49 @@
 <c-vars oob="" />
+{% load core_extras %}
 {% if user.is_authenticated %}
     <div id="user-details"
          {% if oob %}hx-swap-oob="outerHTML"{% endif %}
          class="flex w-full max-w-80 items-center justify-between gap-3">
         <div class="flex flex-col gap-1">
-            <div class="text-sm">Welcome Back,</div>
-            <div class="badge badge-soft font-mono badge-xl font-bold badge-primary">{{ user.username }}</div>
+            <div class="text-sm">{% welcome_phrase %},</div>
+            <div class="badge badge-soft font-mono badge-lg font-bold badge-primary">{{ user.username }}</div>
         </div>
-        <button type="button"
-                class="btn btn-sm btn-ghost"
-                hx-get="{% url 'login:logout_modal' %}"
-                hx-swap="none">Log out</button>
+        <div class="dropdown dropdown-end">
+            <div tabindex="0"
+                 role="button"
+                 class="btn btn-ghost btn-xl btn-square avatar {% if indicator or user.is_anonymous_account %}indicator ring-2{% endif %}">
+                {{ indicator }}
+                {% if user.is_anonymous_account %}
+                    <span class="indicator-item indicator-bottom indicator-center badge badge-xs bg-neutral rounded-sm text-neutral-content border-0 font-bold tracking-widest">GUEST</span>
+                {% endif %}
+                <div class="w-full rounded-lg">
+                    <img src="{{ user.avatar_url }}" alt="{{ user.username }}" />
+                </div>
+            </div>
+            <ul tabindex="0"
+                class="menu menu-sm dropdown-content text-base-300 bg-base-content/95 rounded-md z-10 mt-3 w-32 p-2 shadow">
+                {% if slot %}
+                    {{ slot }}
+                {% else %}
+                    <li>
+                        <button type="button" hx-get="{% url 'login:logout_modal' %}" hx-swap="none">Log out</button>
+                    </li>
+                {% endif %}
+            </ul>
+        </div>
     </div>
 {% else %}
     <div id="user-details"
          {% if oob %}hx-swap-oob="outerHTML"{% endif %}
          class="flex w-full max-w-80 items-center justify-between gap-3">
         <div class="flex flex-col gap-1">
-            <div class="text-sm">Hello Stranger,</div>
+            <div class="text-sm">{% stranger_phrase %},</div>
             <div class="badge badge-soft font-mono badge-xl font-bold badge-neutral">Anonymous</div>
         </div>
         <button type="button"
                 class="btn btn-sm btn-primary"
                 hx-get="{% url 'login:login_card' %}"
+                hx-trigger="click[!document.getElementById('login-card')]"
                 hx-swap="none">Sign in</button>
     </div>
 {% endif %}

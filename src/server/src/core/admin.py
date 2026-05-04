@@ -185,12 +185,11 @@ class PlayerAdmin(ModelAdmin):
                     "bio",
                     "manager",
                     "location",
-                    "token_display",
                 ],
             },
         ),
         (
-            "Sound Library",
+            "Player Sound",
             {
                 "fields": [
                     "sounds",
@@ -199,6 +198,11 @@ class PlayerAdmin(ModelAdmin):
             },
         ),
     ]
+
+    def formfield_for_manytomany(self, db_field, request, **kwargs):
+        if db_field.name == "sounds":
+            kwargs["label"] = "Sound library"
+        return super().formfield_for_manytomany(db_field, request, **kwargs)
 
     def get_form(self, request, obj=None, change=False, **kwargs):
         self._current_request = request
@@ -234,20 +238,37 @@ class PlayerAdmin(ModelAdmin):
                 '<div class="text-sm text-font-subtle-light dark:text-font-subtle-dark">—</div>'
             )
         token = obj.token
+        local_cmd = f"make player token={token}"
+        remote_cmd = f"make player run=remote token={token}"
         refresh_url = reverse("admin:core_player_regenerate_token", args=[obj.pk])
+        btn_style = (
+            "display:inline-block;padding:8px 16px;margin-bottom:8px;"
+            "border-radius:6px;color:#fff;font-weight:600;border:none;"
+            "cursor:pointer;align-self:flex-start;"
+        )
         return mark_safe(f"""
             <div class="flex flex-col gap-2 w-full">
               <input type="text" readonly value="{token}"
                 class="font-mono text-xs bg-base-50 dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-default px-2 py-1 w-full min-w-0 text-ellipsis overflow-hidden whitespace-nowrap"
                 onclick="this.select()" />
-              <div>
+              <div class="flex flex-col w-full">
                 <button type="button"
-                  style="display:inline-block;padding:8px 16px;margin-right:8px;border-radius:6px;color:#fff;font-weight:600;border:none;cursor:pointer;background:#2563eb;"
-                  onclick="navigator.clipboard.writeText('{token}').then(() => {{ this.innerText='✓ Copied'; setTimeout(() => this.innerText='📋 Copy Token', 1500); }})">
+                  style="{btn_style}background:#2563eb;"
+                  onclick="navigator.clipboard.writeText('{token}').then(() => {{ const t=this.innerText; this.innerText='✓ Copied'; setTimeout(() => this.innerText=t, 1500); }})">
                   📋 Copy Token
                 </button>
                 <button type="button"
-                  style="display:inline-block;padding:8px 16px;margin-right:8px;border-radius:6px;color:#fff;font-weight:600;border:none;cursor:pointer;background:#dc2626;"
+                  style="{btn_style}background:#0f766e;"
+                  onclick="navigator.clipboard.writeText('{local_cmd}').then(() => {{ const t=this.innerText; this.innerText='✓ Copied'; setTimeout(() => this.innerText=t, 1500); }})">
+                  📋 Copy Local Player Command
+                </button>
+                <button type="button"
+                  style="{btn_style}background:#7c3aed;"
+                  onclick="navigator.clipboard.writeText('{remote_cmd}').then(() => {{ const t=this.innerText; this.innerText='✓ Copied'; setTimeout(() => this.innerText=t, 1500); }})">
+                  📋 Copy Remote Player Command
+                </button>
+                <button type="button"
+                  style="{btn_style}background:#dc2626;"
                   onclick="
                     if (!confirm('Regenerate token? The old token will stop working.')) return;
                     const csrftoken = document.cookie.split('; ').find(r => r.startsWith('csrftoken='))?.split('=')[1];
@@ -265,7 +286,7 @@ class PlayerAdmin(ModelAdmin):
             </div>
             """)
 
-    @admin.display(description="Now playing")
+    @admin.display(description="Last Updated Cosound")
     def playing_display(self, obj):
         playing = obj.playing
         layers = []

@@ -1,24 +1,7 @@
-import random
 from allauth.account.adapter import get_adapter
-from django.shortcuts import render
 from random_username.generate import generate_username
 
 ANON_EMAIL_DOMAIN = "anon.cosound.ca"
-
-WELCOME_PHRASES = [
-    "They're Back",
-    "Welcome Back",
-    "Look Who's Here",
-    "Good To See You",
-    "Hey Stranger",
-    "Long Time No See",
-    "The Legend Returns",
-    "Right On Time",
-]
-
-
-def generate_random_welcome():
-    return random.choice(WELCOME_PHRASES)
 
 
 def send_login_code(request, email):
@@ -60,11 +43,3 @@ def is_anonymous_user(user):
     return False
 
 
-def get_random_avatar_url(seed):
-    """Deterministic dicebear avatar URL keyed by user pk (or any seed)."""
-    colors = ["b6e3f4", "c0aede", "ffdfbf"]
-    color = colors[int(seed) % len(colors)]
-    return (
-        f"https://api.dicebear.com/9.x/micah/svg?seed={seed}"
-        f"&backgroundColor={color}&scale=110&translateY=-7"
-    )

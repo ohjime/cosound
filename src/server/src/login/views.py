@@ -19,6 +19,11 @@ from login.utils import (
 def login_card(request):
 
     if request.htmx:
+        referer = request.headers.get("HX-Current-URL", "")
+        if "/vote" in referer:
+            request.session["post_login_partial"] = "vote/index.html#post_login"
+        else:
+            request.session.pop("post_login_partial", None)
         return add_card(
             target_deck="deck",
             template="login/index.html#card",
@@ -83,9 +88,10 @@ def verify_code(request):
                     request, user, backend="django.contrib.auth.backends.ModelBackend"
                 )
                 clear_login_state(request)
-                response = pop_card(
-                    request, template="login/index.html#post_login"
+                post_login_partial = request.session.pop(
+                    "post_login_partial", "login/index.html#post_login"
                 )
+                response = pop_card(request, template=post_login_partial)
                 response["HX-Trigger"] = json.dumps(
                     {"card:remove": True, "auth-success": True}
                 )
@@ -131,7 +137,10 @@ def login_anonymously(request):
             },
         )
 
-    response = pop_card(request, template="login/index.html#post_login")
+    post_login_partial = request.session.pop(
+        "post_login_partial", "login/index.html#post_login"
+    )
+    response = pop_card(request, template=post_login_partial)
     response["HX-Trigger"] = json.dumps(
         {"card:remove": True, "auth-success": True}
     )

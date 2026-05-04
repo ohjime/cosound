@@ -215,12 +215,12 @@
             });
         </script>
     </head>
-    <body class="flex h-dvh w-full flex-col overscroll-y-none overflow-x-hidden font-sans">
+    <body class="w-full font-sans">
         {% csrf_token %}
         <div id="page-loader">
             <div class="base-loader" role="status" aria-label="Loading"></div>
         </div>
-        <section class="bg-base flex-1 px-6 overflow-y-auto min-h-0">
+        <section class="bg-base px-6 min-h-dvh w-full flex flex-col">
             <style>
                 .content-loader {
                     width: 22px;
@@ -271,16 +271,18 @@
             // `auth-required` on the originating element. We capture that element
             // and re-click it once `auth-success` fires after a successful login,
             // so the user resumes the action they were attempting.
-            (function () {
+            (function() {
                 let pendingEl = null;
-                document.body.addEventListener('auth-required', function (e) {
+                document.body.addEventListener('auth-required', function(e) {
                     pendingEl = e.target;
                 });
-                document.body.addEventListener('auth-success', function () {
+                document.body.addEventListener('auth-success', function() {
                     const el = pendingEl;
                     pendingEl = null;
                     if (el && document.contains(el)) {
-                        setTimeout(function () { el.click(); }, 50);
+                        setTimeout(function() {
+                            el.click();
+                        }, 50);
                     }
                 });
             })();

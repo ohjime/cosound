@@ -248,6 +248,9 @@ class PlayerAdmin(ModelAdmin):
         )
         return mark_safe(f"""
             <div class="flex flex-col gap-2 w-full">
+                <div class="py-6 text-md text-font-light dark:text-font-dark">
+                    This Token is used to Identify this Player during API calls.
+                </div>
               <input type="text" readonly value="{token}"
                 class="font-mono text-xs bg-base-50 dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-default px-2 py-1 w-full min-w-0 text-ellipsis overflow-hidden whitespace-nowrap"
                 onclick="this.select()" />
@@ -257,6 +260,13 @@ class PlayerAdmin(ModelAdmin):
                   onclick="navigator.clipboard.writeText('{token}').then(() => {{ const t=this.innerText; this.innerText='✓ Copied'; setTimeout(() => this.innerText=t, 1500); }})">
                   📋 Copy Token
                 </button>
+                <div class="py-6 text-md text-font-light dark:text-font-dark">
+                    The buttons below copy premade commands to run this player using it's token. To run, Download the main repo from
+                    <a href="https://github.com/ohjime/cosound" target="_blank" rel="noopener" class="underline">https://github.com/ohjime/cosound</a>,
+                    open the folder in a terminal, and paste one of the commands copied below.
+                    Use the Remote command if the player is running remotely (production),
+                    or the Local command if the player is running locally (development).
+                </div>
                 <button type="button"
                   style="{btn_style}background:#0f766e;"
                   onclick="navigator.clipboard.writeText('{local_cmd}').then(() => {{ const t=this.innerText; this.innerText='✓ Copied'; setTimeout(() => this.innerText=t, 1500); }})">
@@ -267,6 +277,7 @@ class PlayerAdmin(ModelAdmin):
                   onclick="navigator.clipboard.writeText('{remote_cmd}').then(() => {{ const t=this.innerText; this.innerText='✓ Copied'; setTimeout(() => this.innerText=t, 1500); }})">
                   📋 Copy Remote Player Command
                 </button>
+                
                 <button type="button"
                   style="{btn_style}background:#dc2626;"
                   onclick="

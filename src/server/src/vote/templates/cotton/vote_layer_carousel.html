@@ -8,8 +8,8 @@
         playerName: '',
         collectionState: 0,
         get collectionLabel() {
-            if (this.collectionState === 1) return 'Already Collected';
-            if (this.collectionState === 2) return 'New Sound!';
+            if (this.collectionState === 1) return 'Collected';
+            if (this.collectionState === 2) return 'New';
             return '';
         },
         updateActive() {
@@ -80,18 +80,24 @@
     </div>
     <div class="pointer-events-none absolute inset-0 z-20 p-3 pt-8 font-serif italic flex flex-col justify-between text-white font-thin text-shadow-lg">
         <div class="flex items-start justify-between gap-2">
-            <div class="text-left text-lg leading-tight pr-12" x-text="title"></div>
-            <span x-show="kind === 'layer' && gain !== null"
-                  x-cloak
-                  class="not-italic font-mono text-[10px] tracking-widest leading-none mt-1 px-1.5 py-0.5 rounded bg-white/15 backdrop-blur-sm text-white/90"
-                  x-text="'Vol:' + gain"></span>
-        </div>
-        <div class="flex items-end justify-between gap-2">
-            <div x-show="kind === 'layer' && collectionLabel" x-cloak>
-                <span class="badge badge-outline badge-xs font-sans not-italic text-white"
-                      :class="collectionState === 1 ? 'bg-white/20' : 'bg-success/55 font-medium'"
-                      x-text="collectionLabel"></span>
+            <div class="flex flex-col items-start gap-1 pr-12">
+                <div class="text-left text-lg leading-tight" x-text="title"></div>
+                <div x-show="kind === 'layer' && collectionLabel" x-cloak>
+                    <span class="badge badge-outline badge-xs font-sans not-italic font-normal text-white"
+                          :class="collectionState === 1 ? 'bg-white/30' : 'bg-success/75'"
+                          x-text="collectionLabel"></span>
+                </div>
+                <div x-show="kind === 'player'" x-cloak>
+                    <span class="badge badge-neutral badge-sm font-sans not-italic  font-normal text-shadow-none"
+                          x-text="'You are Here'"></span>
+                </div>
             </div>
+        </div>
+        <span x-show="kind === 'layer' && gain !== null"
+              x-cloak
+              class="absolute top-9 right-3 not-italic font-mono text-[10px] tracking-widest leading-none px-1.5 py-0.5 rounded bg-white/15 backdrop-blur-sm text-white/90"
+              x-text="'VOL ' + gain"></span>
+        <div class="flex items-end justify-between gap-2">
             <div class="text-right pb-1 pr-1 text-sm opacity-90 ml-auto" x-text="artist"></div>
         </div>
     </div>

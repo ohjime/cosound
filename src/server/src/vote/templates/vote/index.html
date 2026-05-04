@@ -19,11 +19,11 @@
                 }" @vote-success.window="voted = true" @auth-success.window="voted = true" class="h-fit w-full flex flex-col items-center transition-all duration-300 ease-out opacity-100 htmx-added:opacity-0 -mt-2">
                 <div x-cloak class="grid -mt-18 place-items-center w-full">
                     <div :class="!voted ? 'opacity-100' : 'opacity-0 pointer-events-none'"
-                         class="[grid-area:1/1] transition-opacity duration-500 ease-in-out flex justify-center w-full max-w-70 -mb-3">
+                         class="[grid-area:1/1] transition-opacity duration-700 ease-in-out flex justify-center w-full max-w-70 -mb-3">
                         <c-core-subheader />
                     </div>
                     <div :class="voted ? 'opacity-100' : 'opacity-0 pointer-events-none'"
-                         class="[grid-area:1/1] transition-opacity duration-500 ease-in-out w-full max-w-72 flex flex-col gap-1.5 py-6 pt-12 items-center justify-center">
+                         class="[grid-area:1/1] transition-opacity duration-700 ease-in-out w-full max-w-72 flex flex-col gap-1.5 py-6 pt-12 items-center justify-center">
                         <c-vote-user-details />
                     </div>
                 </div>
@@ -43,10 +43,11 @@
             <div x-cloak
                  x-data="{ voted: false }"
                  @vote-success.window="voted = true"
-                 x-show="voted"
-                 x-transition.opacity.duration.500ms
-                 class="flex flex-col items-center gap-3 w-dvw py-6">
-                <c-vote-recent-voters />
+                 class="grid w-full transition-[grid-template-rows,opacity] duration-700 ease-out"
+                 :class="voted ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'">
+                <div class="overflow-hidden flex flex-col items-center gap-3 w-full pt-6 pb-2">
+                    <c-vote-recent-voters />
+                </div>
             </div>
         {% endif %}
     </c-core-content>

@@ -27,6 +27,7 @@
     {# djlint:off #}
     <button class="btn btn-sm py-2 btn-soft join-item"
             hx-post="{% url 'mixer:save' %}"
+            hx-trigger="click[!document.getElementById('login-card')]"
             hx-swap="none"
             hx-vals='js:{
                 layers: JSON.stringify(Alpine.store("soundLayers").layers.map(l => ({ sound_id: l.sound_id, sound_gain: Alpine.store("soundLayers").isSilenced(l) ? 0 : l.gain / 100 })))

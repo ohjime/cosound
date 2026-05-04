@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import argparse
 from app.player import SoundDevicePlayer
 from app.client import (
     get_sound,
@@ -49,10 +50,10 @@ def setup(api_key: str):
     return manifest
 
 
-def main():
+def main(token: str | None = None):
     print_ascii_banner()
     print_header()
-    api_key = get_or_read_api_key()
+    api_key = token or os.environ.get("COSOUND_API_KEY") or get_or_read_api_key()
     manifest = setup(api_key)
     player = SoundDevicePlayer(channels=8)
     while True:
@@ -68,4 +69,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--token", default=None, help="Player API key")
+    args = parser.parse_args()
+    main(token=args.token)

@@ -50,12 +50,12 @@ def setup(api_key: str):
     return manifest
 
 
-def main(token: str | None = None):
+def main(token: str | None = None, master_gain: float = 0.7):
     print_ascii_banner()
     print_header()
     api_key = token or os.environ.get("COSOUND_API_KEY") or get_or_read_api_key()
     manifest = setup(api_key)
-    player = SoundDevicePlayer(channels=8)
+    player = SoundDevicePlayer(channels=8, master_gain=master_gain)
     while True:
         cosound = get_latest_cosound(api_key)
         print_cosound_state(cosound)
@@ -71,5 +71,11 @@ def main(token: str | None = None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--token", default=None, help="Player API key")
+    parser.add_argument(
+        "--master-gain",
+        type=float,
+        default=float(os.environ.get("COSOUND_MASTER_GAIN", "0.7")),
+        help="Master output gain, 0.0 to 1.0 (default 0.7)",
+    )
     args = parser.parse_args()
-    main(token=args.token)
+    main(token=args.token, master_gain=args.master_gain)

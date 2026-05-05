@@ -238,8 +238,6 @@ class PlayerAdmin(ModelAdmin):
                 '<div class="text-sm text-font-subtle-light dark:text-font-subtle-dark">—</div>'
             )
         token = obj.token
-        local_cmd = f"make player token={token}"
-        remote_cmd = f"make player run=remote token={token}"
         refresh_url = reverse("admin:core_player_regenerate_token", args=[obj.pk])
         btn_style = (
             "display:inline-block;padding:8px 16px;margin-bottom:8px;"
@@ -266,15 +264,24 @@ class PlayerAdmin(ModelAdmin):
                     open the folder in a terminal, and paste one of the commands copied below.
                     Use the Remote command if the player is running remotely (production),
                     or the Local command if the player is running locally (development).
+                    Use the <strong>Master</strong> slider to set the player's master volume (0–100). The copied
+                    command will start the player at that level; the value is converted to a 0.0–1.0 gain.
+                </div>
+                <div class="flex items-center gap-3 mb-2">
+                  <label for="master-slider-{obj.pk}" class="text-sm font-medium text-font-default-light dark:text-font-default-dark">Master</label>
+                  <input id="master-slider-{obj.pk}" type="range" min="0" max="100" value="70"
+                    class="flex-1"
+                    oninput="document.getElementById('master-value-{obj.pk}').innerText = this.value;" />
+                  <span id="master-value-{obj.pk}" class="w-10 text-right tabular-nums text-sm text-font-default-light dark:text-font-default-dark">70</span>
                 </div>
                 <button type="button"
                   style="{btn_style}background:#0f766e;"
-                  onclick="navigator.clipboard.writeText('{local_cmd}').then(() => {{ const t=this.innerText; this.innerText='✓ Copied'; setTimeout(() => this.innerText=t, 1500); }})">
+                  onclick="(() => {{ const v = (document.getElementById('master-slider-{obj.pk}').value / 100).toFixed(2); const cmd = `make player token={token} master_gain=${{v}}`; navigator.clipboard.writeText(cmd).then(() => {{ const t=this.innerText; this.innerText='✓ Copied'; setTimeout(() => this.innerText=t, 1500); }}); }})()">
                   📋 Copy Local Player Command
                 </button>
                 <button type="button"
                   style="{btn_style}background:#7c3aed;"
-                  onclick="navigator.clipboard.writeText('{remote_cmd}').then(() => {{ const t=this.innerText; this.innerText='✓ Copied'; setTimeout(() => this.innerText=t, 1500); }})">
+                  onclick="(() => {{ const v = (document.getElementById('master-slider-{obj.pk}').value / 100).toFixed(2); const cmd = `make player run=remote token={token} master_gain=${{v}}`; navigator.clipboard.writeText(cmd).then(() => {{ const t=this.innerText; this.innerText='✓ Copied'; setTimeout(() => this.innerText=t, 1500); }}); }})()">
                   📋 Copy Remote Player Command
                 </button>
                 

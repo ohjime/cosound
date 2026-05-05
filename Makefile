@@ -75,7 +75,7 @@ else ifeq ($(run),remote)
 	@cd src/player \
 		&& uv sync
 	@cd src/player \
-		&& COSOUND_API_URL=https://cosound.ca/api uv run src/main.py $(if $(token),--token=$(token))
+		&& COSOUND_API_URL=https://cosound.ca/api uv run src/main.py $(if $(token),--token=$(token)) $(if $(master_gain),--master-gain=$(master_gain))
 else ifdef run
 	@echo "Running command in Player Environment..."
 	@cd src/player \
@@ -85,5 +85,5 @@ else
 	@cd src/player \
 		&& uv sync
 	@cd src/player \
-		&& uv run src/main.py $(if $(token),--token=$(token))
+		&& uv run src/main.py $(if $(token),--token=$(token)) $(if $(master_gain),--master-gain=$(master_gain))
 endif

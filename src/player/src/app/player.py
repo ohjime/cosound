@@ -17,8 +17,9 @@ class CommunalPlayer(ABC):
 
 
 class SoundDevicePlayer(CommunalPlayer):
-    def __init__(self, channels=8, fs=44100, fade_time_ms=8000, blocksize=1024):
+    def __init__(self, channels=8, fs=44100, fade_time_ms=8000, blocksize=1024, master_gain=0.7):
         self.fs = fs
+        self.master_gain = float(master_gain)
         requested_channels = int(channels) if channels else 0
         if requested_channels <= 0:
             requested_channels = 1
@@ -54,6 +55,10 @@ class SoundDevicePlayer(CommunalPlayer):
             dtype="float32",
         )
         self.stream.start()
+
+    def set_master_gain(self, gain):
+        with self.lock:
+            self.master_gain = max(0.0, min(1.0, float(gain)))
 
     def queue_sound(self, sound_path, gain):
         """Prepares a sound to be transitioned into the mix."""
@@ -149,6 +154,9 @@ class SoundDevicePlayer(CommunalPlayer):
 
                 if track["curr_gain"] <= 0 and track["target_gain"] == 0:
                     del self.active_tracks[path]
+
+        np.multiply(outdata, self.master_gain, out=outdata)
+        np.clip(outdata, -1.0, 1.0, out=outdata)
 
     def _default_speaker_groups(self, channels):
         if channels >= 8:

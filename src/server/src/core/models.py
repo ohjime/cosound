@@ -16,7 +16,6 @@ from core.utils import (
     generate_layers_string,
     get_random_avatar_url,
 )
-from core.predict import Prediction
 
 
 class Sound(DjangoDB.Model):
@@ -119,11 +118,48 @@ class Cosound(DjangoDB.Model):
             return cls.objects.none()
         return cls.objects.filter(hashset=cls.compute_hashset(ids))
 
+    def layering(self) -> List["SoundLayer"]:
+        return list(self.soundlayer_set.select_related("sound").all())
+
     def __str__(self):
         layers = []
         for layer in self.soundlayer_set.all():  # type: ignore
             layers.append(tuple([layer.sound.pk, layer.gain]))
         return generate_layers_string(layers)
+
+
+class PredictionLayer(BaseModel):
+    sound_id: int
+    sound_gain: float = Field(default=1.0, ge=0.0, le=1.0)
+
+
+class Prediction(BaseModel):
+
+    layers: List[PredictionLayer] = Field(default_factory=list)
+
+    @classmethod
+    def new(cls) -> "Prediction":
+        return cls()
+
+    def add_layer(self, sound_id: int, gain: float = 1.0) -> None:
+        self.layers.append(PredictionLayer(sound_id=sound_id, sound_gain=gain))
+
+    def __bool__(self) -> bool:
+        return bool(self.layers)
+
+    def summary(self):
+        from core.models import Sound
+
+        response = "Prediction Summary:\n"
+        for layer in self.layers:
+            try:
+                sound = Sound.objects.get(pk=layer.sound_id)
+                response += (
+                    f"- {sound.title} by {sound.artist} at gain {layer.sound_gain}\n"
+                )
+            except Sound.DoesNotExist:
+                response += f"- Sound ID {layer.sound_id} not found at gain {layer.sound_gain}\n"
+        return response
 
 
 class User(AbstractUser):
@@ -157,6 +193,9 @@ class Listener(DjangoDB.Model):
 
     def __str__(self):
         return str(self.user)
+
+    def collected(self) -> list[Sound]:
+        return list(self.collection.all())
 
 
 class Manager(DjangoDB.Model):
@@ -192,3 +231,14 @@ class Player(DjangoDB.Model):
         if not self.token:
             self.token = secrets.token_hex(32)
         super().save(*args, **kwargs)
+
+    def library(self) -> List[Sound]:
+        return list(self.sounds.all())
+
+    def update(self, prediction: Prediction) -> None:
+        self.playing = prediction
+        self.save()
+
+    def announce(self, prediction: Prediction) -> None:
+        print(f"New Prediction for \033[1m{self.name}\033[22m:")
+        print(prediction.summary())

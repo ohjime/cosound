@@ -13,7 +13,9 @@ REFRESH_INTERVAL = 120  # In Seconds
 CROSSFADE_INTERVAL = 10  # In Seconds
 TMP_STREAM_DIR = "/tmp/cosound"
 
-API_BASE_URL = os.environ.get("COSOUND_API_URL", "http://localhost:8000/api").rstrip("/")
+API_BASE_URL = (
+    os.environ.get("COSOUND_API_URL", "http://localhost:8000/api").strip().rstrip("/")
+)
 
 
 def _api_get(path: str, api_key: str) -> dict:

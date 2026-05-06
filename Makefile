@@ -1,3 +1,11 @@
+ifeq ($(OS),Windows_NT)
+CLEAR := cls
+REMOTE_ENV := set COSOUND_API_URL=https://cosound.ca/api &&
+else
+CLEAR := reset
+REMOTE_ENV := COSOUND_API_URL=https://cosound.ca/api
+endif
+
 server:
 ifeq ($(run),clean)
 	@echo "Cleaning Server..."
@@ -70,18 +78,18 @@ ifeq ($(run),clean)
 	@cd src/player/src \
 		&& find . -type d -name "__pycache__" -exec rm -rf {} +
 else ifeq ($(run),remote)
-	@reset
+	@$(CLEAR)
 	@echo "Starting Player against remote API (https://cosound.ca/api)..."
 	@cd src/player \
 		&& uv sync
 	@cd src/player \
-		&& COSOUND_API_URL=https://cosound.ca/api uv run src/main.py $(if $(token),--token=$(token)) $(if $(master_gain),--master-gain=$(master_gain))
+		&& $(REMOTE_ENV) uv run src/main.py $(if $(token),--token=$(token)) $(if $(master_gain),--master-gain=$(master_gain))
 else ifdef run
 	@echo "Running command in Player Environment..."
 	@cd src/player \
 		&& $(run)
 else
-	@reset
+	@$(CLEAR)
 	@cd src/player \
 		&& uv sync
 	@cd src/player \

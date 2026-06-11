@@ -24,6 +24,15 @@ REFRESH_INTERVAL = 30  # In Seconds
 global_cosound = {}
 
 
+def list_output_devices() -> None:
+    devices = SoundDevicePlayer.available_output_devices()
+    print("Available output devices:")
+    for index, device in devices:
+        max_output = int(device.get("max_output_channels", 0))
+        name = device.get("name", "Unknown")
+        print(f"  [{index}] {name} (max_output_channels={max_output})")
+
+
 def setup(api_key: str):
 
     # Get Latest Manifest from Server (DUMMY)
@@ -50,12 +59,21 @@ def setup(api_key: str):
     return manifest
 
 
-def main(token: str | None = None, master_gain: float = 0.7):
+def main(
+    token: str | None = None,
+    master_gain: float = 0.7,
+    channels: int = 0,
+    output_device: str | None = None,
+):
     print_ascii_banner()
     print_header()
     api_key = token or os.environ.get("COSOUND_API_KEY") or get_or_read_api_key()
     manifest = setup(api_key)
-    player = SoundDevicePlayer(channels=8, master_gain=master_gain)
+    player = SoundDevicePlayer(
+        channels=channels,
+        master_gain=master_gain,
+        device=output_device,
+    )
     while True:
         cosound = get_latest_cosound(api_key)
         print_cosound_state(cosound)
@@ -77,5 +95,29 @@ if __name__ == "__main__":
         default=float(os.environ.get("COSOUND_MASTER_GAIN", "0.7")),
         help="Master output gain, 0.0 to 1.0 (default 0.7)",
     )
+    parser.add_argument(
+        "--channels",
+        type=int,
+        default=int(os.environ.get("COSOUND_OUTPUT_CHANNELS", "0")),
+        help="Output channels. 0 means use the device maximum.",
+    )
+    parser.add_argument(
+        "--output-device",
+        default=os.environ.get("COSOUND_OUTPUT_DEVICE"),
+        help="Output device index or name substring. Default uses system default output.",
+    )
+    parser.add_argument(
+        "--list-output-devices",
+        action="store_true",
+        help="Print output devices and exit.",
+    )
     args = parser.parse_args()
-    main(token=args.token, master_gain=args.master_gain)
+    if args.list_output_devices:
+        list_output_devices()
+        raise SystemExit(0)
+    main(
+        token=args.token,
+        master_gain=args.master_gain,
+        channels=args.channels,
+        output_device=args.output_device,
+    )

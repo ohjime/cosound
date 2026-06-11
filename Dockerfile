@@ -27,6 +27,7 @@ RUN uv sync --frozen --no-dev
 # Application code + built frontend assets
 COPY src/server/src ./src
 COPY src/server/procfile.prod ./procfile.prod
+COPY docker/backup_to_s3.py ./backup_to_s3.py
 COPY --from=vite /build/vite/static ./vite/static
 
 # Bake the whitenoise static manifest into the image (no DB access needed)

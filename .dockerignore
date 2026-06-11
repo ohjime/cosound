@@ -1,0 +1,24 @@
+.git
+.vscode
+.idea
+docs
+test
+env
+bin
+Makefile
+render.yaml
+
+# Only the server is deployed; player runs on physical audio hardware
+src/player
+src/learn
+
+# Build outputs and local state — regenerated inside the image
+src/server/vite/node_modules
+src/server/vite/static
+src/server/staticfiles
+src/server/db.sqlite3
+
+**/__pycache__
+**/*.pyc
+**/.venv
+**/.DS_Store

@@ -33,7 +33,13 @@ load_dotenv(BASE_DIR.parent.parent / "env" / ".env")
 SECRET_KEY = os.environ.get("SECRET_KEY", default="django-insecure-secret-key")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = "RENDER" not in os.environ
+# An explicit DEBUG env var wins (used by the Docker/DigitalOcean deployment);
+# otherwise fall back to the legacy Render heuristic.
+_debug_env = os.environ.get("DEBUG")
+if _debug_env is not None:
+    DEBUG = _debug_env.strip().lower() in ("1", "true", "yes")
+else:
+    DEBUG = "RENDER" not in os.environ
 
 ALLOWED_HOSTS = []
 
@@ -55,6 +61,9 @@ else:
     prod_hosts = os.environ.get("PROD_HOSTS", "")
     if prod_hosts:
         ALLOWED_HOSTS.extend(prod_hosts.split(","))
+    # Loopback so in-container health checks can reach gunicorn directly;
+    # the reverse proxy only forwards the real domains.
+    ALLOWED_HOSTS.extend(["127.0.0.1", "localhost"])
 
 # Render provides this environment variable automatically
 RENDER_EXTERNAL_HOSTNAME = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
@@ -77,6 +86,11 @@ if _prod_hosts_env:
         if "://" not in entry:
             entry = f"https://{entry}"
         CSRF_TRUSTED_ORIGINS.append(entry)
+
+# TLS terminates at the reverse proxy (Caddy on the droplet); trust its
+# forwarded-proto header so Django treats those requests as secure.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 LOGGING = {
     "version": 1,

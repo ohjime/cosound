@@ -1,0 +1,7 @@
+# HTTPS termination for the droplet. Caddy obtains and renews
+# Let's Encrypt certificates automatically once DNS points here.
+
+cosound.ca, www.cosound.ca {
+	encode zstd gzip
+	reverse_proxy app:8000
+}

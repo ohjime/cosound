@@ -52,4 +52,6 @@ Chathistory.txt
 src/player/cosound.json
 src/server/vite/static/
 src/player/assets/
-src/server/vite/src/server/staticfiles/
+src/server/vite/
+src/server/staticfiles/
+env/.env.production

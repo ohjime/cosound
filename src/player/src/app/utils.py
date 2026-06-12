@@ -1,3 +1,5 @@
+import json
+import os
 import sys
 import typer
 from rich.text import Text
@@ -5,12 +7,15 @@ from rich.panel import Panel
 from rich.console import Console
 from rich.table import Table
 
+ROOT_DIR = os.path.join(os.path.dirname(__file__), "..", "..")
+CONFIG_PATH = os.path.join(ROOT_DIR, "cosound.json")
+
 the_love_life_you_wish_you_had = r"""
-By the unknown artist
                ____
              _(____)_
     _____ooO_(_U__U_)_Ooo_____
-   ____                    ____
+   ____                     ____
+   ____ C O  S   O   U  N D ____
 """
 
 app = typer.Typer()
@@ -45,13 +50,7 @@ def delete_last_lines(n: int = 1):
 
 
 def print_header():
-    content = Text(
-        "C O  S   O   U  N D",
-        justify="center",
-        style="bold white",
-    )
     panel = Panel(
-        content,
         style="bold cyan",
         padding=(1, 6),
         title="[bold]  CLI Player ",

@@ -11,6 +11,7 @@ dependencies = [
     "rich>=15.0.0",
     "sounddevice>=0.5.5",
     "soundfile>=0.13.1",
+    "textual>=1.0.0",
     "typer>=0.25.1",
     "wget>=3.2",
 ]

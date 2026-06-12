@@ -44,3 +44,38 @@ def get_cosound(request) -> dict[str, float]:
         str(layer.sound_id): layer.sound_gain
         for layer in player.playing.layers
     }
+
+
+@api.get(
+    "/player",
+    auth=PlayerTokenAuth(),
+    throttle=[AuthRateThrottle("10/m")],
+)
+def get_player(request) -> dict:
+    """Return player details and the currently playing cosound layers."""
+    player: Player = request.auth
+    sounds = Sound.objects.in_bulk(
+        [layer.sound_id for layer in player.playing.layers]
+    )
+    return {
+        "name": player.name,
+        "manager": player.manager.name,
+        "location": player.location,
+        "layers": [
+            {
+                "sound_id": layer.sound_id,
+                "title": (
+                    sounds[layer.sound_id].title
+                    if layer.sound_id in sounds
+                    else f"Sound {layer.sound_id}"
+                ),
+                "artist": (
+                    sounds[layer.sound_id].artist
+                    if layer.sound_id in sounds
+                    else ""
+                ),
+                "gain": layer.sound_gain,
+            }
+            for layer in player.playing.layers
+        ],
+    }

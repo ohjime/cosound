@@ -3,7 +3,6 @@ import threading
 import numpy as np
 import sounddevice as sd
 import soundfile as sf
-from pprint import pprint
 
 
 class CommunalPlayer(ABC):
@@ -50,6 +49,9 @@ class SoundDevicePlayer(CommunalPlayer):
         self.active_tracks = {}
         self.pending_queue = {}
         self.lock = threading.Lock()
+        self.muted = False
+        self.levels = {}
+        self.last_status = None
 
         # Keep optional attenuation for some channels in wider layouts.
         self.channel_gains = self._default_channel_gains(self.channels)
@@ -68,6 +70,20 @@ class SoundDevicePlayer(CommunalPlayer):
     def set_master_gain(self, gain):
         with self.lock:
             self.master_gain = max(0.0, min(1.0, float(gain)))
+
+    def set_muted(self, muted):
+        with self.lock:
+            self.muted = bool(muted)
+
+    def toggle_mute(self):
+        with self.lock:
+            self.muted = not self.muted
+            return self.muted
+
+    def get_levels(self):
+        """Latest per-track output peaks as {sound_path: peak in [0, 1]}."""
+        with self.lock:
+            return dict(self.levels)
 
     def queue_sound(self, sound_path, gain):
         """Prepares a sound to be transitioned into the mix."""
@@ -119,9 +135,10 @@ class SoundDevicePlayer(CommunalPlayer):
     def _audio_callback(self, outdata, frames, time, status):
         """The real-time audio thread."""
         if status:
-            print(status)
+            self.last_status = status
 
         outdata.fill(0)
+        levels = {}
 
         with self.lock:
             for path in list(self.active_tracks.keys()):
@@ -152,15 +169,23 @@ class SoundDevicePlayer(CommunalPlayer):
                 else:
                     ramp = np.full(frames, current, dtype=np.float32)
 
-                outdata += chunk * ramp[:, np.newaxis]
+                gained = chunk * ramp[:, np.newaxis]
+                outdata += gained
+                if gained.size:
+                    levels[path] = float(np.max(np.abs(gained)))
 
                 track["ptr"] = (track["ptr"] + frames) % len(data)
 
                 if track["curr_gain"] <= 0 and track["target_gain"] == 0:
                     del self.active_tracks[path]
 
+            output_gain = 0.0 if self.muted else self.master_gain
+            self.levels = {
+                path: min(1.0, peak * output_gain) for path, peak in levels.items()
+            }
+
         np.multiply(outdata, self.channel_gains, out=outdata)
-        np.multiply(outdata, self.master_gain, out=outdata)
+        np.multiply(outdata, output_gain, out=outdata)
         np.clip(outdata, -1.0, 1.0, out=outdata)
 
     def _default_channel_gains(self, channels):
@@ -190,16 +215,11 @@ class SoundDevicePlayer(CommunalPlayer):
 
     def _resolve_output_device(self, device):
         if device is None:
-            info = self._query_output_device_info(None)
-            print("Using default output device")
-            pprint(info)
-            return None, info
+            return None, self._query_output_device_info(None)
 
         normalized = int(device) if str(device).isdigit() else device
         info = self._query_output_device_info(normalized)
         if info:
-            print(f"Using output device: {normalized}")
-            pprint(info)
             return normalized, info
 
         name = str(device).lower()
@@ -214,8 +234,6 @@ class SoundDevicePlayer(CommunalPlayer):
             raise ValueError(f"No output device matched '{device}'.")
 
         selected_index, selected_info = matches[0]
-        print(f"Using output device by name match: {selected_index}")
-        pprint(selected_info)
         return selected_index, selected_info
 
     def _query_output_device_info(self, device):

@@ -37,6 +37,34 @@ def get_latest_cosound(api_key: str) -> dict:
     return _api_get("/cosound", api_key)
 
 
+def get_player_info(api_key: str) -> dict:
+    """Fetch player details and currently playing layers from /player.
+
+    Returns {name, manager, location, layers: [{sound_id, title, artist, gain}]}.
+    Falls back to /cosound if the server does not expose /player yet.
+    """
+    try:
+        return _api_get("/player", api_key)
+    except urllib.error.HTTPError as error:
+        if error.code != 404:
+            raise
+        cosound = get_latest_cosound(api_key)
+        return {
+            "name": "",
+            "manager": "",
+            "location": "",
+            "layers": [
+                {
+                    "sound_id": int(sound_id),
+                    "title": f"Sound {sound_id}",
+                    "artist": "",
+                    "gain": gain,
+                }
+                for sound_id, gain in cosound.items()
+            ],
+        }
+
+
 def get_sound(sound_id, remote_path) -> str:
     # First check if sound_id exists locally:
     os.makedirs(ASSETS_DIR, exist_ok=True)

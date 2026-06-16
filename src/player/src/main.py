@@ -28,6 +28,9 @@ def setup(api_key: str):
     # Get Latest Manifest from Server (DUMMY)
     manifest = get_latest_manifest(api_key)
 
+    # Ensure the assets directory exists before reading from it
+    os.makedirs(ASSETS_DIR, exist_ok=True)
+
     # Remove sounds not in Latest Manifest to save space
     sounds = os.listdir(ASSETS_DIR)
     for sound in sounds:

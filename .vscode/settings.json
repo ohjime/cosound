@@ -30,6 +30,7 @@
         "**/manifest.json": true,
         "**/tmp": true,
         "**/cosound.json": true,
+        ".claude/": true,
     },
     "files.watcherExclude": {
         "**/routeTree.gen.ts": true

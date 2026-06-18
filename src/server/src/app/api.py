@@ -70,7 +70,7 @@ def get_player(request) -> dict:
                     else f"Sound {layer.sound_id}"
                 ),
                 "artist": (
-                    sounds[layer.sound_id].artist
+                    sounds[layer.sound_id].artist_name
                     if layer.sound_id in sounds
                     else ""
                 ),

@@ -21,7 +21,27 @@ from core.utils import (
 class Sound(DjangoDB.Model):
     file = DjangoDB.FileField(upload_to="sounds/")
     title = DjangoDB.CharField(max_length=255)
-    artist = DjangoDB.CharField(max_length=255)
+    artist = DjangoDB.ForeignKey(
+        "Artist",
+        on_delete=DjangoDB.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sounds",
+    )
+    # Optional grouping of an artist's sounds. A sound with no set is a "single".
+    set = DjangoDB.ForeignKey(
+        "Set",
+        on_delete=DjangoDB.SET_NULL,
+        null=True,
+        blank=True,
+        default=None,
+        related_name="sounds",
+    )
+    # Legacy free-text artist, kept so the artist FK can be backfilled. Unused
+    # by the app going forward; safe to drop once the migration is verified.
+    artist_legacy = DjangoDB.CharField(
+        max_length=255, blank=True, null=True
+    )
     tags = TaggableManager(blank=True)
     art = DjangoDB.ImageField(
         upload_to="sound_arts/", blank=True, null=True, max_length=255
@@ -33,6 +53,13 @@ class Sound(DjangoDB.Model):
 
     def __str__(self):
         return self.title
+
+    @property
+    def artist_name(self) -> str:
+        """Display name of the artist, falling back to the legacy text."""
+        if self.artist_id:
+            return self.artist.name
+        return self.artist_legacy or ""
 
     def save(self, *args, **kwargs):
         if self.embeddings is None:
@@ -46,7 +73,7 @@ class Sound(DjangoDB.Model):
             "sound_file": self.file.url,
             "sound_gain": with_gain,
             "sound_title": self.title,
-            "sound_artist": self.artist,
+            "sound_artist": self.artist_name,
         }
 
 
@@ -155,7 +182,7 @@ class Prediction(BaseModel):
             try:
                 sound = Sound.objects.get(pk=layer.sound_id)
                 response += (
-                    f"- {sound.title} by {sound.artist} at gain {layer.sound_gain}\n"
+                    f"- {sound.title} by {sound.artist_name} at gain {layer.sound_gain}\n"
                 )
             except Sound.DoesNotExist:
                 response += f"- Sound ID {layer.sound_id} not found at gain {layer.sound_gain}\n"
@@ -205,6 +232,46 @@ class Manager(DjangoDB.Model):
         upload_to="logos/", blank=True, null=True, max_length=255
     )
     bio = DjangoDB.TextField(blank=True)
+    created_at = DjangoDB.DateTimeField(auto_now_add=True)
+    updated_at = DjangoDB.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+
+class Artist(DjangoDB.Model):
+    user = DjangoDB.ForeignKey(
+        User, on_delete=DjangoDB.SET_NULL, null=True, blank=True
+    )
+    name = DjangoDB.CharField(max_length=255)
+    bio = DjangoDB.TextField(blank=True)
+    url = DjangoDB.URLField(blank=True)
+    avatar = DjangoDB.ImageField(
+        upload_to="artist_avatars/", blank=True, null=True, max_length=255
+    )
+    cover = DjangoDB.ImageField(
+        upload_to="artist_covers/", blank=True, null=True, max_length=255
+    )
+    created_at = DjangoDB.DateTimeField(auto_now_add=True)
+    updated_at = DjangoDB.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+    def singles(self) -> list["Sound"]:
+        """Sounds by this artist that are not grouped into a set."""
+        return list(self.sounds.filter(set__isnull=True))
+
+
+class Set(DjangoDB.Model):
+    artist = DjangoDB.ForeignKey(
+        Artist, on_delete=DjangoDB.CASCADE, related_name="sets"
+    )
+    name = DjangoDB.CharField(max_length=255)
+    bio = DjangoDB.TextField(blank=True)
+    cover = DjangoDB.ImageField(
+        upload_to="set_covers/", blank=True, null=True, max_length=255
+    )
     created_at = DjangoDB.DateTimeField(auto_now_add=True)
     updated_at = DjangoDB.DateTimeField(auto_now=True)
 

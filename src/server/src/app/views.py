@@ -1,8 +1,10 @@
 from django.http import HttpResponse
 from django.shortcuts import render
 
+from core.models import Sound
+from core.utils import show_modal
 from mixer.utils import get_random_sounds
-from app.utils import serialize_user_mixes
+from app.utils import serialize_user_mixes, build_artist_context
 
 
 def example_card_page(request):
@@ -52,6 +54,24 @@ def example_card_swap_multiple(request):
         request,
         "example/example_card.html#new-multiple",
     )
+
+
+def artist_details(request):
+    """Open the artist_details modal for the artist behind a given sound."""
+    if not request.htmx:
+        return HttpResponse("Request Denied.")
+    sound_id = request.GET.get("sound_id")
+    sound = (
+        Sound.objects.select_related("artist")
+        .filter(pk=sound_id)
+        .first()
+        if sound_id
+        else None
+    )
+    artist = sound.artist if sound else None
+    fallback_name = sound.artist_name if sound else ""
+    context = build_artist_context(request.user, artist, fallback_name)
+    return show_modal(request, "app/artist_details.html", context)
 
 
 def home_page(request):

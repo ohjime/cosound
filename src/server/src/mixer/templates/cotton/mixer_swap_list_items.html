@@ -24,8 +24,8 @@
         <div>
             <div class="text-sm font-semibold">{{ sound.title }}</div>
             <div class="text-xs font-semibold opacity-60">
-                <span x-text="inMix ? 'Already in mix' : ''">{{ sound.artist }}</span>
-                <span x-show="!inMix">{{ sound.artist }}</span>
+                <span x-text="inMix ? 'Already in mix' : ''">{{ sound.artist_name }}</span>
+                <span x-show="!inMix">{{ sound.artist_name }}</span>
             </div>
         </div>
     </li>

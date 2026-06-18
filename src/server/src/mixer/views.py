@@ -160,7 +160,9 @@ def mixer_search(request):
 
     q = (request.GET.get("q") or "").strip()
     if q:
-        qs = qs.filter(Q(title__icontains=q) | Q(artist__icontains=q)).order_by(
+        qs = qs.filter(
+            Q(title__icontains=q) | Q(artist__name__icontains=q)
+        ).order_by(
             "title"
         )[:20]
     else:

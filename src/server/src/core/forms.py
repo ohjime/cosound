@@ -18,7 +18,7 @@ class SoundForm(FileFormMixin, ModelForm):
 
     class Meta:
         model = Sound
-        fields = ["file", "title", "artist", "art", "flavor", "tags"]
+        fields = ["file", "title", "artist", "set", "art", "flavor", "tags"]
 
     readonly_fields = ["timestamp"]
 

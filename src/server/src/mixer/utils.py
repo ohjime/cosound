@@ -59,7 +59,7 @@ def serialize_sounds(sounds):
             "artwork_url": generate_sound_artwork(sound),
             "id": sound.id,
             "title": sound.title,
-            "artist": sound.artist,
+            "artist": sound.artist_name,
         }
         for sound in sounds
     ]

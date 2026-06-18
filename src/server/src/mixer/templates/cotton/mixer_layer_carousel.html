@@ -68,7 +68,13 @@
     </div>
     <div class="pointer-events-none absolute inset-0 z-20 p-3 pt-8 font-serif italic flex flex-col justify-between text-white font-thin text-shadow-lg">
         <div class="text-left text-lg leading-tight pr-12" x-text="title"></div>
-        <div class="text-right pb-1 pr-1 text-sm opacity-90" x-text="artist"></div>
+        <button type="button"
+                class="pointer-events-auto self-end text-right pb-1 pr-1 text-sm opacity-90 hover:opacity-100 hover:underline cursor-pointer transition"
+                x-text="artist"
+                title="View artist"
+                hx-get="{% url 'app:artist_details' %}"
+                hx-swap="none"
+                :hx-vals="JSON.stringify({ sound_id: $store.{{ name }}.currentLayer?.sound_id })"></button>
     </div>
 
 </div>

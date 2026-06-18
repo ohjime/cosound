@@ -17,7 +17,7 @@ from unfold.admin import ModelAdmin, TabularInline, StackedInline
 from unfold.contrib.filters.admin import FieldTextFilter
 from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 
-from core.models import Manager, User, Sound, Player, Listener, Cosound
+from core.models import Manager, User, Sound, Player, Listener, Cosound, Artist, Set
 from core.forms import SoundForm
 
 
@@ -27,6 +27,16 @@ class ListenerInline(StackedInline):
 
 class ManagerInline(StackedInline):
     model = Manager
+
+
+class ArtistInline(StackedInline):
+    model = Artist
+    extra = 0
+
+
+class SetInline(TabularInline):
+    model = Set
+    extra = 0
 
 
 class PlayerInline(TabularInline):
@@ -42,7 +52,7 @@ admin.site.unregister(Group)
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin, ModelAdmin):
-    inlines = [ManagerInline, ListenerInline]
+    inlines = [ManagerInline, ArtistInline, ListenerInline]
 
     class Meta:
         model = User
@@ -93,11 +103,30 @@ class TagsField(fields.Field):
         return
 
 
+class ArtistByNameWidget(widgets.ForeignKeyWidget):
+    """Resolve an artist by name on import, creating it if it doesn't exist."""
+
+    def clean(self, value, row=None, **kwargs):
+        name = (value or "").strip()
+        if not name:
+            return None
+        artist, _ = self.model.objects.get_or_create(name=name)
+        return artist
+
+    def render(self, value, obj=None, **kwargs):
+        return value.name if value else ""
+
+
 class SoundResource(resources.ModelResource):
     embeddings = fields.Field(
         column_name="embeddings",
         attribute="embeddings",
         widget=VectorWidget(),
+    )
+    artist = fields.Field(
+        column_name="artist",
+        attribute="artist",
+        widget=ArtistByNameWidget(Artist, "name"),
     )
     tags = TagsField(
         column_name="tags",
@@ -160,6 +189,7 @@ class SoundAdmin(FileFormAdmin, ModelAdmin, ImportExportModelAdmin):  # type: ig
             "Details",
             {
                 "fields": [
+                    "set",
                     "flavor",
                     "tags",
                 ],
@@ -329,7 +359,7 @@ class PlayerAdmin(ModelAdmin):
             pct = max(0, min(100, round(gain * 100)))
             sound = sounds.get(sid)
             title = sound.title if sound else "(missing sound)"
-            artist = sound.artist if sound else ""
+            artist = sound.artist_name if sound else ""
             meta = f"{artist} &middot; #{sid}" if artist else f"#{sid}"
             rows.append(f"""
                 <div class="flex items-center gap-3 py-2 border-b border-base-200 dark:border-base-800 last:border-0">
@@ -357,6 +387,30 @@ class ManagerAdmin(ModelAdmin):
     list_display = ["name", "user", "created_at"]
     list_filter = [("name", FieldTextFilter)]
     inlines = [PlayerInline]
+
+
+@admin.register(Artist)
+class ArtistAdmin(ModelAdmin):
+    list_display = ["name", "user", "created_at"]
+    list_filter = [("name", FieldTextFilter)]
+    inlines = [SetInline]
+    compressed_fields = True
+    fieldsets = [
+        (
+            None,
+            {"fields": ["user", "name", "bio", "url"]},
+        ),
+        (
+            "Media",
+            {"fields": ["avatar", "cover"]},
+        ),
+    ]
+
+
+@admin.register(Set)
+class SetAdmin(ModelAdmin):
+    list_display = ["name", "artist", "created_at"]
+    list_filter = [("name", FieldTextFilter)]
 
 
 @admin.register(Listener)
@@ -390,7 +444,7 @@ class ListenerAdmin(ModelAdmin):
             rows.append(
                 f'<li class="py-2 border-b border-base-200 dark:border-base-800 last:border-0">'
                 f'<a href="{url}" class="font-medium text-font-default-light dark:text-font-default-dark hover:underline">{s.title}</a>'
-                f'<span class="text-xs text-font-subtle-light dark:text-font-subtle-dark"> &middot; {s.artist} &middot; #{s.pk}</span>'
+                f'<span class="text-xs text-font-subtle-light dark:text-font-subtle-dark"> &middot; {s.artist_name} &middot; #{s.pk}</span>'
                 f"</li>"
             )
         return mark_safe(

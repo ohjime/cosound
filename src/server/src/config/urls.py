@@ -1,12 +1,12 @@
 from django.contrib import admin
 from django.urls import path, include
 
-from app.api import api
+from app.api import api_urls
 
 
 urlpatterns = [
     path("", include("app.urls")),
-    path("api/", api.urls),
+    path("api/", api_urls),
     path("login/", include("login.urls")),
     path("mixer/", include("mixer.urls")),
     path("vote/", include("vote.urls")),

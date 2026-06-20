@@ -1,9 +1,9 @@
 ifeq ($(OS),Windows_NT)
 CLEAR := cls
-REMOTE_ENV := set COSOUND_API_URL=https://cosound.ca/api &&
+REMOTE_ENV := set COSOUND_API_URL=https://api.cosound.ca &&
 else
 CLEAR := reset
-REMOTE_ENV := COSOUND_API_URL=https://cosound.ca/api
+REMOTE_ENV := COSOUND_API_URL=https://api.cosound.ca
 endif
 
 server:
@@ -79,7 +79,7 @@ ifeq ($(run),clean)
 		&& find . -type d -name "__pycache__" -exec rm -rf {} +
 else ifeq ($(run),remote)
 	@$(CLEAR)
-	@echo "Starting Player against remote API (https://cosound.ca/api)..."
+	@echo "Starting Player against remote API (https://api.cosound.ca)..."
 	@cd src/player \
 		&& uv sync
 	@cd src/player \

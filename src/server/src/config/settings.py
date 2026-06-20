@@ -181,9 +181,9 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
-    # Host-based URLconf switch (admin subdomain -> admin at root). Must precede
-    # CommonMiddleware so request.urlconf is set before URL resolution.
-    "config.middleware.AdminSubdomainURLConf",
+    # Host-based URLconf switch (admin/api subdomains -> app at root). Must
+    # precede CommonMiddleware so request.urlconf is set before URL resolution.
+    "config.middleware.SubdomainURLConf",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",

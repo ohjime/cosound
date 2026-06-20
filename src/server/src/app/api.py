@@ -79,3 +79,11 @@ def get_player(request) -> dict:
             for layer in player.playing.layers
         ],
     }
+
+
+# Resolve the NinjaAPI's URLs exactly once. django-ninja refuses to attach the
+# same NinjaAPI instance twice (ConfigError on a duplicate namespace), so both
+# mount points — "/api/" in config.urls and "/" in config.urls_api (the
+# api.cosound.ca subdomain) — must reuse this single tuple.
+api_urls = api.urls
+

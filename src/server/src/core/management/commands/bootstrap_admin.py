@@ -18,30 +18,34 @@ class Command(BaseCommand):
             return
 
         User = get_user_model()
-        user = User.objects.filter(email=email).first()
 
+        # Only ever bootstrap when the site has NO superuser at all. Once any
+        # superuser exists, this is not a first run, so we never create or
+        # promote — even if the admin's email was later changed or the default
+        # admin account was deleted. This keeps deploys/builds idempotent and
+        # stops the first superuser from being recreated every run.
+        if User.objects.filter(is_superuser=True).exists():
+            self.stdout.write("bootstrap_admin: a superuser already exists; skipping.")
+            return
+
+        # No superuser yet. If an account already uses this email (e.g. a plain
+        # user), promote it rather than colliding on the unique constraint;
+        # otherwise create the first superuser.
+        user = User.objects.filter(email=email).first()
         if user is None:
             User.objects.create_superuser(
                 email=email, username=username, password=password
             )
-            self.stdout.write(self.style.SUCCESS(f"bootstrap_admin: created superuser {email}"))
+            self.stdout.write(
+                self.style.SUCCESS(f"bootstrap_admin: created first superuser {email}")
+            )
             return
 
-        # User already exists — ensure it is a superuser, but do NOT reset the
-        # password (it may have been rotated since first deploy).
-        changed = []
-        if not user.is_superuser:
-            user.is_superuser = True
-            changed.append("is_superuser")
-        if not user.is_staff:
-            user.is_staff = True
-            changed.append("is_staff")
-        if changed:
-            user.save(update_fields=changed)
-            self.stdout.write(
-                self.style.SUCCESS(
-                    f"bootstrap_admin: promoted existing user {email} ({', '.join(changed)})"
-                )
+        user.is_superuser = True
+        user.is_staff = True
+        user.save(update_fields=["is_superuser", "is_staff"])
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"bootstrap_admin: promoted existing user {email} to first superuser"
             )
-        else:
-            self.stdout.write(f"bootstrap_admin: superuser {email} already present; no change.")
+        )

@@ -99,7 +99,7 @@ endif
 # --- Docker / production ---
 DC = docker compose -f docker/docker-compose.yml --project-directory . --env-file env/.env
 
-.PHONY: docker-env docker-build docker-up docker-down docker-restart docker-logs docker-ps docker-shell docker-migrate docker-prune docker-deploy
+.PHONY: docker-env docker-build docker-up docker-down docker-restart docker-logs docker-logs-web docker-ps docker-shell docker-migrate docker-prune docker-deploy
 
 docker-env:
 	@chmod +x bin/setup_env.sh
@@ -119,6 +119,11 @@ docker-restart:
 
 docker-logs:
 	$(DC) logs -f
+
+# Follow the Django app server (gunicorn/uvicorn): print() output, tracebacks,
+# and request/access logs. Override line count with TAIL=N (default 100).
+docker-logs-web:
+	$(DC) logs -f --tail=$(or $(TAIL),100) web
 
 docker-ps:
 	$(DC) ps

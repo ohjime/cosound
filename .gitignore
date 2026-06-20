@@ -53,25 +53,8 @@ src/player/cosound.json
 src/server/vite/static/
 src/player/assets/
 src/server/vite/
-src/player/conditioned/2.wav
-src/player/conditioned/2.wav.json
-src/player/conditioned/3.wav
-src/player/conditioned/3.wav.json
-src/player/conditioned/5.wav
-src/player/conditioned/5.wav.json
-src/player/conditioned/6.wav
-src/player/conditioned/6.wav.json
-src/player/conditioned/12.wav
-src/player/conditioned/12.wav.json
-src/player/conditioned/13.wav
-src/player/conditioned/13.wav.json
-src/player/conditioned/14.wav
-src/player/conditioned/14.wav.json
-src/player/conditioned/16.wav
-src/player/conditioned/16.wav.json
-src/player/conditioned/18.wav
-src/player/conditioned/18.wav.json
 
 # Local backup of corrupted .env (secrets) — never commit
 **/.env*.bak
 .claude/settings.json
+src/player/conditioned/

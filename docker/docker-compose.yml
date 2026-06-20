@@ -30,7 +30,7 @@ services:
   release:                                  # one-shot: migrate + cache table, runs on every `up`
     image: cosound-web:latest
     env_file: [env/.env]
-    command: sh -c "python src/main.py migrate --noinput && python src/main.py createcachetable"
+    command: sh -c "python src/main.py migrate --noinput && python src/main.py createcachetable && python src/main.py bootstrap_admin"
     depends_on:
       db: { condition: service_healthy }
     restart: "no"

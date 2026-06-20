@@ -44,6 +44,7 @@ if DEBUG:
     ALLOWED_HOSTS.extend(
         [
             "localhost",
+            ".localhost",  # wildcard: admin.localhost etc. for testing subdomain routing
             "127.0.0.1",
             "0.0.0.0",
             "localhost:5173",
@@ -180,6 +181,9 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    # Host-based URLconf switch (admin subdomain -> admin at root). Must precede
+    # CommonMiddleware so request.urlconf is set before URL resolution.
+    "config.middleware.AdminSubdomainURLConf",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",

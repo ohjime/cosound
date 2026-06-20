@@ -4,3 +4,12 @@
     encode zstd gzip
     reverse_proxy web:8000
 }
+
+# Admin subdomain. Has its own block (not in SITE_ADDRESS) so the bare host can
+# redirect to the Django admin login; everything else proxies through normally.
+# Caddy still auto-provisions HTTPS for this hostname.
+admin.cosound.ca {
+    encode zstd gzip
+    redir / /admin/ 302
+    reverse_proxy web:8000
+}

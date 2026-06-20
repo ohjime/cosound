@@ -4,6 +4,12 @@ import numpy as np
 import sounddevice as sd
 import soundfile as sf
 
+from app.devices import detect_output, list_output_devices
+from app.layout import infer_layout, default_source_azimuths
+from app.spatial import make_renderer
+from app.reverb import FDNReverb
+from app.conditioning import _resample as resample_audio
+
 
 class CommunalPlayer(ABC):
     @abstractmethod
@@ -18,32 +24,46 @@ class CommunalPlayer(ABC):
 class SoundDevicePlayer(CommunalPlayer):
     @staticmethod
     def available_output_devices():
-        return [
-            (index, device)
-            for index, device in enumerate(sd.query_devices())
-            if int(device.get("max_output_channels", 0)) > 0
-        ]
+        return list_output_devices()
 
     def __init__(
         self,
         channels=0,
-        fs=44100,
+        fs=None,
         fade_time_ms=8000,
         blocksize=1024,
         master_gain=0.7,
         device=None,
+        layout_override=None,
+        reverb_room=0.5,
+        reverb_amount=0.35,
+        rotation_deg_per_s=0.0,
     ):
-        self.fs = fs
+        # --- Resolve and probe the output device (auto-detect, see devices.py) ---
+        self.device_obj = detect_output(device)
+        if channels and int(channels) > 0:
+            self.device_obj.channels = min(int(channels), self.device_obj.channels)
+        self.device = self.device_obj.index
+        self.device_info = self.device_obj.raw or {"name": self.device_obj.name}
+        self.channels = self.device_obj.channels
+        # Default to the device's own sample rate unless overridden.
+        self.fs = int(fs) if fs else int(self.device_obj.samplerate)
         self.master_gain = float(master_gain)
-        self.device, self.device_info = self._resolve_output_device(device)
-        self.channels = self._resolve_output_channels(channels, self.device_info)
+
+        # --- Infer speaker layout and build the spatial renderer + reverb ---
+        self.layout = infer_layout(self.device_obj, layout_override)
+        self.renderer = make_renderer(
+            self.layout, self.fs, rotation_deg_per_s=rotation_deg_per_s
+        )
+        self.reverb = FDNReverb(
+            self.channels, self.fs, room=reverb_room, amount=reverb_amount
+        )
+
         fade_time_sec = fade_time_ms / 1000.0
         if fade_time_sec <= 0:
             self.fade_samples = 1
         else:
-            self.fade_samples = int(self.fs * fade_time_sec)
-            if self.fade_samples < 1:
-                self.fade_samples = 1
+            self.fade_samples = max(1, int(self.fs * fade_time_sec))
 
         # State Management
         self.active_tracks = {}
@@ -53,8 +73,9 @@ class SoundDevicePlayer(CommunalPlayer):
         self.levels = {}
         self.last_status = None
 
-        # Keep optional attenuation for some channels in wider layouts.
-        self.channel_gains = self._default_channel_gains(self.channels)
+        # Source positions for layered tracks (AAS used an even 45° spread).
+        self._positions = default_source_azimuths(8)
+        self._pos_idx = 0
 
         # Initialize Stream
         self.stream = sd.OutputStream(
@@ -66,6 +87,8 @@ class SoundDevicePlayer(CommunalPlayer):
             dtype="float32",
         )
         self.stream.start()
+
+    # --- Controls -----------------------------------------------------------
 
     def set_master_gain(self, gain):
         with self.lock:
@@ -80,15 +103,30 @@ class SoundDevicePlayer(CommunalPlayer):
             self.muted = not self.muted
             return self.muted
 
+    def set_reverb(self, room=None, amount=None):
+        if room is not None:
+            self.reverb.set_room(room)
+        if amount is not None:
+            self.reverb.set_amount(amount)
+
     def get_levels(self):
         """Latest per-track output peaks as {sound_path: peak in [0, 1]}."""
         with self.lock:
             return dict(self.levels)
 
+    # --- Queueing -----------------------------------------------------------
+
     def queue_sound(self, sound_path, gain):
         """Prepares a sound to be transitioned into the mix."""
         with self.lock:
             self.pending_queue[str(sound_path)] = float(gain)
+
+    def _assign_azimuth(self):
+        if not self._positions:
+            return 0.0
+        az = self._positions[self._pos_idx % len(self._positions)]
+        self._pos_idx += 1
+        return az
 
     def dequeue_cosound(self):
         """Triggers the transition: fades out old tracks and fades in new ones."""
@@ -96,7 +134,7 @@ class SoundDevicePlayer(CommunalPlayer):
             pending = dict(self.pending_queue)
             self.pending_queue = {}
 
-            # Any track currently playing that ISN'T in the new queue should fade to 0
+            # Any track currently playing that ISN'T in the new queue fades to 0.
             for path in list(self.active_tracks.keys()):
                 if path not in pending:
                     self.active_tracks[path]["target_gain"] = 0.0
@@ -107,12 +145,11 @@ class SoundDevicePlayer(CommunalPlayer):
         # Load audio outside the lock to avoid blocking the real-time callback.
         new_tracks = {}
         for path, target_gain in pending.items():
-            data, _ = sf.read(path, dtype="float32", always_2d=True)
-            data = self._adapt_channels_for_output(data)
-
+            data, sr = sf.read(path, dtype="float32", always_2d=True)
+            if sr != self.fs:
+                data = resample_audio(data, sr, self.fs)
             if data.size == 0:
                 continue
-
             new_tracks[path] = {
                 "data": data,
                 "ptr": 0,
@@ -121,23 +158,24 @@ class SoundDevicePlayer(CommunalPlayer):
             }
 
         with self.lock:
-            # Add new tracks or update target gains for existing ones
             for path, target_gain in pending.items():
                 track = self.active_tracks.get(path)
                 if track:
                     track["target_gain"] = float(target_gain)
                     continue
-
                 new_track = new_tracks.get(path)
                 if new_track:
+                    new_track["azimuth"] = self._assign_azimuth()
                     self.active_tracks[path] = new_track
 
+    # --- Real-time audio ----------------------------------------------------
+
     def _audio_callback(self, outdata, frames, time, status):
-        """The real-time audio thread."""
+        """The real-time audio thread: gain-ramp tracks, then spatialise+reverb."""
         if status:
             self.last_status = status
 
-        outdata.fill(0)
+        sources = []
         levels = {}
 
         with self.lock:
@@ -169,8 +207,8 @@ class SoundDevicePlayer(CommunalPlayer):
                 else:
                     ramp = np.full(frames, current, dtype=np.float32)
 
-                gained = chunk * ramp[:, np.newaxis]
-                outdata += gained
+                gained = (chunk * ramp[:, np.newaxis]).astype(np.float32)
+                sources.append({"signal": gained, "azimuth": track.get("azimuth")})
                 if gained.size:
                     levels[path] = float(np.max(np.abs(gained)))
 
@@ -184,98 +222,11 @@ class SoundDevicePlayer(CommunalPlayer):
                 path: min(1.0, peak * output_gain) for path, peak in levels.items()
             }
 
-        np.multiply(outdata, self.channel_gains, out=outdata)
-        np.multiply(outdata, output_gain, out=outdata)
-        np.clip(outdata, -1.0, 1.0, out=outdata)
-
-    def _default_channel_gains(self, channels):
-        gains = np.ones(channels, dtype=np.float32)
-        if channels >= 8:
-            gains[6:8] = 0.5
-        return gains
-
-    def _resolve_output_channels(self, requested_channels, output_info):
-        requested = int(requested_channels) if requested_channels else 0
-        max_channels = int((output_info or {}).get("max_output_channels", 0))
-
-        if max_channels <= 0:
-            return requested if requested > 0 else 1
-
-        if requested <= 0:
-            return max_channels
-
-        if requested > max_channels:
-            print(
-                "Requested %s output channels, but device supports %s. Using %s."
-                % (requested, max_channels, max_channels)
-            )
-            return max_channels
-
-        return requested
-
-    def _resolve_output_device(self, device):
-        if device is None:
-            return None, self._query_output_device_info(None)
-
-        normalized = int(device) if str(device).isdigit() else device
-        info = self._query_output_device_info(normalized)
-        if info:
-            return normalized, info
-
-        name = str(device).lower()
-        matches = []
-        for index, candidate in enumerate(sd.query_devices()):
-            if int(candidate.get("max_output_channels", 0)) <= 0:
-                continue
-            if name in str(candidate.get("name", "")).lower():
-                matches.append((index, candidate))
-
-        if not matches:
-            raise ValueError(f"No output device matched '{device}'.")
-
-        selected_index, selected_info = matches[0]
-        return selected_index, selected_info
-
-    def _query_output_device_info(self, device):
-        try:
-            kwargs = {"kind": "output"}
-            if device is not None:
-                kwargs["device"] = device
-            return sd.query_devices(**kwargs)
-        except Exception:
-            return None
-
-    def _adapt_channels_for_output(self, data):
-        samples, in_channels = data.shape
-        out_channels = self.channels
-
-        if out_channels == in_channels:
-            return data
-
-        if in_channels == 1:
-            return np.repeat(data, out_channels, axis=1)
-
-        if in_channels == 2:
-            if out_channels == 1:
-                return data.mean(axis=1, keepdims=True)
-
-            out = np.zeros((samples, out_channels), dtype=np.float32)
-            left_targets = list(range(0, out_channels, 2))
-            right_targets = list(range(1, out_channels, 2))
-
-            if not left_targets:
-                left_targets = [0]
-            if not right_targets:
-                right_targets = left_targets
-
-            left_weight = 1.0 / np.sqrt(len(left_targets))
-            right_weight = 1.0 / np.sqrt(len(right_targets))
-
-            out[:, left_targets] = data[:, [0]] * left_weight
-            out[:, right_targets] = data[:, [1]] * right_weight
-            return out
-
-        out = np.zeros((samples, out_channels), dtype=np.float32)
-        for out_ch in range(out_channels):
-            out[:, out_ch] = data[:, out_ch % in_channels]
-        return out
+        # Spatialise (positioned/decorrelated) + add the reverb return. These
+        # objects are only ever touched here on the audio thread.
+        dry, send = self.renderer.render(sources, frames)
+        wet = self.reverb.process(send)
+        mix = dry + wet
+        mix *= output_gain
+        np.clip(mix, -1.0, 1.0, out=mix)
+        outdata[:] = mix

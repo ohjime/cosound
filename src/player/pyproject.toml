@@ -14,4 +14,9 @@ dependencies = [
     "textual>=1.0.0",
     "typer>=0.25.1",
     "wget>=3.2",
+    # Audio conditioning / DSP. Imported lazily and guarded — the player still
+    # runs with numpy-only fallbacks if these are not installed, but installing
+    # them gives higher-quality resampling and loudness normalisation.
+    "soxr>=0.5.0",
+    "pyloudnorm>=0.1.1",
 ]

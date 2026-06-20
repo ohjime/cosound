@@ -1,0 +1,6 @@
+# Domain(s) come from the SITE_ADDRESS env var (set in .env), so staging vs
+# production is just a config change — no edits to this file.
+{$SITE_ADDRESS} {
+    encode zstd gzip
+    reverse_proxy web:8000
+}

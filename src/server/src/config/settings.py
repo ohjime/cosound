@@ -33,7 +33,10 @@ load_dotenv(BASE_DIR.parent.parent / "env" / ".env")
 SECRET_KEY = os.environ.get("SECRET_KEY", default="django-insecure-secret-key")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = "RENDER" not in os.environ
+# DEBUG is driven by an explicit env var so the app behaves correctly on any host
+# (Render set DEBUG=false; on a plain Droplet there is no RENDER var, so without this
+# DEBUG would silently default to True and django-vite would switch to dev-server mode).
+DEBUG = os.environ.get("DEBUG", "False").strip().lower() in ("1", "true", "yes", "on")
 
 ALLOWED_HOSTS = []
 
@@ -56,16 +59,8 @@ else:
     if prod_hosts:
         ALLOWED_HOSTS.extend(prod_hosts.split(","))
 
-# Render provides this environment variable automatically
-RENDER_EXTERNAL_HOSTNAME = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
-if RENDER_EXTERNAL_HOSTNAME:
-    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
-
 # CSRF Configuration for production
 CSRF_TRUSTED_ORIGINS = []
-if RENDER_EXTERNAL_HOSTNAME:
-    CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_EXTERNAL_HOSTNAME}")
-    CSRF_TRUSTED_ORIGINS.append(f"https://www.{RENDER_EXTERNAL_HOSTNAME}")
 
 # Add production hosts to CSRF trusted origins (with scheme)
 _prod_hosts_env = os.environ.get("PROD_HOSTS", "")
@@ -77,6 +72,14 @@ if _prod_hosts_env:
         if "://" not in entry:
             entry = f"https://{entry}"
         CSRF_TRUSTED_ORIGINS.append(entry)
+
+# Behind a TLS-terminating reverse proxy (e.g. Caddy) in production: trust the
+# forwarded scheme so HTTPS detection, CSRF, and secure cookies work correctly.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    USE_X_FORWARDED_HOST = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
 
 LOGGING = {
     "version": 1,

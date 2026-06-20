@@ -95,3 +95,45 @@ else
 	@cd src/player \
 		&& uv run src/main.py $(if $(token),--token=$(token)) $(if $(master_gain),--master-gain=$(master_gain))
 endif
+
+# --- Docker / production ---
+DC = docker compose -f docker/docker-compose.yml --project-directory . --env-file env/.env
+
+.PHONY: docker-env docker-build docker-up docker-down docker-restart docker-logs docker-ps docker-shell docker-migrate docker-prune docker-deploy
+
+docker-env:
+	@chmod +x bin/setup_env.sh
+	@bin/setup_env.sh
+
+docker-build:
+	$(DC) build web
+
+docker-up:
+	$(DC) up -d
+
+docker-down:
+	$(DC) down
+
+docker-restart:
+	$(DC) restart
+
+docker-logs:
+	$(DC) logs -f
+
+docker-ps:
+	$(DC) ps
+
+docker-shell:
+	$(DC) exec web python src/main.py shell
+
+docker-migrate:
+	$(DC) exec web python src/main.py migrate
+
+docker-prune:
+	docker image prune -f
+
+docker-deploy:
+	git pull --ff-only
+	$(DC) build web
+	$(DC) up -d
+	docker image prune -f

@@ -1,0 +1,71 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16          # pgvector REQUIRED: core/migrations/0001 runs CREATE EXTENSION vector
+    restart: unless-stopped
+    env_file: [env/.env]
+    command: ["postgres", "-c", "shared_buffers=96MB", "-c", "max_connections=20",
+              "-c", "effective_cache_size=256MB", "-c", "work_mem=4MB",
+              "-c", "maintenance_work_mem=32MB"]          # keep Postgres light on the 1 GB box
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build: { context: ./src/server }
+    image: cosound-web:latest
+    env_file: [env/.env]
+    command: sh -c "gunicorn config.asgi:application -k uvicorn_worker.UvicornWorker
+                    --bind 0.0.0.0:8000 --workers $${WEB_CONCURRENCY:-1} --chdir src
+                    --access-logfile - --log-level warning"
+    expose: ["8000"]
+    depends_on:
+      db: { condition: service_healthy }
+      release: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  release:                                  # one-shot: migrate + cache table, runs on every `up`
+    image: cosound-web:latest
+    env_file: [env/.env]
+    command: sh -c "python src/main.py migrate --noinput && python src/main.py createcachetable"
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+
+  worker:                                   # django-tasks background queue
+    image: cosound-web:latest
+    env_file: [env/.env]
+    command: python src/main.py db_worker --no-reload
+    depends_on:
+      db: { condition: service_healthy }
+      release: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  scheduler:                                # prediction refresh loop (internal :9000)
+    image: cosound-web:latest
+    env_file: [env/.env]
+    command: python src/main.py refresh 0.0.0.0:9000
+    depends_on:
+      db: { condition: service_healthy }
+      release: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  caddy:                                    # auto-HTTPS reverse proxy
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS in env/.env}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [web]
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

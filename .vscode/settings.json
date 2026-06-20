@@ -26,11 +26,11 @@
         "**/migrations/": true,
         "**/pyproject.toml": true,
         "**/README.md": true,
-        "**/render.yaml": true,
         "**/manifest.json": true,
         "**/tmp": true,
         "**/cosound.json": true,
         ".claude/": true,
+        ".old/": true,
     },
     "files.watcherExclude": {
         "**/routeTree.gen.ts": true

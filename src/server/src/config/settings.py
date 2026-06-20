@@ -54,20 +54,29 @@ if DEBUG:
         ]
     )
 else:
-    # Production hosts from env
+    # Production hosts from env. A leading-dot entry like ".cosound.ca" is a
+    # wildcard: Django's ALLOWED_HOSTS matches the apex domain and every
+    # subdomain, so a single value covers all present and future subdomains.
     prod_hosts = os.environ.get("PROD_HOSTS", "")
     if prod_hosts:
-        ALLOWED_HOSTS.extend(prod_hosts.split(","))
+        ALLOWED_HOSTS.extend(h.strip() for h in prod_hosts.split(",") if h.strip())
 
 # CSRF Configuration for production
 CSRF_TRUSTED_ORIGINS = []
 
-# Add production hosts to CSRF trusted origins (with scheme)
+# Add production hosts to CSRF trusted origins (with scheme). A leading-dot
+# wildcard like ".cosound.ca" expands to BOTH the subdomain wildcard origin
+# and the apex, because Django's CSRF wildcard matches subdomains only.
 _prod_hosts_env = os.environ.get("PROD_HOSTS", "")
 if _prod_hosts_env:
     for entry in _prod_hosts_env.split(","):
         entry = entry.strip().rstrip("/")
         if not entry:
+            continue
+        if entry.startswith("."):
+            base = entry.lstrip(".")
+            CSRF_TRUSTED_ORIGINS.append(f"https://*.{base}")
+            CSRF_TRUSTED_ORIGINS.append(f"https://{base}")
             continue
         if "://" not in entry:
             entry = f"https://{entry}"

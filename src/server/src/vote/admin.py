@@ -42,11 +42,19 @@ class PlayerAdmin(CorePlayerAdmin):
         if not obj or not obj.token:
             return "—"
         request = getattr(self, "_current_request", None)
-        base = (
-            request.build_absolute_uri(reverse("vote:vote"))
-            if request
-            else reverse("vote:vote")
-        )
+        # Resolve against the root URLconf explicitly: on the admin subdomain
+        # the active urlconf (config.urls_admin) only mounts the admin and has
+        # no "vote" namespace, so a plain reverse() would raise NoReverseMatch.
+        path = reverse("vote:vote", urlconf="config.urls")
+        if request is not None:
+            host = request.get_host()
+            # Voting is served on the public site, not the admin subdomain, so
+            # the NFC URLs must point at the apex host (strip the "admin." prefix).
+            if host.startswith("admin."):
+                host = host[len("admin.") :]
+            base = f"{request.scheme}://{host}{path}"
+        else:
+            base = path
         return mark_safe(
             render_to_string(
                 "admin/vote_urls.html",

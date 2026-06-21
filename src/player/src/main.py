@@ -6,11 +6,14 @@ from app.client import (
     get_sound,
     get_latest_manifest,
 )
+from app.devices import detect_output
+from app.conditioning import condition_manifest
 from app.tui import CosoundPlayerApp
 from app.utils import get_or_read_api_key
 
 ROOT_DIR = os.path.join(os.path.dirname(__file__), "..")
 ASSETS_DIR = os.path.join(ROOT_DIR, "assets")
+CONDITIONED_DIR = os.path.join(ROOT_DIR, "conditioned")
 CONFIG_PATH = os.path.join(ROOT_DIR, "cosound.json")
 
 
@@ -23,7 +26,7 @@ def list_output_devices() -> None:
         print(f"  [{index}] {name} (max_output_channels={max_output})")
 
 
-def setup(api_key: str):
+def setup(api_key: str, target_fs: int):
 
     # Get Latest Manifest from Server (DUMMY)
     manifest = get_latest_manifest(api_key)
@@ -31,17 +34,22 @@ def setup(api_key: str):
     # Ensure the assets directory exists before reading from it
     os.makedirs(ASSETS_DIR, exist_ok=True)
 
-    # Remove sounds not in Latest Manifest to save space
-    sounds = os.listdir(ASSETS_DIR)
-    for sound in sounds:
-        if sound not in manifest.keys():
-            os.remove(os.path.join(ASSETS_DIR, sound))
+    # Remove downloaded sounds not in Latest Manifest to save space (skip dirs)
+    for sound in os.listdir(ASSETS_DIR):
+        path = os.path.join(ASSETS_DIR, sound)
+        if os.path.isfile(path) and sound not in manifest.keys():
+            os.remove(path)
 
     # Download and save all sounds in Latest Manfiest
     for sound_id, remote_path in manifest.items():
         local_path = get_sound(sound_id, remote_path)
         # Update Manifest to point to Local Path
         manifest[sound_id] = local_path
+
+    # Offline conditioning pass: decode/resample/loudness/loop-fix/de-harsh once
+    # so even lossy sources play back cleanly. Manifest now points at the cache.
+    print(f"Conditioning {len(manifest)} sound(s) @ {target_fs} Hz…")
+    manifest = condition_manifest(manifest, CONDITIONED_DIR, target_fs)
 
     config = {"API_KEY": api_key, "MANIFEST": manifest}
 
@@ -59,12 +67,18 @@ def main(
     output_device: str | None = None,
 ):
     api_key = token or os.environ.get("COSOUND_API_KEY") or get_or_read_api_key()
-    manifest = setup(api_key)
+
+    # Auto-detect the output so we can condition audio to its native rate.
+    device = detect_output(output_device)
+    print(f"Output: {device.name} — {device.channels}ch @ {device.samplerate} Hz")
+
+    manifest = setup(api_key, device.samplerate)
     player = SoundDevicePlayer(
         channels=channels,
         master_gain=master_gain,
         device=output_device,
     )
+    print(f"Speaker layout: {player.layout.describe()}")
     app = CosoundPlayerApp(api_key=api_key, manifest=manifest, player=player)
     app.run()
 

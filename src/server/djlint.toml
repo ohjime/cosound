@@ -1,0 +1,32 @@
+# djLint config for the Django templates under src/.
+#
+# This lives in its own file rather than in pyproject.toml's [tool.djlint] on
+# purpose. The production image's dependency layer is keyed on pyproject.toml +
+# uv.lock (see Dockerfile: `COPY pyproject.toml uv.lock ./`), and Docker keys
+# that layer on file bytes — so retuning a formatter setting invalidated the
+# layer exactly as hard as adding a package, forcing a full `uv sync` rebuild on
+# the droplet. Formatting config and dependency config now churn independently.
+#
+# Note the key layout differs from pyproject.toml: options are top-level here,
+# NOT under a [tool.djlint] table.
+#
+# Consumers:
+#   .zed/settings.json  — runs .venv/bin/djlint with `--configuration` pointing
+#                         at this file (required: Zed's cwd is the worktree
+#                         root, above this file, so discovery would miss it).
+#   .vscode/settings.json — the monosans.djlint extension passes its own
+#                         settings and ignores this file; keep the two in sync.
+
+ignore = ["D018", "H006", "H021"]
+custom_html = "c-[\\w-]+"
+custom_blocks = "buttons,endbuttons,fragment,component_title,component_navinfo,component_alert_global__acting_for,partialdef,component_box_nexus_activated_service"
+
+# Match .vscode/settings.json's djlint.maxAttributeLength / djlint.maxLineLength,
+# so Zed (plain djlint + this file) and VS Code (the extension, which passes its
+# own settings) format identically.
+max_attribute_length = 80
+max_line_length = 120
+
+preserve_blank_lines = false
+format_css = true
+format_js = true

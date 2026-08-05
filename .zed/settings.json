@@ -13,7 +13,9 @@
   //
   // djLint is Django-aware and keeps every tag on one line. It reads its config
   // (custom_blocks incl. partialdef, custom_html for cotton's c-* tags) from
-  // src/server/pyproject.toml — the same tool VS Code already uses here.
+  // src/server/djlint.toml — the same tool VS Code already uses here. (That
+  // config used to live in src/server/pyproject.toml; it moved out so formatter
+  // tweaks stop invalidating the Docker dependency layer.)
   //
   // Paths are relative to the worktree root, which is the cwd Zed runs external
   // formatters in — so this file survives the checkout moving and is safe to
@@ -23,8 +25,8 @@
   //
   // `--configuration` is required and not optional sugar: djLint discovers its
   // config by walking up from the cwd, and the cwd here is the worktree root,
-  // one level ABOVE src/server/pyproject.toml. Without the flag it silently
-  // runs with stock defaults — no custom_blocks, no custom_html.
+  // one level ABOVE src/server/djlint.toml. Without the flag it silently runs
+  // with stock defaults — no custom_blocks, no custom_html.
   //
   // `-` makes djLint read the buffer from stdin and write to stdout, which is
   // what Zed's external formatter expects. Passing `{buffer_path}` as well (as
@@ -38,7 +40,7 @@
           "arguments": [
             "--reformat",
             "--configuration",
-            "src/server/pyproject.toml",
+            "src/server/djlint.toml",
             "-"
           ]
         }

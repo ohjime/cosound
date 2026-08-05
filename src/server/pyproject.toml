@@ -33,7 +33,6 @@ dependencies = [
     "uvicorn-worker>=0.4.0",
     "gunicorn>=23.0.0",
     "honcho>=2.0.0",
-    "djlint>=1.36.4",
     "pillow>=12.2.0",
     "django-anymail[amazon-ses]>=14.0",
     "django-import-export>=4.4.0",
@@ -41,15 +40,13 @@ dependencies = [
 ]
 
 
-[tool.djlint]
-ignore = ["D018","H006","H021"]
-custom_html = "c-[\\w-]+"
-custom_blocks="buttons,endbuttons,fragment,component_title,component_navinfo,component_alert_global__acting_for,partialdef,component_box_nexus_activated_service"
-# Match .vscode/settings.json's djlint.maxAttributeLength / djlint.maxLineLength,
-# so Zed (plain djlint + this file) and VS Code (the monosans.djlint extension,
-# which passes its own settings and ignores these) format identically.
-max_attribute_length=80
-max_line_length=120
-preserve_blank_lines=false
-format_css = true
-format_js = true
+# Editor/formatting tooling only — never imported by the app, and excluded from
+# the production image, which builds with `uv sync --frozen --no-dev`.
+# `make server` runs a plain `uv sync`, which installs this group by default.
+[dependency-groups]
+dev = [
+    "djlint>=1.36.4",
+]
+
+# djLint's settings live in djlint.toml, not here — keeping them out of this
+# file stops a formatter tweak from invalidating the Docker dependency layer.

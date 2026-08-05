@@ -959,7 +959,6 @@ dependencies = [
     { name = "django-vite" },
     { name = "django-widget-tweaks" },
     { name = "djangorestframework" },
-    { name = "djlint" },
     { name = "email-validator" },
     { name = "gunicorn" },
     { name = "honcho" },
@@ -972,6 +971,11 @@ dependencies = [
     { name = "uvicorn" },
     { name = "uvicorn-worker" },
     { name = "whitenoise", extra = ["brotli"] },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "djlint" },
 ]
 
 [package.metadata]
@@ -994,7 +998,6 @@ requires-dist = [
     { name = "django-vite", specifier = ">=3.1.0" },
     { name = "django-widget-tweaks", specifier = ">=1.5.0" },
     { name = "djangorestframework", specifier = ">=3.16.1" },
-    { name = "djlint", specifier = ">=1.36.4" },
     { name = "email-validator", specifier = ">=2.0.0" },
     { name = "gunicorn", specifier = ">=23.0.0" },
     { name = "honcho", specifier = ">=2.0.0" },
@@ -1008,6 +1011,9 @@ requires-dist = [
     { name = "uvicorn-worker", specifier = ">=0.4.0" },
     { name = "whitenoise", extras = ["brotli"], specifier = ">=6.7.0" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "djlint", specifier = ">=1.36.4" }]
 
 [[package]]
 name = "six"

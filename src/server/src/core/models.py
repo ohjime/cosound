@@ -1,18 +1,21 @@
 import datetime
 import hashlib
 import secrets
+from datetime import datetime, timezone
 from decimal import ROUND_UP, Decimal
 from typing import List
-from datetime import datetime, timezone
-from django.db import models as DjangoDB, transaction
-from pydantic import BaseModel, Field
-from pgvector.django import VectorField
-from django_pydantic_field import SchemaField
+
 from django.contrib.auth.models import AbstractUser
+from django.db import models as DjangoDB
+from django.db import transaction
+from django_pydantic_field import SchemaField
+from pgvector.django import VectorField
+from pydantic import BaseModel, Field
 from taggit.managers import TaggableManager
+
 from core.utils import (
-    _get_sound_dimension,
     _get_sound_classifier,
+    _get_sound_dimension,
     generate_layers_string,
     get_random_avatar_url,
 )
@@ -39,9 +42,7 @@ class Sound(DjangoDB.Model):
     )
     # Legacy free-text artist, kept so the artist FK can be backfilled. Unused
     # by the app going forward; safe to drop once the migration is verified.
-    artist_legacy = DjangoDB.CharField(
-        max_length=255, blank=True, null=True
-    )
+    artist_legacy = DjangoDB.CharField(max_length=255, blank=True, null=True)
     tags = TaggableManager(blank=True)
     art = DjangoDB.ImageField(
         upload_to="sound_arts/", blank=True, null=True, max_length=255
@@ -87,7 +88,6 @@ class SoundLayer(DjangoDB.Model):
 
 
 class Cosound(DjangoDB.Model):
-
     layers = DjangoDB.ManyToManyField(Sound, through=SoundLayer)
     hashset = DjangoDB.CharField(max_length=64, editable=False, db_index=True)
     created_at = DjangoDB.DateTimeField(auto_now_add=True)
@@ -161,7 +161,6 @@ class PredictionLayer(BaseModel):
 
 
 class Prediction(BaseModel):
-
     layers: List[PredictionLayer] = Field(default_factory=list)
 
     @classmethod
@@ -181,9 +180,7 @@ class Prediction(BaseModel):
         for layer in self.layers:
             try:
                 sound = Sound.objects.get(pk=layer.sound_id)
-                response += (
-                    f"- {sound.title} by {sound.artist_name} at gain {layer.sound_gain}\n"
-                )
+                response += f"- {sound.title} by {sound.artist_name} at gain {layer.sound_gain}\n"
             except Sound.DoesNotExist:
                 response += f"- Sound ID {layer.sound_id} not found at gain {layer.sound_gain}\n"
         return response
@@ -240,9 +237,7 @@ class Manager(DjangoDB.Model):
 
 
 class Artist(DjangoDB.Model):
-    user = DjangoDB.ForeignKey(
-        User, on_delete=DjangoDB.SET_NULL, null=True, blank=True
-    )
+    user = DjangoDB.ForeignKey(User, on_delete=DjangoDB.SET_NULL, null=True, blank=True)
     name = DjangoDB.CharField(max_length=255)
     bio = DjangoDB.TextField(blank=True)
     url = DjangoDB.URLField(blank=True)

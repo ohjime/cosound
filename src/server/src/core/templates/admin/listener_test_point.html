@@ -1,0 +1,37 @@
+{% if original and has_change_permission %}
+    <section class="border border-base-200 rounded-default bg-white mb-6 p-6 shadow-sm dark:bg-base-900 dark:border-base-800">
+        <div class="mb-4">
+            <h2 class="font-semibold text-font-important-light dark:text-font-important-dark">Set test point</h2>
+            <p class="mt-1 text-sm text-font-subtle-light dark:text-font-subtle-dark">
+                Replace this listener's entire collection with every sound carrying the selected tag. Votes and other listener data are unchanged.
+            </p>
+        </div>
+
+        <form method="post" action="{{ set_test_point_url }}" class="flex flex-col gap-3 sm:flex-row sm:items-end">
+            {% csrf_token %}
+            <div class="flex-1 max-w-xl">
+                <label for="test-point-tag" class="block font-medium mb-2 text-sm text-font-default-light dark:text-font-default-dark">
+                    Tag
+                </label>
+                <select id="test-point-tag"
+                        name="test_point_tag"
+                        required
+                        class="border border-base-200 bg-white font-medium min-w-20 placeholder-base-400 rounded-default shadow-xs text-font-default-light text-sm w-full focus:outline-2 focus:-outline-offset-2 focus:outline-primary-600 dark:bg-base-900 dark:border-base-700 dark:text-font-default-dark dark:scheme-dark">
+                    <option value="">Select a tag</option>
+                    {% for tag in test_point_tags %}<option value="{{ tag.pk }}">{{ tag.name }}</option>{% endfor %}
+                </select>
+            </div>
+
+            <button type="submit"
+                    {% if not test_point_tags %}disabled{% endif %}
+                    onclick="return confirm('Replace this listener\'s entire collection with sounds carrying the selected tag?');"
+                    class="bg-primary-600 border border-transparent font-medium px-4 py-2 rounded-default text-sm text-white shadow-xs hover:bg-primary-700 focus:outline-2 focus:outline-offset-2 focus:outline-primary-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-primary-500 dark:hover:bg-primary-600">
+                Set test point
+            </button>
+        </form>
+
+        {% if not test_point_tags %}
+            <p class="mt-3 text-sm text-font-subtle-light dark:text-font-subtle-dark">No tags are currently available.</p>
+        {% endif %}
+    </section>
+{% endif %}

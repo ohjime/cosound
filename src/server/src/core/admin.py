@@ -6,7 +6,9 @@ from unfold.contrib.import_export.forms import ExportForm, ImportForm
 import json
 from django.contrib import admin, messages
 from django.apps import apps as django_apps
-from django.http import HttpResponseRedirect
+from django.core.exceptions import PermissionDenied
+from django.db import transaction
+from django.http import HttpResponseNotAllowed, HttpResponseRedirect
 from django.urls import path, reverse
 from django.utils.safestring import mark_safe
 from django.template.loader import render_to_string
@@ -16,6 +18,7 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from unfold.admin import ModelAdmin, TabularInline, StackedInline
 from unfold.contrib.filters.admin import FieldTextFilter
 from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
+from taggit.models import Tag
 
 from core.models import Manager, User, Sound, Player, Listener, Cosound, Artist, Set
 from core.forms import SoundForm
@@ -417,6 +420,7 @@ class SetAdmin(ModelAdmin):
 class ListenerAdmin(ModelAdmin):
     list_display = ["user", "created_at"]
     readonly_fields = ["collection_display", "created_at", "updated_at"]
+    change_form_outer_after_template = "admin/listener_test_point.html"
     compressed_fields = True
     fieldsets = [
         (
@@ -428,6 +432,78 @@ class ListenerAdmin(ModelAdmin):
             {"classes": ["tab"], "fields": ["collection_display"]},
         ),
     ]
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path(
+                "<path:object_id>/set-test-point/",
+                self.admin_site.admin_view(self.set_test_point_view),
+                name="core_listener_set_test_point",
+            ),
+        ]
+        return custom + urls
+
+    def change_view(self, request, object_id, form_url="", extra_context=None):
+        extra_context = extra_context or {}
+        extra_context.update(
+            {
+                "test_point_tags": Tag.objects.order_by("name"),
+                "set_test_point_url": reverse(
+                    "admin:core_listener_set_test_point", args=[object_id]
+                ),
+            }
+        )
+        return super().change_view(
+            request,
+            object_id,
+            form_url=form_url,
+            extra_context=extra_context,
+        )
+
+    def set_test_point_view(self, request, object_id):
+        if request.method != "POST":
+            return HttpResponseNotAllowed(["POST"])
+
+        listener = self.get_object(request, object_id)
+        if listener is None:
+            messages.error(request, "Listener not found.")
+            return HttpResponseRedirect(reverse("admin:core_listener_changelist"))
+        if not self.has_change_permission(request, listener):
+            raise PermissionDenied
+
+        redirect_url = reverse("admin:core_listener_change", args=[listener.pk])
+        tag_id = request.POST.get("test_point_tag")
+        try:
+            tag = Tag.objects.filter(pk=tag_id).first() if tag_id else None
+        except (TypeError, ValueError):
+            tag = None
+        if tag is None:
+            messages.error(request, "Select a valid tag before setting a test point.")
+            return HttpResponseRedirect(redirect_url)
+
+        sound_ids = list(
+            Sound.objects.filter(tags=tag).values_list("pk", flat=True).distinct()
+        )
+        with transaction.atomic():
+            listener.collection.clear()
+            if sound_ids:
+                listener.collection.add(*sound_ids)
+
+        if sound_ids:
+            sound_label = "sound" if len(sound_ids) == 1 else "sounds"
+            messages.success(
+                request,
+                f'Set test point to "{tag.name}" and replaced the collection '
+                f"with {len(sound_ids)} {sound_label}.",
+            )
+        else:
+            messages.warning(
+                request,
+                f'Set test point to "{tag.name}". No sounds use this tag, '
+                "so the collection is now empty.",
+            )
+        return HttpResponseRedirect(redirect_url)
 
     @admin.display(description="Saved sounds")
     def collection_display(self, obj):

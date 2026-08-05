@@ -1,0 +1,30 @@
+<!--
+A YouTube embed styled like the media blocks on Anthropic's research posts:
+sits in the reading column at full width, breaks out to an 800px media column
+on large screens, rounded corners, with an optional left-aligned caption
+underneath in their 14px sans caption style.
+
+    < c-youtube-video id="dQw4w9WgXcQ" caption="What the video shows." />
+
+`id` is the YouTube video id. The iframe uses the privacy-enhanced
+youtube-nocookie.com host and lazy-loads. The lg: breakout assumes the
+component sits inside the article's 640px reading column — anywhere else,
+wrap it in a max-w-160 container or the negative margins will overflow.
+-->
+<c-vars id="" caption="" title="YouTube video player" />
+<figure class="w-full lg:w-[calc(100%+10rem)] lg:-mx-20 flex flex-col">
+    <div class="relative w-full aspect-video overflow-hidden rounded-lg sm:rounded-xl bg-black">
+        <iframe class="absolute inset-0 w-full h-full"
+                src="https://www.youtube-nocookie.com/embed/{{ id }}"
+                title="{{ title }}"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerpolicy="strict-origin-when-cross-origin"
+                allowfullscreen
+                loading="lazy"></iframe>
+    </div>
+    {% if caption %}
+        <figcaption class="mt-2 w-full font-sans text-[14px] leading-[120%] tracking-[0.15px] text-base-content/60">
+            {{ caption }}
+        </figcaption>
+    {% endif %}
+</figure>

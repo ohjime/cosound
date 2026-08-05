@@ -1,9 +1,62 @@
 import random
-from collections import Counter
+from collections import Counter, defaultdict
+
 from django.tasks import task
+
 from core.models import Player, Prediction, Sound
 from vote.models import Vote
-from mixer.models import SoundMix
+
+
+def _predict_for_player(player_id: int) -> int:
+    player = Player.objects.get(pk=player_id)
+    recent_votes = Vote.recent(player, minutes=5)
+    active_listeners = sorted(
+        Vote.get_listeners(recent_votes),
+        key=lambda listener: listener.pk,
+    )
+    next_prediction = Prediction.new()
+    selected_sound_ids: set[int] = set()
+
+    library_by_tag: dict[int, list[Sound]] = defaultdict(list)
+    for sound in player.sounds.prefetch_related("tags"):
+        for tag in sound.tags.all():
+            library_by_tag[tag.pk].append(sound)
+
+    for listener in active_listeners:
+        tag_counts: Counter[int] = Counter()
+        for sound in listener.collection.prefetch_related("tags"):
+            tag_counts.update(tag.pk for tag in sound.tags.all())
+
+        if not tag_counts:
+            continue
+
+        highest_count = max(tag_counts.values())
+        usable_top_tags = [
+            tag_id
+            for tag_id, count in tag_counts.items()
+            if count == highest_count and library_by_tag[tag_id]
+        ]
+        if not usable_top_tags:
+            continue
+
+        selected_tag = random.choice(usable_top_tags)
+        unused_sounds = [
+            sound
+            for sound in library_by_tag[selected_tag]
+            if sound.pk not in selected_sound_ids
+        ]
+        if not unused_sounds:
+            continue
+
+        selected_sound = random.choice(unused_sounds)
+        next_prediction.add_layer(sound_id=selected_sound.pk, gain=1.0)
+        selected_sound_ids.add(selected_sound.pk)
+
+    if next_prediction:
+        player.update(next_prediction)
+        player.announce(next_prediction)
+        return 1
+    return 0
 
 
 @task
@@ -12,68 +65,4 @@ def random_predictor(
     *args,
     **kwargs,
 ) -> int:
-
-    player = Player.objects.get(pk=player_id)
-    player_library = player.library()
-    recent_votes = Vote.recent(player, minutes=30)
-    active_listeners = Vote.get_listeners(recent_votes)
-    currently_playing = player.playing
-    next_prediction = Prediction.new()
-    sound_score: Counter = Counter()
-
-    for listener in active_listeners:
-        listener_likes = listener.collected()
-        for sound in listener_likes:
-            if sound in player_library:
-                sound_score[sound] += 1
-
-    for listener in active_listeners:
-        listener_mixes = SoundMix.collect(listener, recent=4)
-        for mix in listener_mixes:
-            for layer in mix.cosound.layering():
-                sound_score[layer.sound] += 1
-
-    for vote in recent_votes:
-        match vote.value:
-            case Vote.DOWNVOTE:
-                for layer in vote.cosound.layering():
-                    sound_score[layer.sound] -= 1
-            case Vote.UPVOTE:
-                for layer in vote.cosound.layering():
-                    sound_score[layer.sound] += 1
-
-    # Keep all currently playing sounds, shuffle to randomize tiebreaks, then
-    # sort ascending so the 2 worst scorers are at the front.
-    current_sounds: list[Sound] = [
-        Sound.objects.get(pk=layer.sound_id) for layer in currently_playing.layers
-    ]
-    random.shuffle(current_sounds)
-    current_sounds.sort(key=lambda s: sound_score[s])
-
-    # Drop the 2 worst, carry the rest forward.
-    keepers = current_sounds[1:]
-    keeper_pks = {s.pk for s in keepers}
-
-    # Fill the remaining slots with the top-scoring library sounds not already kept.
-    needed = 3 - len(keepers)
-    additions: list[Sound] = [
-        s for s, _ in sound_score.most_common() if s.pk not in keeper_pks
-    ][:needed]
-
-    candidates = keepers + additions
-    if len(candidates) < 3:
-        candidate_pks = {s.pk for s in candidates}
-        remaining = [s for s in player_library if s.pk not in candidate_pks]
-        candidates += random.sample(remaining, min(3 - len(candidates), len(remaining)))
-
-    for sound in candidates:
-        next_prediction.add_layer(
-            sound_id=sound.pk,
-            gain=round(random.uniform(0.1, 0.4), 2),
-        )
-
-    if next_prediction:
-        player.update(next_prediction)
-        player.announce(next_prediction)
-        return 1
-    return 0
+    return _predict_for_player(player_id)

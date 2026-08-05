@@ -10,6 +10,7 @@ urlpatterns = [
     path("login/", include("login.urls")),
     path("mixer/", include("mixer.urls")),
     path("vote/", include("vote.urls")),
+    path("studio/", include("studio.urls")),
     path("admin/", admin.site.urls, name="admin"),
     path("upload/", include("django_file_form.urls")),
 ]

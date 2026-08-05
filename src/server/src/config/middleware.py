@@ -8,8 +8,9 @@ including ``localhost`` under ``make server`` — keeps the default
 
 # Host prefix -> URLconf that mounts that app at the subdomain root.
 SUBDOMAIN_URLCONFS = {
-    "admin.": "config.urls_admin",  # admin.* -> Django admin at /
-    "api.": "config.urls_api",      # api.*   -> django-ninja API at /
+    "admin.": "config.urls_admin",    # admin.*  -> Django admin at /
+    "api.": "config.urls_api",        # api.*    -> django-ninja API at /
+    "studio.": "config.urls_studio",  # studio.* -> artist studio at /
 }
 
 

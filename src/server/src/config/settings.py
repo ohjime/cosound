@@ -175,6 +175,7 @@ INSTALLED_APPS = [
     "vote",
     "mixer",
     "login",
+    "studio",
     "allauth",
     "allauth.account",
 ]

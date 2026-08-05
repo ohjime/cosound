@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build --emptyOutDir"
+    "build": "vite build --emptyOutDir",
+    "test": "node --test assets/js/*.test.js"
   },
   "keywords": [],
   "author": "",

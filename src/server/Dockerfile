@@ -14,9 +14,14 @@ RUN npm run build                      # -> /app/vite/static (incl. manifest.jso
 # ---------- Stage 2: Python runtime ----------
 FROM python:3.13-slim AS runtime
 COPY --from=ghcr.io/astral-sh/uv:0.9.18 /uv /uvx /bin/
+# UV_COMPILE_BYTECODE_TIMEOUT: uv's per-file bytecode timeout is 60s. numpy
+# (pulled in by pgvector) ships ~1 MB test modules that blow past it on the 1 GB
+# droplet — worse because BuildKit runs the assets stage's `npm run build` on the
+# same CPU. 0 = no timeout; compilation still completes, it just takes longer.
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     UV_COMPILE_BYTECODE=1 \
+    UV_COMPILE_BYTECODE_TIMEOUT=0 \
     UV_LINK_MODE=copy \
     DEBUG=False \
     PATH="/app/.venv/bin:$PATH"

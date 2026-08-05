@@ -53,8 +53,12 @@ src/player/cosound.json
 src/server/vite/static/
 src/player/assets/
 src/server/vite/
+!src/server/vite/
+src/server/vite/node_modules/
+src/server/vite/static/
 
 # Local backup of corrupted .env (secrets) — never commit
 **/.env*.bak
 .claude/settings.json
 src/player/conditioned/
+.old.zip

@@ -45,8 +45,11 @@ dependencies = [
 ignore = ["D018","H006","H021"]
 custom_html = "c-[\\w-]+"
 custom_blocks="buttons,endbuttons,fragment,component_title,component_navinfo,component_alert_global__acting_for,partialdef,component_box_nexus_activated_service"
-max_attribute_length=200
-preserve_blank_lines=true
-extend_exclude = "itou/templates/utils/widgets/duet_date_picker_widget.html"
+# Match .vscode/settings.json's djlint.maxAttributeLength / djlint.maxLineLength,
+# so Zed (plain djlint + this file) and VS Code (the monosans.djlint extension,
+# which passes its own settings and ignores these) format identically.
+max_attribute_length=80
+max_line_length=120
+preserve_blank_lines=false
 format_css = true
 format_js = true

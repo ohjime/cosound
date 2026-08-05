@@ -65,9 +65,6 @@ def submit_vote(request):
         section=context.get("section") or "",
     )
 
-    if value == 1 and layers:
-        listener.collection.add(*[sound_id for sound_id, _ in layers])
-
     response = HttpResponse("")
     response["HX-Trigger"] = json.dumps(
         {"vote-success": {"voters": serialize_recent_votes(player)}}

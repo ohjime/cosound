@@ -9,6 +9,8 @@ from app.views import (
     example_card_swap_multiple,
     home_page,
     home_initial,
+    home_tab_mixer,
+    home_tab_about,
     artist_details,
 )
 
@@ -60,6 +62,16 @@ htmx_urlpatterns = [
         "htmx/home/initial",
         home_initial,
         name="home_initial",
+    ),
+    path(
+        "htmx/home/tab/mixer",
+        home_tab_mixer,
+        name="home_tab_mixer",
+    ),
+    path(
+        "htmx/home/tab/about",
+        home_tab_about,
+        name="home_tab_about",
     ),
     path(
         "htmx/artist/details",

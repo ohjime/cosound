@@ -7,33 +7,25 @@
 {% endblock content %}
 {% partialdef initial %}
     <div class="min-h-dvh w-full flex flex-col items-center justify-center gap-6 py-10 motion-delay-200 motion-preset-expand">
-        {# Header #}
+        <!-- Header -->
         <div class="motion-preset-blur-down-lg motion-duration-700 motion-delay-700 w-full flex justify-center">
             <c-core-header />
         </div>
-        {# Deck stack #}
+        <!-- Deck stack -->
         <div class="motion-preset-blur-down motion-duration-700 motion-delay-500 w-full flex flex-col items-center">
-            <c-mixer-player :sounds="sounds" />
-            <div x-data
-                 class="h-fit w-full flex flex-col items-center transition-all duration-300 ease-out opacity-100 htmx-added:opacity-0 -mt-2">
-                <div x-cloak class="grid -mt-12 pb-2 place-items-center w-full">
-                    <div :class="!$store.soundLayers.started ? 'opacity-100' : 'opacity-0 pointer-events-none'"
-                         class="[grid-area:1/1] transition-opacity duration-500 ease-in-out flex justify-center w-full max-w-70 -mb-4">
-                        <c-core-subheader />
-                    </div>
-                    <div :class="$store.soundLayers.started ? 'opacity-100' : 'opacity-0 pointer-events-none'"
-                         class="[grid-area:1/1] transition-opacity duration-500 ease-in-out flex flex-col gap-1.5 py-6 pt-12 items-center justify-center">
-                        <c-mixer-master />
-                    </div>
+            <div class="h-fit w-full flex flex-col items-center -mt-5">
+                <!-- The tab bar is the page's primary navigation, so it is
+                     always on screen — no reveal, no crossfade, nothing gated
+                     on playback state. -->
+                <div class="flex flex-col gap-1.5 pb-6 items-center justify-center w-full">
+                    <c-app-navigation-tabs />
                 </div>
-                <div class="flex flex-col items-center gap-10 w-full">
-                    <c-core-deck id="deck">
-                        {% include "mixer/index.html#mixer" %}
-                    </c-core-deck>
-                </div>
+                <!-- The tab-controlled body: each c-app-navigation-tabs radio
+                     swaps this region's contents. Opens on the mixer. -->
+                <div id="tab_content" class="flex flex-col items-center gap-10 w-full">{% include "app/home.html#tab_mixer" %}</div>
             </div>
         </div>
-        {# Below-deck content — each section animates its own height in/out via grid-rows trick #}
+        <!-- Below-deck content — each section animates its own height in/out via grid-rows trick -->
         <div class="w-full flex flex-col items-center">
             <div x-data
                  class="grid w-full transition-[grid-template-rows,opacity] duration-500 ease-out"
@@ -58,6 +50,28 @@
             </div>
         </div>
     </div>
+{% endpartialdef %}
+<!--
+The MIXER tab. The player lives inside the swapped region on purpose: it is
+what mounts the soundLayers store over this tab's mix, so choosing another tab
+unmounts it (the htmx cleanup hook in soundscape-store.js stops the audio) and
+choosing MIXER again mounts a fresh random mix.
+-->
+{% partialdef tab_mixer %}
+    <c-mixer-player :sounds="sounds" />
+    <div>
+        <c-core-deck id="deck">
+            {% include "mixer/index.html#mixer" %}
+        </c-core-deck>
+    </div>
+{% endpartialdef %}
+<!--
+The ABOUT tab: cosound's own write-up — what the project is, how the server and
+venue player work, and the open recommendation problem. See
+cotton/app_about_article.html.
+-->
+{% partialdef tab_about %}
+    <c-app-about-article />
 {% endpartialdef %}
 {% partialdef mix_title_modal %}
     <h3 class="font-bold text-lg">Name your cosound</h3>

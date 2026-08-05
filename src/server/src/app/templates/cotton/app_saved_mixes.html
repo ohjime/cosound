@@ -6,25 +6,7 @@
         mixes: JSON.parse(document.getElementById('userMixes').textContent),
         loadMix(mix) {
             const store = Alpine.store('soundLayers');
-            store._players.forEach(p => { try { p.pause(); } catch (e) {} });
-            store.tracksLoading = true;
-            store.loadedCount = 0;
-            store._players = [];
-            store.currentIndex = 0;
-            store.layers = mix.layers.map(l => ({
-                ...l,
-                gain: l.sound_gain != null ? l.sound_gain * 100 : (l.gain ?? 50),
-                isolated: false,
-                mute: false,
-                saved: l.saved ?? true,
-            }));
-            requestAnimationFrame(() => requestAnimationFrame(() => {
-                document.querySelectorAll('audio').forEach(el => {
-                    const src = el.getAttribute('src');
-                    if (!store.layers.some(l => l.sound_file === src)) return;
-                    if (el.readyState >= 3) store.registerPlayer(el);
-                });
-            }));
+            store.loadMix(mix);
         }
      }"
 {# djlint:on #}

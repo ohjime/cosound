@@ -1,0 +1,841 @@
+<!--
+The ABOUT tab's body: cosound's own write-up — what the project is, how the
+server and the venue player actually work today, and what still has to be
+solved before the recommendation step deserves the word "intelligent".
+
+Everything below is written against the code in `src/server` and `src/player`.
+Where the running code and the intention disagree, the code is what is
+described and the gap is called out.
+
+The wrapper below owns the tab's entrance animation, so the ABOUT body reveals
+itself the same way the MIXER card does when its tab is picked (see
+cotton/core_card.html): after htmx swaps it in, a double rAF flips `mounted`,
+which slides it up 60px and fades it in over 200ms ease-out. The inline
+`opacity: 0` is the pre-Alpine starting state — without it the content flashes
+at full opacity for one frame before Alpine initializes.
+-->
+<div x-data="{ mounted: false }"
+     x-init="requestAnimationFrame(() => requestAnimationFrame(() => mounted = true))"
+     style="opacity: 0"
+     :style="`transition: transform 200ms ease-out, opacity 200ms ease-out; transform: translateY(${mounted ? 0 : 60}px); opacity: ${mounted ? 1 : 0};`"
+     class="flex flex-col items-center gap-10 w-full">
+    <h1 class="font-sans text-center text-[32px] sm:text-[52px] font-bold leading-[100%]">
+    Sound, chosen by the room
+</h1>
+<p class="font-sans text-center text-[15px] sm:text-[17px] max-w-140 opacity-70 leading-[150%]">
+    How cosound collects preference without a survey, how the server and the
+    venue player fit together, and what it would take to predict a mixture
+    worth listening to.
+</p>
+<!--
+Paper link and video. Both still point at the placeholder targets they were
+introduced with — swap the href and the `id` for cosound's own paper and clip
+before this page goes in front of anyone.
+-->
+<a href="https://transformer-circuits.pub/2026/workspace/index.html"
+   target="_blank"
+   rel="noopener"
+   class="font-sans inline-block rounded-full bg-[#141413] text-[#faf9f5] px-6 py-3.5 text-[15px] leading-none transition-colors hover:bg-[#3d3d3a]">Read our Paper</a>
+<div class="max-w-100 w-full">
+    <c-youtube-video id="8ClVZlJNMJM" />
+</div>
+<article class="shadow-sm w-full max-w-200 bg-base-200 text-base-content rounded-3xl overflow-hidden text-left">
+    <div class="px-6 sm:px-12 pt-16 pb-20">
+        <!-- Reading column: body-2 serif post-text, headline-4 post-headings. -->
+        <div class="max-w-160 mx-auto font-serif text-[17px] leading-[155%] [&_p]:mb-[1.5em] [&_a]:underline [&_a]:underline-offset-2 [&_a]:decoration-[#b0aea5] hover:[&_a]:decoration-[#141413] [&_h2]:font-sans [&_h2]:text-[23px] sm:[&_h2]:text-[32px] [&_h2]:font-semibold [&_h2]:leading-[120%] [&_h2]:mt-16 [&_h2]:mb-8 [&_h3]:font-sans [&_h3]:text-[19px] [&_h3]:font-semibold [&_h3]:mt-10 [&_h3]:mb-4 [&_ul]:mb-[1.5em] [&_ul]:pl-6 [&_ul]:list-disc [&_ol]:mb-[1.5em] [&_ol]:pl-6 [&_ol]:list-decimal [&_li]:mb-3 [&_code]:font-sans [&_code]:text-[14px] [&_code]:bg-base-300 [&_code]:rounded [&_code]:px-1.5 [&_code]:py-0.5 [&_table]:w-full [&_table]:text-[15px] [&_table]:font-sans [&_table]:border-collapse [&_th]:text-left [&_th]:font-semibold [&_th]:py-2 [&_th]:pr-4 [&_th]:border-b [&_th]:border-base-content/20 [&_td]:align-top [&_td]:py-2 [&_td]:pr-4 [&_td]:border-b [&_td]:border-base-content/10">
+            <!-- Epigraph. Schafer is the source of the keynote/signal/soundmark and hi-fi/lo-fi vocabulary used further down, so he opens the page. -->
+            <figure class="border-l-2 border-base-content/25 pl-6 sm:pl-8">
+                <blockquote class="text-[21px] sm:text-[26px] leading-[135%] italic">
+                    “The best way to comprehend what I mean by acoustic design
+                    is to regard the soundscape of the world as a huge musical
+                    composition, unfolding around us ceaselessly. We are
+                    simultaneously its audience, its performers and its
+                    composers.”
+                </blockquote>
+                <figcaption class="mt-4 font-sans not-italic text-[15px] leading-[140%] tracking-[-0.24px] text-base-content/60">
+                    R. Murray Schafer, <em>The Soundscape: Our Sonic Environment and the Tuning of the World</em>, 1977
+                </figcaption>
+            </figure>
+            <h2>What cosound is</h2>
+            <p>
+                Cosound plays layered environmental audio in a shared public
+                space and lets the people in that space steer it. A
+                <em>cosound</em> is nothing more than a set of sound layers and
+                a gain for each one. The research question underneath the
+                product is narrow and hard: how does a public soundscape
+                respond to a changing group of listeners without asking any of
+                them to fill out a form?
+            </p>
+            <p>
+                The first venue is the public listening space at Cameron
+                Library. The system runs a loop — a venue player renders the
+                current mixture into the room, listeners react to it, the
+                server folds those reactions into a new mixture, and the player
+                fades to it. Everything in this write-up describes that loop as
+                it is actually implemented today, and then argues about the one
+                part of it that is still a placeholder: the choosing.
+            </p>
+            <h2>Where the design came from</h2>
+            <p>
+                The project began as a way to help Dr. Frishkopf collect
+                listener feedback for curating a real-time public soundscape.
+                The first mechanism was deliberately blunt: an upvote tag and a
+                downvote tag on every table, written as NFC. Hearing something
+                you like, you tap the upvote tag with your phone; hearing
+                something you don't, you tap the other one. The tap opens a URL
+                carrying the venue's player token, and the server identifies
+                the listener from their session — if the phone isn't logged in,
+                it asks them to log in before the vote counts.
+            </p>
+            <p>
+                That worked, and it collected almost nothing. A vote is one bit
+                attached to a mixture; it tells you a person in that room at
+                that moment approved or disapproved of a combination of four or
+                five sounds, and gives you no way to know which of them did the
+                work. The obvious fix — put a survey in front of the voter and
+                build a proper listener profile — was rejected on purpose. It
+                asks too much of somebody who came to the library to study, and
+                it makes the room feel like a lab.
+            </p>
+            <p>
+                The alternative became the thing you are using right now. Give
+                the listener a personal web mixer they actually want to use,
+                and read the preference signal out of how they use it. They get
+                a toy; the project gets a far richer record than any survey
+                would have produced. Nobody is being measured against their
+                will, because the measurement is the same act as the enjoyment.
+            </p>
+            <p>
+                Which raised the next problem: if the mixer is good enough to
+                enjoy at home, why come back to the room and vote? The answer
+                is the collection. The mixer is not stocked with the whole
+                library — you can only build from sounds you have collected,
+                and the way to collect a sound is to be in a room where it is
+                playing and upvote it. Public listening becomes the way you
+                acquire material for private listening, and each acquisition
+                also happens to be a labelled preference event at a known place
+                and time.
+            </p>
+            <p>
+                That loop is also the commercial argument, for whatever it
+                turns out to be worth. Scarce, venue-exclusive soundscapes give
+                a building a reason to want a player — foot traffic from people
+                who want the sounds only that building plays. And soundscapes
+                are neutral in a way music never is: a café that plays rock
+                irritates one table and a café that plays rap irritates
+                another, while rain on a window offends nobody.
+            </p>
+            <h2>Two sensors, two different signals</h2>
+            <p>
+                The system has exactly two ways of learning what a listener
+                likes, and treating them as one signal would be a mistake. They
+                measure different things, under different conditions, with
+                different reliability.
+            </p>
+            <div class="overflow-x-auto mb-[1.5em]">
+                <table>
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>The public vote</th>
+                            <th>The personal mixer</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>What it records</strong></td>
+                            <td>Approval of a whole mixture, in a real room, at a known time and table</td>
+                            <td>Which sounds a listener chooses to combine, and at what relative levels</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Resolution</strong></td>
+                            <td>One bit over N layers — credit assignment is ambiguous</td>
+                            <td>Per-sound, per-gain, and repeatable</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Context</strong></td>
+                            <td>Everything: the room, the crowd, the HVAC, the hour</td>
+                            <td>None — headphones, unknown environment</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Intent</strong></td>
+                            <td>Judgement: "this fits here, now"</td>
+                            <td>Exploration: "what happens if I put these together?"</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Cost to the listener</strong></td>
+                            <td>One tap</td>
+                            <td>Minutes of deliberate play</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p>
+                The asymmetry matters for modelling. A saved mix is a strong
+                statement about taste and a weak statement about fit — it was
+                made in an unknown acoustic context, and the mixer is a
+                playground, so a saved mix may be an experiment the listener
+                enjoyed once and would never sit inside for an hour. A vote is
+                the reverse: weak about taste, strong about fit. The public
+                speaker is not only trying to predict what a person would like;
+                it is trying to predict what <em>works in that room for the
+                people currently in it</em>, which is a different target.
+            </p>
+            <p>
+                So the mixer signal probably wants to be discounted by recency
+                and repetition — a sound that shows up across several saved
+                mixes over weeks is taste, a sound that appears once at the top
+                of a session is curiosity — while the vote signal wants to be
+                weighted by context and treated as evidence about the
+                <em>combination</em>, not the parts.
+            </p>
+            <h2>How the system works today</h2>
+            <p>
+                Three processes: the Django server (the only place decisions
+                are made), the venue player (a read-only client that renders
+                whatever the server says), and a scheduler loop that re-runs the
+                prediction. The listener-facing web app is served by the same
+                Django process.
+            </p>
+            <h3>The data model</h3>
+            <p>
+                <code>Sound</code> is a file plus a title, an artist, free-text
+                tags, cover art, a short flavour line, and a pgvector
+                <code>embeddings</code> column. <code>Cosound</code> is a
+                mixture: a many-to-many to <code>Sound</code> through
+                <code>SoundLayer</code>, which carries the gain. Every cosound
+                is identified by two SHA-256 digests computed from its layers —
+                <code>hashid</code> over sound ids <em>and</em> gains (gains
+                quantised to the nearest 0.05 first), and <code>hashset</code>
+                over the sound ids alone. That is what makes a mixture a
+                first-class, deduplicated object: the same layers at the same
+                levels are the same row no matter who built it, and
+                <code>hashset</code> lets you ask "has this set of sounds ever
+                been assembled, at any levels?"
+            </p>
+            <p>
+                A <code>Listener</code> wraps a user and owns a
+                <code>collection</code> — the deck of sounds they are allowed
+                to mix with. A <code>Player</code> is a venue endpoint: a
+                manager, a name, a location, an assigned library
+                (<code>sounds</code>), a 64-hex API token generated on first
+                save, and <code>playing</code>, a pydantic
+                <code>Prediction</code> stored as JSON that holds the layers
+                currently assigned to that venue. A <code>Vote</code> joins a
+                listener, a player, a cosound, an integer value, and the
+                table's <code>section</code> string.
+            </p>
+            <h3>The vote path</h3>
+            <ol>
+                <li>
+                    An NFC tag on a table encodes
+                    <code>/vote/?player=&lt;token&gt;&amp;section=&lt;table&gt;&amp;choice=1</code>
+                    — or <code>choice=0</code> for the downvote tag. Admin has a
+                    page that generates and copies these URLs per section.
+                </li>
+                <li>
+                    The page resolves the token to a player and builds a
+                    carousel of what is currently playing there: card zero is
+                    the venue, then one card per layer with its artwork, tags,
+                    gain and collection state.
+                </li>
+                <li>
+                    If the phone isn't authenticated, the vote is intercepted:
+                    a login card is pushed onto the deck, the intended partial
+                    is stashed in the session, and the vote resumes after
+                    passwordless email login — or as a guest account
+                    (<code>@anon.cosound.ca</code>), so a stranger can still
+                    vote.
+                </li>
+                <li>
+                    A per-listener throttle (60 seconds by default) rejects
+                    rapid repeat taps and reports the seconds remaining.
+                </li>
+                <li>
+                    The current layers are frozen into a <code>Cosound</code>
+                    via <code>get_or_create_from_layers</code>, and a
+                    <code>Vote</code> row is written against it. On an upvote,
+                    every sound in the mixture is added to that listener's
+                    collection — that is the "collect what you heard in public"
+                    mechanic, implemented in four lines.
+                </li>
+            </ol>
+            <p>
+                One defect worth naming: the downvote tag sends
+                <code>choice=0</code> and the view stores that integer
+                verbatim, while <code>Vote.DOWNVOTE</code> is defined as
+                <code>-1</code>. Nothing consumes vote values yet, so nothing
+                is currently wrong in production — but any scoring function
+                that multiplies by <code>value</code> will silently treat every
+                downvote as a no-op until the two agree.
+            </p>
+            <h3>The personal mixer</h3>
+            <p>
+                The mixer is a Web Audio engine driven by Alpine and htmx. It
+                opens on three random library sounds, two of them audible, at
+                random gains — deliberately unfinished, so the listener arrives
+                with room to build rather than a mix that is already done. The
+                cap is eight layers. Swapping or searching for a layer queries
+                <em>only</em> the listener's collection, which is where the
+                deck economy is enforced. Saving posts the layer JSON, clamps
+                each gain into [0, 1], drops any layer whose id isn't a real
+                <code>Sound</code> (blank slots and local files from the artist
+                studio both carry browser-made ids), resolves the result to a
+                <code>Cosound</code>, and attaches a titled
+                <code>SoundMix</code> to the user.
+            </p>
+            <h3>The scheduler and the prediction</h3>
+            <p>
+                A management command loops forever: every 180 seconds it walks
+                every <code>Player</code> and enqueues the configured predictor
+                as a background task, resolved by dotted path from settings so
+                the strategy is swappable without touching the loop. The
+                predictor writes its result into <code>player.playing</code>.
+                That is the entire decision surface of the system — one
+                function, one player id, one <code>Prediction</code> out.
+            </p>
+            <h3>The player process</h3>
+            <p>
+                The venue player is a separate Python program with a Textual
+                terminal UI, and it is strictly a client — it never decides
+                anything.
+            </p>
+            <ol>
+                <li>
+                    At startup it sends its token as <code>X-API-Key</code> and
+                    requests <code>/manifest</code>, receiving
+                    <code>{sound_id: url}</code> for its assigned library. It
+                    deletes local files no longer in the manifest and downloads
+                    the rest.
+                </li>
+                <li>
+                    Then it conditions every file once, offline, and caches the
+                    result keyed by a signature over size, mtime, target rate
+                    and target loudness: decode to float32, resample to the
+                    output device's native rate, apply a gentle high-shelf cut
+                    above ~13 kHz to tame lossy-codec fizz, crossfade the tail
+                    into the head so loops don't click, and normalise to −20
+                    LUFS with a −1 dBFS peak ceiling. That last step is what
+                    lets layers sit together predictably — gains coming from
+                    the server mean something because every file arrives at the
+                    same loudness.
+                </li>
+                <li>
+                    Every 30 seconds it polls <code>/player</code> and compares
+                    a signature of the returned layers and gains against the
+                    last one. Unchanged, it does nothing. Changed, it queues
+                    each layer and triggers a transition.
+                </li>
+                <li>
+                    The transition is a gain ramp on the audio thread — new
+                    tracks ramp up from zero, dropped tracks ramp down to zero
+                    and are deleted, and files loop forever by modular
+                    indexing. Each new layer is assigned an azimuth from a
+                    van der Corput sequence, so that <em>any</em> number of
+                    active layers stays spread around the listener instead of
+                    piling onto one side.
+                </li>
+                <li>
+                    Rendering adapts to whatever the room has. The player probes
+                    the output device, infers a speaker layout from the channel
+                    count, and picks a mode: constant-power stereo panning on
+                    two channels, VBAP on a recognised 4/6/8-channel ring, and a
+                    geometry-free decorrelated upmix (flat-magnitude,
+                    random-phase all-pass per speaker) on anything unusual.
+                    A feedback-delay-network reverb adds a diffuse room field —
+                    vectorised in chunks no longer than the shortest delay line,
+                    so an inherently recursive structure still runs in numpy
+                    inside the audio callback.
+                </li>
+            </ol>
+            <p>
+                The API is three read-only endpoints behind the token:
+                <code>/manifest</code>, <code>/player</code> (venue details plus
+                titles, artists and gains), and <code>/cosound</code> (the bare
+                <code>{sound_id: gain}</code> map, kept for compatibility), all
+                throttled to ten requests a minute.
+            </p>
+            <h2>What the recommender actually does right now</h2>
+            <p>
+                It is worth being exact about this, because the gap between it
+                and the goal is the whole project. The current predictor:
+            </p>
+            <ul>
+                <li>
+                    treats a listener as <strong>present</strong> at a venue if
+                    they voted there in the last 30 minutes — a deliberately
+                    crude proxy for occupancy, and the one number most likely to
+                    change (the working definition has since drifted toward an
+                    hour);
+                </li>
+                <li>
+                    counts every tag on every sound in every present listener's
+                    collection into a single <code>Counter</code>;
+                </li>
+                <li>
+                    walks tag scores from highest to lowest and picks a random
+                    library sound carrying a tag at that score, falling back to
+                    a uniformly random library sound;
+                </li>
+                <li>
+                    emits that <em>one</em> sound at gain 1.0 as the new
+                    mixture.
+                </li>
+            </ul>
+            <p>
+                So the thing described as a layered adaptive soundscape is, at
+                this moment, a tag-weighted random single-sound picker. The
+                embedding column exists but is filled by
+                <code>random_sound_classifier</code>, which returns five
+                uniform random numbers — a placeholder wearing the shape of the
+                real thing. Saved gains are recorded and never read. Nothing
+                consumes vote polarity. And the candidate pool for saved-mix
+                material is not restricted to the venue's assigned library, so
+                a smarter version of this function could happily select a sound
+                the player has never downloaded.
+            </p>
+            <p>
+                None of that is a criticism of the code — it closes the loop
+                end-to-end, which is exactly what a baseline is for. But it
+                means every interesting claim about preference learning is
+                currently unearned, and the honest next step is not a bigger
+                model. It is deciding what the model is supposed to be
+                optimising.
+            </p>
+            <h2>The actual blocker: what is a good cosound?</h2>
+            <p>
+                Predicting mixtures is a search problem, and the search space
+                is enormous. With a library of <em>n</em> sounds and up to eight
+                layers, each with a continuous gain, there is no useful sense in
+                which the system can explore it — and no ground truth to
+                explore <em>toward</em>, because "good" here has never been
+                defined. Votes give sparse, noisy, mixture-level feedback that
+                would take an implausible amount of traffic to shape a search
+                that large.
+            </p>
+            <p>
+                The temptation is to write down rules for what a good mixture
+                is. That should be resisted, and mostly for a good reason: the
+                interesting result is what listeners actually converge on, and
+                a rulebook written in advance would just be the team's taste
+                laundered through a recommender. The mixture level should stay
+                loose and open, with minimal injected bias.
+            </p>
+            <p>
+                But "loose at the mixture level" only works if the search is
+                constrained somewhere else — otherwise the system explores
+                nothing but noise. The right place to put the structure is one
+                level down, on the <strong>sounds</strong>. If every sound is
+                described well enough, a large fraction of obviously-bad
+                mixtures becomes unreachable without anyone having to legislate
+                taste. Guardrails on the ingredients; freedom in the recipe.
+            </p>
+            <h2>Labelling the sounds properly</h2>
+            <p>
+                Today a sound might carry the tag "Rain". That is a start and
+                not much more — it is one facet, chosen ad hoc, in a folksonomy
+                inherited from wherever the file came from. Several established
+                frameworks would give the same file far more usable structure,
+                and they are complementary rather than competing.
+            </p>
+            <h3>1. Origin — the geophony / biophony / anthrophony split</h3>
+            <p>
+                Acoustic ecology's standard partition: <strong>geophony</strong>
+                for non-biological natural sound (water, wind, thunder),
+                <strong>biophony</strong> for non-human organisms (birds,
+                insects), <strong>anthrophony</strong> for human-generated
+                sound, itself split into controlled (music, speech) and
+                uncontrolled (traffic, machine hum). Cheap to annotate,
+                immediately useful as a diversity constraint — a mixture that is
+                four biophony layers is a very different proposition from one
+                geophony bed plus one biophony accent.
+            </p>
+            <h3>2. Function — Schafer's keynote / signal / soundmark</h3>
+            <div class="overflow-x-auto mb-[1.5em]">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Class</th>
+                            <th>Role</th>
+                            <th>In a mix</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Keynote</strong></td>
+                            <td>Background that is rarely consciously heard but sets the character of a place</td>
+                            <td>The bed. You want roughly one, maybe two, and they can sit loud</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Signal</strong></td>
+                            <td>Foreground sound listened to consciously; carries information</td>
+                            <td>Accents. Too many and the room becomes a to-do list</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Soundmark</strong></td>
+                            <td>A sound a community treats as uniquely its own</td>
+                            <td>The venue-exclusive material the collection mechanic is built on</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p>
+                This one is arguably the highest-leverage label in the whole
+                scheme, because it maps directly onto mixing rules. It is also
+                the label most likely to need per-sound human judgement rather
+                than a classifier.
+            </p>
+            <h3>3. Perception — the ISO 12913 circumplex</h3>
+            <p>
+                ISO 12913 codifies how people <em>feel</em> about an acoustic
+                environment on two axes: <strong>pleasantness</strong>
+                (unpleasant → pleasant) and <strong>eventfulness</strong>
+                (uneventful → eventful), yielding four quadrants — calm
+                (pleasant, uneventful), exciting (pleasant, eventful), chaotic
+                (unpleasant, eventful), monotonous (unpleasant, uneventful). A
+                library reading room is asking for the calm quadrant, and
+                stating that as a coordinate rather than a vibe gives the
+                recommender an actual objective.
+            </p>
+            <p>
+                There is a live methodological choice here between ISO 12913's
+                eight-item questionnaire and SAM (Self-Assessment Manikin:
+                valence, arousal, dominance). SAM is faster per stimulus,
+                pictographic and language-independent, and its arousal axis maps
+                more directly onto a calm objective than pleasantness alone —
+                a vibrant carnival scores pleasant in ISO terms and is exactly
+                what a library does not want. The pragmatic route is to collect
+                SAM as the primary instrument and reconstruct approximate ISO
+                pleasantness and eventfulness for comparability with the
+                soundscape literature, calibrated on 30–50 stimuli rated on both
+                instruments rather than asserted. SAM's dominance axis, usually
+                discarded as redundant, may actually be worth keeping here: read
+                as perceived intrusiveness, it captures the sound that feels
+                like it is bearing down on you even at moderate arousal.
+            </p>
+            <h3>4. Clarity — hi-fi versus lo-fi</h3>
+            <p>
+                Schafer's other axis is essentially signal-to-noise. A
+                <strong>hi-fi</strong> environment has depth — you can hear a
+                distant bird and a nearby footstep at once. A
+                <strong>lo-fi</strong> one is a wall of sound in which
+                individual events are masked. This is a property a mixture
+                acquires or loses through layering, which makes it a natural
+                thing to <em>predict</em> from the layers and score against.
+            </p>
+            <h3>5. Raw acoustic description</h3>
+            <p>
+                None of the above tells you whether two files will physically
+                sit together. That needs signal-level features, and they are the
+                cheapest labels to obtain because they are computed, not judged:
+                integrated loudness and loudness range, spectral centroid and
+                band occupancy (where in the spectrum does this sound actually
+                live), event density and stationarity (a continuous bed versus
+                sparse discrete events), and periodicity. Masking predictions
+                fall straight out of band occupancy: two sounds crowding the
+                same octaves will fight, whatever their labels say.
+            </p>
+            <p>
+                This is also where the intuition about birds comes from. Stack
+                several bright, high-frequency, event-dense biophony layers and
+                the result is not "nature", it is being mobbed — high
+                eventfulness, low pleasantness, the chaotic quadrant. A
+                classifier that knows only "these are all bird sounds and the
+                listener likes birds" will walk straight into it. One that also
+                knows band occupancy and event density will not.
+            </p>
+            <h3>Public tags and hidden tags</h3>
+            <p>
+                Not every label needs to be shown. There are two audiences with
+                genuinely different needs, and conflating them is what makes tag
+                vocabularies rot. <strong>Public tags</strong> are for the
+                listener browsing their deck in the mixer — evocative, sparse,
+                curated, and allowed to be poetic. <strong>Hidden tags</strong>
+                exist only for the recommender — band occupancy bucket, event
+                density, keynote/signal role, provisional ISO coordinates,
+                confidence flags, experimental labels being trialled. Hidden
+                tags can be machine-written, revised, versioned and thrown away
+                without ever confusing a person, which means the labelling
+                scheme can stay experimental for as long as it needs to. The
+                schema already supports this cheaply: <code>taggit</code> plus
+                a namespace convention, or a separate model, and a
+                <code>Sound.public_tags</code> accessor used by the templates.
+            </p>
+            <h2>Mixing rules the labels would buy</h2>
+            <p>
+                The point of labelling well is that the constraints become
+                statements about ingredients, not about taste:
+            </p>
+            <ul>
+                <li>
+                    at most one or two keynote beds; signals capped by count,
+                    not by gain;
+                </li>
+                <li>
+                    diversity across origin classes — penalise mixtures that are
+                    entirely biophony or entirely anthrophony;
+                </li>
+                <li>
+                    spectral spread — penalise layers competing for the same
+                    band occupancy, which is the masking problem stated in
+                    features;
+                </li>
+                <li>
+                    an event-density budget, so the total rate of discrete
+                    events stays in the uneventful half of the circumplex;
+                </li>
+                <li>
+                    a gain budget, so that the sum of layers keeps headroom —
+                    the player already loudness-normalises every file, so gains
+                    are comparable across the library and this is arithmetic
+                    rather than guesswork.
+                </li>
+            </ul>
+            <p>
+                Every one of those is a filter over candidate mixtures, not a
+                prescription of the right answer. The space left over is still
+                large, still open to exploration, and no longer full of
+                mixtures nobody could stand.
+            </p>
+            <h2>Profiling listeners, and combining them</h2>
+            <p>
+                With sounds described in a shared feature space, a listener
+                profile becomes a point (or a distribution) in that same space
+                rather than a bag of tags. Collected sounds, saved-mix layers
+                weighted by their gains, and upvotes each contribute, with
+                different weights and different decay — and negative evidence
+                finally becomes usable once downvotes stop being stored as
+                zero.
+            </p>
+            <p>
+                Group selection is then its own problem with its own literature.
+                Averaging profiles is the obvious move and the wrong one: the
+                mean of two strong, opposed preferences is a mixture nobody
+                asked for. The measures that matter are the trade-off between
+                majority fit and worst-case individual dissatisfaction, and any
+                aggregation rule has to be transparent enough to explain to a
+                venue manager. Whatever is chosen must be evaluated against the
+                current baseline, which is exactly what the baseline is there
+                for.
+            </p>
+            <h2>What we would have to build, in order</h2>
+            <ol>
+                <li>
+                    <strong>Fix the plumbing.</strong> Align downvote encoding
+                    with <code>Vote.DOWNVOTE</code>; restrict candidate sounds
+                    to the venue's assigned library; let a running player pick
+                    up a library change without a restart; settle the presence
+                    window at one number and use it consistently.
+                </li>
+                <li>
+                    <strong>Label the library.</strong> Annotate every sound on
+                    all five schemes — origin, function, perceptual coordinates,
+                    clarity, computed acoustics — splitting public tags from
+                    hidden ones. This is the unglamorous step everything else
+                    depends on.
+                </li>
+                <li>
+                    <strong>Replace the random embedding.</strong> Swap
+                    <code>random_sound_classifier</code> for a real one. The
+                    hook already exists as a settings path, and the pgvector
+                    column is already there; only the dimension needs to change.
+                </li>
+                <li>
+                    <strong>Model the mixture, not the sound.</strong> Score
+                    candidate cosounds against the labelled constraints, using
+                    gain-weighted mixture vectors rather than unweighted sets.
+                </li>
+                <li>
+                    <strong>Calibrate against people.</strong> Run a small
+                    rating study — SAM on standardised-length excerpts — to
+                    ground the perceptual coordinates and fit the ISO mapping,
+                    so claims about calmness are measured rather than asserted.
+                </li>
+                <li>
+                    <strong>Evaluate group selection.</strong> Compare
+                    aggregation rules against the baseline on vote outcomes,
+                    reporting both majority fit and worst-case dissatisfaction.
+                </li>
+            </ol>
+            <h2>Reading list</h2>
+            <p>
+                Curated from the Freesound papers, datasets and projects
+                indexes in <code>docs/research</code>. Ordered by how directly
+                each item bears on the open problems above, not by date.
+            </p>
+            <h3>Closest prior art — read these first</h3>
+            <ul>
+                <li>
+                    <strong>Autonomous In-Situ Soundscape Augmentation via Joint Selection of Masker and Gain</strong> — Watcharasupat, Ooi, Lam et al., IEEE SPL 2022.
+                    Almost literally cosound's problem: choose which sound to add to a real environment <em>and</em> at what level, automatically, to improve perceived pleasantness.
+                    <a href="https://www.semanticscholar.org/paper/9ed03a9a979af9fbe0ec66afc0e4829c143dce1f" target="_blank" rel="noopener">Paper</a>
+                </li>
+                <li>
+                    <strong>ARAUS: A Large-Scale Dataset and Baseline Models of Affective Responses to Augmented Urban Soundscapes</strong> — Ooi, Ong, Watcharasupat et al., IEEE TAC 2022.
+                    Human affective ratings of soundscapes augmented with added sounds at known gains — the labelled data our recommender does not have.
+                    <a href="https://www.semanticscholar.org/paper/4ec06338eb0e58f29184d22a4dfb45cfe780cc27" target="_blank" rel="noopener">Paper</a>
+                </li>
+                <li>
+                    <strong>A Framework for Computer-Assisted Sound Design Systems Supported by Modelling Affective and Perceptual Properties of Soundscape</strong> — Thorogood, Fan, Pasquier, 2019.
+                    Directly about generating soundscapes from modelled affect. See also the same group's <a href="https://www.semanticscholar.org/paper/b755ae68a5aba53aaa813c25c4ac7ae1bd21a29c" target="_blank" rel="noopener">Soundscape Generation Systems</a> survey.
+                    <a href="https://www.semanticscholar.org/paper/63fd725a55637acea393cf49e017ce2a1b377bbd" target="_blank" rel="noopener">Paper</a>
+                </li>
+                <li>
+                    <strong>Audio Metaphor: Audio Information Retrieval for Soundscape Composition</strong> — Thorogood, Pasquier, Eigenfeldt, 2012, and <a href="https://www.semanticscholar.org/paper/05cea543c16c2bccb1ba8b8e8e271bf64dffedcc" target="_blank" rel="noopener">Computationally Created Soundscapes with Audio Metaphor</a>, 2013.
+                    Retrieval-driven soundscape assembly from Freesound; the <a href="https://audiometaphor.ca/" target="_blank" rel="noopener">project</a> is still live.
+                    <a href="https://www.semanticscholar.org/paper/5af24195c02a35394d493da5c73f33f0f26fdaf9" target="_blank" rel="noopener">Paper</a>
+                </li>
+            </ul>
+            <h3>Perceptual models and affect</h3>
+            <ul>
+                <li>
+                    <strong>A Comparison of Methods for Modeling Soundscape Dimensions Based on Different Datasets</strong> — Versümer, Blättermann, Rosenthal, Weinzierl, JASA 2025. What actually predicts pleasantness/eventfulness, and how much the answer depends on the dataset.
+                    <a href="https://www.semanticscholar.org/paper/58a10f28e5d874c079dbb857b3f3300252bf81e9" target="_blank" rel="noopener">Paper</a>
+                </li>
+                <li>
+                    <strong>An Exhaustive Variable Selection Study for Linear Models of Soundscape Emotions</strong> — San Millán-Castillo, Martino, Morgado, Llorente, IEEE/ACM TASLP 2022, and the 2024 <a href="https://www.semanticscholar.org/paper/5860ed81387ddbd88b12abc610e385b45ba1365c" target="_blank" rel="noopener">decision-tree follow-up</a>. Which acoustic features earn their place in an emotion model — directly relevant to picking our hidden tags.
+                    <a href="https://www.semanticscholar.org/paper/01402158bf7ef2b6ce631a0d82d6cbf05cda66f2" target="_blank" rel="noopener">Paper</a>
+                </li>
+                <li>
+                    <strong>Soundscape Captioning Using Sound Affective Quality Network and Large Language Model</strong> — Hou, Ren, Mitchell, Wang, Kang et al., 2024. Joins acoustic scene, affective quality and description in one model.
+                    <a href="https://www.semanticscholar.org/paper/dfe7c2ca3089c0544ac930c65ca4a373f80b2de1" target="_blank" rel="noopener">Paper</a>
+                </li>
+                <li>
+                    <strong>Singapore Soundscape Site Selection Survey (S5)</strong> — Ooi, Lam, Hong et al., Sustainability 2022. Clustering real sites into characteristic soundscapes; a template for describing what a venue <em>is</em> before deciding what to play there.
+                    <a href="https://www.semanticscholar.org/paper/ff0d4f3209f293ebe8ab2a7eb54ad870ab28be6a" target="_blank" rel="noopener">Paper</a>
+                </li>
+                <li>
+                    <strong>Psychophysiological Responses of Young People to Soundscapes in Actual Rural and City Environments</strong> — Li, Cai, Dong, Wu, Chen, JAES 2021. Physiological rather than self-reported measures — worth knowing about before claiming anything about calm.
+                    <a href="https://www.semanticscholar.org/paper/460c7f88ecd3b7d9ecdb33c72526b3acee8012c7" target="_blank" rel="noopener">Paper</a>
+                </li>
+            </ul>
+            <h3>Taxonomy and labelling</h3>
+            <ul>
+                <li>
+                    <strong>Heterogeneous Sound Classification with the Broad Sound Taxonomy and Dataset</strong> — Anastasopoulou, Torrey, Serra, Font, 2024. Freesound's own 23-class broad taxonomy, built for exactly our situation: a heterogeneous user-contributed library that needs organising.
+                    <a href="https://www.semanticscholar.org/paper/24fbe7802fc98a1c42150438cc17d173afc603b1" target="_blank" rel="noopener">Paper</a>
+                </li>
+                <li>
+                    <strong>SALT: Standardized Audio Event Label Taxonomy</strong> — Stamatiadis, Olvera, Essid, 2024. Reconciling incompatible label sets across datasets.
+                    <a href="https://www.semanticscholar.org/paper/3511cfbf7fa3ef6d71d7dbdcd3a3fde2a98c51de" target="_blank" rel="noopener">Paper</a>
+                </li>
+                <li>
+                    <strong>Ontology-Aware Learning and Evaluation for Audio Tagging</strong> — Liu, Kong, Liu, Mei, Wang, Plumbley, 2022. Why flat labels mislead evaluation when the label space is hierarchical.
+                    <a href="https://www.semanticscholar.org/paper/92fc5f32f48947729ad9e8ad52fc16be5159aa55" target="_blank" rel="noopener">Paper</a>
+                </li>
+                <li>
+                    <strong>Facilitating the Manual Annotation of Sounds When Using Large Taxonomies</strong> — Favory, Fonseca, Font, Serra, 2018. Practical annotation tooling — read before hand-labelling the library.
+                    <a href="https://www.semanticscholar.org/paper/5b9904b79224a9a8943a16b7292bc7897f62eb77" target="_blank" rel="noopener">Paper</a>
+                </li>
+                <li>
+                    <strong>Improving Audio Retrieval Through Loudness Profile Categorization</strong> — Parekh, Font, Serra, 2016. Categorising sounds by how their loudness evolves — a sharp, cheap, mixing-relevant descriptor.
+                    <a href="https://www.semanticscholar.org/paper/d82ac8dd15f1ecbdcf71031066d8bbdd5541e33a" target="_blank" rel="noopener">Paper</a>
+                </li>
+                <li>
+                    <strong>Analysis of the Folksonomy of Freesound</strong> — Font, Serra, 2012, plus the tag-recommendation line: <a href="https://www.semanticscholar.org/paper/7534738859fc01ff8ceaf7ddeef5039fb7d245d5" target="_blank" rel="noopener">Folksonomy-Based Tag Recommendation</a> (2013), <a href="https://www.semanticscholar.org/paper/b9147f37356cbb4859773473f10e61f31341879b" target="_blank" rel="noopener">Class-Based Tag Recommendation</a> (2014) and <a href="https://www.semanticscholar.org/paper/0b2157140728fe2c08a58aaf58184097f5d06bea" target="_blank" rel="noopener">its real-world impact study</a> (2015). Since our sounds come from Freesound with Freesound tags, this is the analysis of the vocabulary we inherited.
+                    <a href="https://www.semanticscholar.org/paper/dc891a4995bda769f356e8e00c2fc79cf9b10020" target="_blank" rel="noopener">Paper</a>
+                </li>
+            </ul>
+            <h3>Representation and retrieval</h3>
+            <ul>
+                <li>
+                    <strong>CLAP: Learning Audio Concepts from Natural Language Supervision</strong> — Elizalde, Deshmukh, Al Ismail, Wang, 2022, and <a href="https://www.semanticscholar.org/paper/732db04372de1ee796d86448927339158d662942" target="_blank" rel="noopener">LAION-CLAP</a>. The most plausible off-the-shelf replacement for the random embedding, and it gives text-queryable sounds for free.
+                    <a href="https://www.semanticscholar.org/paper/78211fe6fbec037eced569a4f18b2fb56bbf243d" target="_blank" rel="noopener">Paper</a>
+                </li>
+                <li>
+                    <strong>Transformation of Audio Embeddings into Interpretable, Concept-Based Representations</strong> — Zhang, Thomaz, Lu, 2025. Bridges "we need embeddings" and "we need to explain the choice to a venue manager".
+                    <a href="https://www.semanticscholar.org/paper/acb3fc972ce6ddc41b1c982c921a85d92c817535" target="_blank" rel="noopener">Paper</a>
+                </li>
+                <li>
+                    <strong>Semi-Supervised Triplet Loss Based Learning of Ambient Audio Embeddings</strong> — Turpault, Serizel, Vincent, 2019. Embeddings for ambient material specifically, with few labels.
+                    <a href="https://www.semanticscholar.org/paper/222d04ba1c001584b0c29f2fb72a57a433c11449" target="_blank" rel="noopener">Paper</a>
+                </li>
+                <li>
+                    <strong>How Robust Are Audio Embeddings for Polyphonic Sound Event Tagging?</strong> — Abeßer, Grollmisch, Müller, 2023. Our target is inherently polyphonic — several layers at once — so robustness under overlap is the property that matters.
+                    <a href="https://www.semanticscholar.org/paper/b42f533ba9887740dd89bf4460e10511f6fba682" target="_blank" rel="noopener">Paper</a>
+                </li>
+                <li>
+                    <strong>A Semantic Hybrid Approach for Sound Recommendation</strong> — Ostuni, Di Noia, Di Sciascio, Oramas, Serra, 2015. Recommendation over a sound library rather than a music catalogue.
+                    <a href="https://www.semanticscholar.org/paper/e881c3e6c532d2febdb4ca8b601e8256349778c9" target="_blank" rel="noopener">Paper</a>
+                </li>
+                <li>
+                    <strong>The Language of Sound Search: Examining User Queries in Audio Search Engines</strong> — Weck, Font, 2024. How people actually ask for sounds — useful for choosing the public tag vocabulary.
+                    <a href="https://www.semanticscholar.org/paper/c2c03b6fc6ad40738164f7849848e6165beb2bac" target="_blank" rel="noopener">Paper</a>
+                </li>
+            </ul>
+            <h3>Datasets worth pulling</h3>
+            <ul>
+                <li>
+                    <strong>Emo-Soundscapes</strong> — 1,213 six-second clips with crowd-sourced valence/arousal ratings, and crucially <em>613 of them are mixtures</em> of the 600 base recordings. Ratings on combinations, not just single sounds: the closest public analogue to what we are trying to predict.
+                    <a href="https://metacreation.net/emo-soundscapes/" target="_blank" rel="noopener">Dataset</a>
+                </li>
+                <li>
+                    <strong>SimSceneTVB (Perception and Learning)</strong> — 100 rated and 600 simulated 45-second urban scenes, each built from three controlled source classes (traffic, voices, birds) at known levels. A ready-made experiment in how source mix and level drive perception.
+                    <a href="https://zenodo.org/record/3248734" target="_blank" rel="noopener">Perception</a> ·
+                    <a href="https://zenodo.org/record/3248703" target="_blank" rel="noopener">Learning</a>
+                </li>
+                <li>
+                    <strong>BSD10k</strong> — 10,000+ Freesound clips labelled under the Broad Sound Taxonomy. The obvious training set if we adopt BST as the origin/function backbone.
+                    <a href="https://zenodo.org/records/17233904" target="_blank" rel="noopener">Dataset</a>
+                </li>
+                <li>
+                    <strong>FSD50K</strong> — 51,197 human-labelled Freesound clips over 200 AudioSet classes. The general-purpose tagging workhorse, same provenance as our library.
+                    <a href="https://zenodo.org/record/4060432" target="_blank" rel="noopener">Dataset</a>
+                </li>
+                <li>
+                    <strong>ESC-50</strong> — 2,000 clips, 50 classes. Small enough to iterate on quickly; already the basis of the offline experiment in <code>src/learn</code>.
+                    <a href="https://github.com/karolpiczak/ESC-50" target="_blank" rel="noopener">Dataset</a>
+                </li>
+                <li>
+                    <strong>Freesound Loop Dataset</strong> — 9,455 loops with annotations. Our layers loop forever, so loop-specific material and its seam behaviour are directly relevant.
+                    <a href="https://zenodo.org/record/3967852" target="_blank" rel="noopener">Dataset</a>
+                </li>
+            </ul>
+            <h3>Standards and background</h3>
+            <ul>
+                <li>
+                    <strong>ISO 12913-1:2014</strong> — the soundscape definition and conceptual framework the perceptual axes come from.
+                    <a href="https://cdn.standards.iteh.ai/samples/52161/229d6f3657604d89b8c382a04058a839/ISO-12913-1-2014.pdf" target="_blank" rel="noopener">PDF</a>
+                </li>
+                <li>
+                    <strong>Comparing Soundscape Assessment Methods of ISO 12913-2 (Methods A and B) with Narrative Interview (Method C)</strong> — the practical trade-offs between instruments, which is the decision behind choosing SAM.
+                    <a href="https://hal.science/hal-03233780/document" target="_blank" rel="noopener">PDF</a>
+                </li>
+                <li>
+                    <strong>R. Murray Schafer, <em>The Soundscape: Our Sonic Environment and the Tuning of the World</em></strong> — the origin of keynote / signal / soundmark and of hi-fi versus lo-fi. Not on the Freesound index; it is the source everything else cites.
+                </li>
+            </ul>
+            <h2>Open questions</h2>
+            <ul>
+                <li>
+                    Should presence be a vote in the last hour, or something less
+                    gameable — and what happens to the mixture when the room
+                    empties?
+                </li>
+                <li>
+                    How much should a saved mix count relative to a vote, given
+                    that one is exploration and the other is judgement?
+                </li>
+                <li>
+                    Is the objective a fixed target in the calm quadrant, or
+                    does it move with time of day and occupancy?
+                </li>
+                <li>
+                    What does the system do when the present listeners genuinely
+                    disagree — average, alternate, or optimise the worst case?
+                </li>
+                <li>
+                    Do venue-exclusive soundscapes actually change behaviour, or
+                    is the collection mechanic only interesting to the people
+                    who built it?
+                </li>
+            </ul>
+            <p class="font-sans text-[15px] tracking-[-0.24px] text-[#b0aea5]">
+                Written against the code in <code>src/server</code> and
+                <code>src/player</code>, August 2026. Where this page and the
+                repository disagree, the repository is right.
+            </p>
+        </div>
+    </div>
+</article>
+</div>

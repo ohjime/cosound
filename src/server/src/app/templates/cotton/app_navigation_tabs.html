@@ -1,0 +1,37 @@
+<c-vars target="#tab_content" />
+<!--
+The home page's tab bar: three daisyUI radio tabs that decide what the main
+body region shows. Each radio carries its own hx-get and swaps the fetched
+fragment into `target` (app/home.html's #tab_content) on change — a radio only
+fires change when it becomes checked, so re-clicking the active tab fetches
+nothing.
+
+MIXER and STUDIO fragments each bring their own c-mixer-player, so picking a
+tab remounts the soundLayers store over that tab's layers, and the htmx cleanup
+hook in soundscape-store.js stops the outgoing tab's audio when its player root
+leaves the DOM.
+-->
+<div class="tabs tabs-lift">
+    <input type="radio"
+           name="home_tabs"
+           class="tab"
+           aria-label="ABOUT US"
+           hx-get="{% url 'app:home_tab_about' %}"
+           hx-target="{{ target }}"
+           hx-swap="innerHTML" />
+    <input type="radio"
+           name="home_tabs"
+           class="tab"
+           aria-label="LISTEN"
+           checked="checked"
+           hx-get="{% url 'app:home_tab_mixer' %}"
+           hx-target="{{ target }}"
+           hx-swap="innerHTML" />
+    <input type="radio"
+           name="home_tabs"
+           class="tab"
+           aria-label="DESIGNER"
+           hx-get="{% url 'studio:initial' %}"
+           hx-target="{{ target }}"
+           hx-swap="innerHTML" />
+</div>

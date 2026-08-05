@@ -1,0 +1,96 @@
+<c-vars artist_name="" :sounds="sounds" />
+<!--
+The studio's mix builder: two panes over one shared mix.
+
+  left  — c-studio-layer-settings, a tab per layer and every setting for the
+          selected one *except* how loud it sits. This is where the mix is
+          built; it scrolls.
+  right — c-studio-card, the deck card showing how the soundscape reads. It
+          stays put while the left pane scrolls.
+
+Both panes drive the same `soundLayers` Alpine store, so the card on the right
+is not a preview that has to be kept in step — it is the same state, rendered.
+That is also why every mixer part inside the card (carousel, fader, arrows,
+layer indicator) is the mixer's own component, used unmodified.
+
+Being the same state is also how the two panes divide up: each control lives in
+exactly one of them. The card's fader is live, so level, mute and solo are the
+card's and the settings pane does not repeat them; everything else about a layer
+is the settings pane's. The only genuinely inert thing on the card is the layer
+options pill, which is there so the card still reads as a cosound card.
+
+A saved Cosound is a list of Sound ids, and a track from the artist's own
+machine has no row to point at — `$store.soundLayers.canSave` is what the
+transport reads, and `saveBlockedReason` is what it says when it is off.
+
+The behaviour lives in `vite/assets/js/studio-builder.js`, registered as the
+`studioBuilder` Alpine component. It is not in an `x-data` attribute any more
+and should not go back: Alpine compiles an expression by splicing it into one
+line, so in a single-line attribute a `//` comment takes the rest of the object
+literal with it — the expression stops parsing, x-data evaluates to nothing, and
+every handler here becomes a silent no-op. Two comments in the old inline
+version did exactly that, and the `+` tab, the drop target and the file inputs
+were all dead until it moved.
+
+What stays here is markup and wiring: the file inputs and drag state this
+component owns, and the window listeners the panes reach them through by
+dispatching `studio:*` events.
+-->
+<div class="w-full"
+     x-data="studioBuilder({ artistName: '{{ artist_name|escapejs }}' })"
+     @studio:add-track.window="pickTrack()"
+     @studio:attach-track.window="pickTrack($event.detail)"
+     @studio:add-artwork.window="pickArtwork()"
+     @studio:add-blank.window="addBlank()"
+     @studio:remove-layer.window="removeCurrent()"
+     @studio:wake.window="wake()"
+     @studio:open-library.window="openLibrary($event.detail)"
+     @studio:error.window="fail($event.detail)">
+    <c-mixer-player :sounds="sounds" artist_name="{{ artist_name }}" />
+    <!-- Local-only pickers. No `name`, never inside a submitting form. -->
+    <input x-ref="trackInput" type="file" accept="audio/*" multiple class="hidden" @change="onTrackInput($event)" />
+    <input x-ref="artInput" type="file" accept="image/*" class="hidden" @change="onArtInput($event)" />
+    <!-- Fetches the library picker. It lives here, listening on the window, so
+         both panes can open it with one `studio:open-library` event instead of
+         each carrying its own copy of the request. -->
+    <div class="hidden"
+         hx-get="{% url 'studio:library' %}"
+         hx-trigger="studio:open-library from:window"
+         hx-swap="none swap:300ms"
+         hx-on:htmx:before-swap="document.querySelectorAll('#card-figure, #card-body').forEach(el => el.classList.add('htmx-swapping'))"
+         hx-on:htmx:after-swap="document.getElementById('sound-search-input')?.focus()"></div>
+    <!-- The builder sits in normal page flow (the home tab and the standalone
+         studio page both scroll as ordinary pages), so both panes size to their
+         content and the window is the only scroll container. -->
+    <div class="grid w-full grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_26rem]">
+        <!-- Left pane: everything about the selected layer. min-w-0 keeps wide
+             content from stretching the grid track; below lg it drops under the
+             card (order-2) so the deck stays first on small screens. -->
+        <div class="order-2 w-full min-w-0 lg:order-1 lg:py-6 lg:pr-3">
+            <c-studio-layer-settings />
+        </div>
+        <!-- Right pane: the card, top-aligned beside the settings it reflects.
+             lg:px-8 keeps the card's glow inside the pane (shadow-2xl is
+             `0 25px 50px -12px` — ~13px sideways) and lg:pb-20 gives the ~38px
+             of glow below the card room to paint. The column is 26rem rather
+             than 22rem so that side padding comes out of the grid track instead
+             of squeezing the card. -->
+        <div class="order-1 flex w-full justify-center py-2 lg:order-2 lg:items-start lg:justify-end lg:px-8 lg:py-0"
+             @dragover.prevent="dragging = true"
+             @dragleave.prevent="dragging = false"
+             @drop.prevent="dragging = false; onDrop($event)">
+            <div class="w-full max-w-80 transition-all lg:pb-20" :class="dragging && 'scale-[1.02] drop-shadow-2xl'">
+                <!-- Transport above the deck, the way app/home.html sits
+                     c-mixer-master over the mixer's own card. -->
+                <div class="mb-6 flex w-full justify-center">
+                    <c-studio-master />
+                </div>
+                <c-core-deck id="deck">
+                    <c-studio-card />
+                </c-core-deck>
+                <div x-show="error" x-cloak x-transition.opacity class="mt-3 text-center font-mono text-[8pt] text-error" x-text="error">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,328 @@
+<!--
+The left pane: one tab per layer, and everything about the selected one.
+
+This is where the mix is actually built — add, fill, swap, remove. The card on
+the right shows the result and its own controls are inert, so there is exactly
+one place any given change can be made.
+
+Selection is not a second piece of state. The radios dispatch `carousel-goto`,
+which the carousel answers by setting `$store.soundLayers.currentIndex` to the
+target at once and then scrolling the artwork over to meet it — so the tab
+checks on the click, not when the artwork lands, and the strip does not tick
+through every layer between here and there while the scroll runs. Swiping the
+artwork moves the checked tab live instead, which is the same store property
+read the other way round. The layer indicator pill works exactly this way too.
+
+On the tab markup: daisyUI's `tabs-lift` normally pairs each `input.tab` with an
+adjacent `.tab-content`, because the CSS shows content via the checked input's
+sibling selector. Alpine's `x-for` can only emit one root element per iteration,
+so it cannot produce those pairs. The strip below is therefore the radios only,
+with a single panel underneath — same result, one panel instead of N.
+
+That panel draws no border of its own. `tabs-lift` already outlines the strip:
+every unchecked tab carries a bottom border and the checked one lifts out of it,
+so a border on the panel only adds a second line ruled straight through that
+join. The empty `.tab` at the end of the strip is what makes the single line
+reach the right edge — daisyUI gives an empty tab `flex-grow: 1`, so it stretches
+and its bottom border comes along.
+
+Tabs are labelled by position — "Layer 1", "Layer 2" — never by the sound in
+them. The label is the slot; what is in the slot is the panel's business, and
+the panel says so in its heading: that reads the layer's title, so it rewrites
+itself as the title field is typed into. Position stays on the chip, identity
+goes in the heading, and neither has to fight the other for the same line.
+
+Level, mute and solo are not here. They are the fader on the card, which is a
+live c-mixer-slider driving setGain / toggleMute / toggleIsolate on this same
+store — a second set of them in this pane would be two controls for one value,
+and the fader is the one that looks like a fader.
+
+So three kinds of edit live in that panel, and they cost different amounts:
+
+  - words (title, flavor, tags) — updateLayer, no audio work at all
+  - loudness — setLoudness, live on the graph: the make-up gain is a factor on
+    the voice's own gain node, so the target slider rides on `input`. Only
+    switching it on costs anything, and only once per crop — the engine caches a
+    reading against the file and the region it was taken over.
+  - rate, stretch, crossfade and the trim handles — setTiming, which has to
+    rebuild the voice because the engine bakes all of them into its schedule
+    when a voice is prepared. The sliders are bound on `change` rather than
+    `input`, and the trim panel commits on release, so a drag rebuilds once.
+
+Crossfade, trim and loudness all need something only the engine knows — how long
+the file turned out to be, how long a fade a pass of it can hold, and how loud it
+measured — so all three stay hidden until `layer.duration` arrives from
+`_syncAnalysis`, which is also why none of them show on a blank layer. The trim
+handles and the crossfade are read back through that same path rather than
+trusted as set: the engine corrects a start dragged past its end and a fade
+longer than half a pass, and the control snaps to what is really being played.
+-->
+<div class="w-full"
+     x-data="{
+         get layer() { return $store.soundLayers.currentLayer },
+         get index() { return $store.soundLayers.currentIndex },
+         set(patch) { $store.soundLayers.updateLayer(this.index, patch) },
+         retime(patch) { $store.soundLayers.setTiming(this.index, patch) },
+         loud(target) { $store.soundLayers.setLoudness(this.index, target) },
+         select(i) { $dispatch('carousel-goto', i) },
+         get full() { return $store.soundLayers.isFull },
+         get span() { return Number(this.layer?.duration) || 0 },
+         get cropStart() { return Math.min(Number(this.layer?.trim_start) || 0, this.span) },
+         get cropEnd() { return this.layer?.trim_end == null ? this.span : Math.min(Number(this.layer.trim_end), this.span) },
+         get cropped() { return this.cropStart > 0.001 || this.cropEnd < this.span - 0.001 },
+         get fade() { return Number(this.layer?.loop_crossfade) || 0 },
+         get fadeMax() { return Number(this.layer?.loop_crossfade_max) || 0 },
+         get loudOn() { return this.layer?.loudness_target != null },
+         get reading() { return this.layer?.loudness == null ? '' : this.layer.loudness.toFixed(1) },
+         get makeup() { const db = Number(this.layer?.loudness_gain_db) || 0; return (db >= 0 ? '+' : '') + db.toFixed(1) },
+         clock(seconds) { const r = Math.round(Math.max(0, Number(seconds) || 0) * 10) / 10; return Math.floor(r / 60) + ':' + (r % 60).toFixed(1).padStart(4, '0') },
+     }">
+    <div class="max-w-full overflow-x-auto">
+        <div class="tabs tabs-lift w-full min-w-max">
+            <template x-for="(l, i) in $store.soundLayers.layers" :key="l.sound_id">
+                <input type="radio"
+                       name="studio_layer_tabs"
+                       class="tab z-1"
+                       :aria-label="'Layer ' + (i + 1)"
+                       :checked="i === $store.soundLayers.currentIndex"
+                       @change="select(i)" />
+            </template>
+            <!-- The add button rides at the end of the strip, so it slides right
+                 as layers appear. A button rather than a radio: it is an action,
+                 and it must never become the checked tab. -->
+            <button type="button"
+                    class="tab z-1 font-bold"
+                    aria-label="Add a layer"
+                    :disabled="full"
+                    :title="full ? $store.soundLayers.maxLayers + ' layers is the most a mix can hold.' : 'Add a layer'"
+                    @click="$dispatch('studio:add-blank')">+</button>
+            <!-- Empty on purpose: daisyUI grows an empty tab to fill the row, so
+                 the strip's bottom border runs the whole width. -->
+            <div class="tab"></div>
+        </div>
+    </div>
+    <div class="rounded-b-box bg-base-100 p-6">
+        <template x-if="$store.soundLayers.isEmpty">
+            <p class="py-6 text-center text-sm opacity-50">Adding a layer…</p>
+        </template>
+        <template x-if="!$store.soundLayers.isEmpty">
+            <div class="flex flex-col gap-5">
+                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-base-content/10 pb-3">
+                    <!-- Falls back to the position so the heading is never
+                         blank while the title field is empty. -->
+                    <h2 class="min-w-0 truncate font-serif text-2xl font-semibold tracking-wide"
+                        x-text="layer.sound_title || 'Layer ' + (index + 1)"></h2>
+                    <!-- Removing a layer sits up here with the badges rather
+                         than at the foot of the panel: it acts on the layer the
+                         heading names, so it belongs on the same line as the
+                         name. Icon-only, since every other control in the panel
+                         is a word and this is the one that destroys something —
+                         it should not read like the rest of them. -->
+                    <div class="flex items-center gap-2">
+                        <span x-show="layer.isDraft" class="badge badge-sm badge-warning badge-soft font-mono text-[7pt] uppercase tracking-widest">Blank</span>
+                        <span x-show="layer.isLocal && !layer.isDraft" class="badge badge-sm badge-info badge-soft font-mono text-[7pt] uppercase tracking-widest">Your track</span>
+                        <span x-show="!layer.isLocal" class="badge badge-sm badge-ghost font-mono text-[7pt] uppercase tracking-widest">Library</span>
+                        <button type="button"
+                                class="btn btn-sm btn-square btn-ghost text-error/70 hover:bg-error/10 hover:text-error"
+                                aria-label="Remove this layer"
+                                title="Remove this layer"
+                                @click="$dispatch('studio:remove-layer')">
+                            <c-icons.trash class="size-5" />
+                        </button>
+                    </div>
+                </div>
+                <!-- Source. Both ways to fill a layer, and to swap one out. -->
+                <section class="flex flex-col gap-2">
+                    <h3 class="font-mono text-[8pt] uppercase tracking-widest opacity-50">Sound</h3>
+                    <div class="flex flex-wrap items-center gap-2 rounded-lg bg-base-200/60 px-3 py-2">
+                        <span class="min-w-0 flex-1 truncate font-mono text-xs"
+                              :class="layer.isDraft ? 'italic opacity-40' : 'opacity-70'"
+                              x-text="layer.isDraft ? 'no sound yet' : layer.sound_title"></span>
+                        <button type="button" class="btn btn-xs" @click="$dispatch('studio:attach-track', index)">
+                            <span x-text="layer.isDraft ? 'Add file' : 'Replace'"></span>
+                        </button>
+                        <button type="button" class="btn btn-xs btn-ghost" @click="$dispatch('studio:open-library', index)">Library</button>
+                    </div>
+                    <p x-show="layer.isDraft" class="font-mono text-[7pt] opacity-45">
+                        A blank layer holds its place silently until you give it a sound.
+                    </p>
+                </section>
+                <!-- Words. Pure metadata; nothing here touches the audio graph.
+                     No artist field: the name on every layer is the one on the
+                     account, set once on the artist profile, so the builder
+                     stamps it and never asks. -->
+                <section class="flex flex-col gap-3">
+                    <label class="floating-label">
+                        <span>Title</span>
+                        <input type="text"
+                               class="input input-sm w-full"
+                               maxlength="255"
+                               placeholder="Title"
+                               spellcheck="false"
+                               :value="layer.sound_title"
+                               @input="set({ sound_title: $event.target.value })" />
+                    </label>
+                    <label class="floating-label">
+                        <span>Tags</span>
+                        <input type="text"
+                               class="input input-sm w-full"
+                               maxlength="120"
+                               placeholder="rain / night / slow"
+                               spellcheck="false"
+                               :value="layer.tags"
+                               @input="set({ tags: $event.target.value })" />
+                    </label>
+                    <label class="floating-label">
+                        <span>Flavor</span>
+                        <textarea class="textarea textarea-sm h-20 w-full"
+                                  maxlength="200"
+                                  placeholder="flavor text"
+                                  spellcheck="false"
+                                  :value="layer.flavor"
+                                  @input="set({ flavor: $event.target.value })"></textarea>
+                    </label>
+                    <button type="button" class="btn btn-xs btn-dash self-start" @click="$dispatch('studio:add-artwork')">
+                        Replace artwork
+                    </button>
+                </section>
+                <!-- Playback shape. Each change rebuilds this one voice. -->
+                <section class="flex flex-col gap-3">
+                    <h3 class="font-mono text-[8pt] uppercase tracking-widest opacity-50">Playback</h3>
+                    <div class="flex flex-col gap-1">
+                        <div class="flex items-center justify-between font-mono text-[8pt] opacity-60">
+                            <span>Rate</span>
+                            <span x-text="`${Number(layer.playback_rate).toFixed(2)}×`"></span>
+                        </div>
+                        <input type="range"
+                               class="range range-xs w-full"
+                               min="0.25"
+                               max="2"
+                               step="0.05"
+                               :value="layer.playback_rate"
+                               @change="retime({ playback_rate: Number($event.target.value) })" />
+                        <p class="font-mono text-[7pt] opacity-40">Pitch and schedule together, like tape speed.</p>
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <div class="flex items-center justify-between font-mono text-[8pt] opacity-60">
+                            <span>Stretch</span>
+                            <span x-text="`${Number(layer.stretch).toFixed(2)}×`"></span>
+                        </div>
+                        <input type="range"
+                               class="range range-xs w-full"
+                               min="0.5"
+                               max="4"
+                               step="0.05"
+                               :value="layer.stretch"
+                               @change="retime({ stretch: Number($event.target.value) })" />
+                        <p class="font-mono text-[7pt] opacity-40">How far apart the two offset passes drift.</p>
+                    </div>
+                    <!-- Crossfade. Every repeat is pulled this far into the one
+                         before it and the seam is faded across, so a layer
+                         loops into itself instead of butting one pass against
+                         the next. Hidden until the file has decoded, like the
+                         trim panel: how long a fade the schedule can take
+                         depends on how long a pass turned out to be, and the
+                         ceiling comes back from the engine as
+                         loop_crossfade_max — asking for more snaps to it, the
+                         same way a crop handle dragged too far does. -->
+                    <div x-show="!layer.isDraft && span > 0" class="flex flex-col gap-1">
+                        <div class="flex items-center justify-between font-mono text-[8pt] opacity-60">
+                            <span>Crossfade</span>
+                            <span x-text="fade > 0 ? `${fade.toFixed(2)}s` : 'Off'"></span>
+                        </div>
+                        <input type="range"
+                               class="range range-xs w-full"
+                               min="0"
+                               :max="fadeMax"
+                               step="0.01"
+                               :value="fade"
+                               @change="retime({ loop_crossfade: Number($event.target.value) })" />
+                        <p class="font-mono text-[7pt] opacity-40">
+                            How long each repeat fades into the next, up to <span x-text="fadeMax.toFixed(2)"></span>s here.
+                        </p>
+                    </div>
+                </section>
+                <!-- Trim. Two handles into the decoded file, in seconds from
+                     its head, cutting the run-in and the tail off a recording
+                     without touching the file itself. Both schedules play the
+                     same stretch — the crop belongs to the track, not to one
+                     pass — and the drift period follows the cropped length, so
+                     trimming a long tail tightens the mix rather than leaving a
+                     silence where the tail used to be. -->
+                <section x-show="!layer.isDraft && span > 0" class="flex flex-col gap-3">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-mono text-[8pt] uppercase tracking-widest opacity-50">Trim</h3>
+                        <button type="button"
+                                class="btn btn-ghost btn-xs font-mono text-[7pt] uppercase tracking-widest"
+                                x-show="cropped"
+                                @click="retime({ trim_start: 0, trim_end: null })">Reset</button>
+                    </div>
+                    <!-- The waveform, with the two handles dragged over it and
+                         the playheads sweeping through. `trimTrack`
+                         (vite/assets/js/trim-track.js) fills this div in —
+                         canvas, markers and labels — so the only thing here is
+                         the wiring: what it draws goes in through x-effect, and
+                         the crop comes back out as trim-commit. The effect is
+                         what keeps it on the selected layer: everything it reads
+                         is store state, so switching tabs, Reset, or the engine
+                         correcting a crop all re-run it. Both handles refuse to
+                         cross, and the engine corrects them anyway on the way
+                         in, so what comes back through `layer` is always what is
+                         really being played.
+                         `index` is the voice it asks where the layer is
+                         sounding. `gainDb` is the loudness make-up gain, which
+                         scales the drawn wave — see the Loudness section below,
+                         and trim-track.js for why that one and not the fader. -->
+                    <div x-data="trimTrack()"
+                         x-effect="load({ src: layer.sound_file, duration: span, start: cropStart, end: cropEnd, index, gainDb: layer.loudness_gain_db })"
+                         @trim-commit="retime($event.detail)"></div>
+                    <p class="font-mono text-[7pt] opacity-40">
+                        Playing <span x-text="clock(cropEnd - cropStart)"></span> of <span x-text="clock(span)"></span>.
+                    </p>
+                </section>
+                <!-- Loudness. A layer is matched by measuring it the way the
+                     ear hears level — BS.1770 integrated loudness over the
+                     trimmed stretch, not its peak — and putting the difference
+                     on the voice's gain node. That is what lets a quiet field
+                     recording and a close-miked one sit at the same fader
+                     position and actually arrive at the same level. -->
+                <section x-show="!layer.isDraft && span > 0" class="flex flex-col gap-3">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-mono text-[8pt] uppercase tracking-widest opacity-50">Loudness</h3>
+                        <input type="checkbox"
+                               class="toggle toggle-xs toggle-warning"
+                               aria-label="Match this layer to a loudness target"
+                               :checked="loudOn"
+                               @change="loud($event.target.checked ? $store.soundLayers.loudnessDefault : null)" />
+                    </div>
+                    <!-- x-if, not x-show: with the toggle off there is no
+                         target to format and no reading to name. -->
+                    <template x-if="loudOn">
+                        <div class="flex flex-col gap-1">
+                            <div class="flex items-center justify-between font-mono text-[8pt] opacity-60">
+                                <span>Target</span>
+                                <span x-text="`${Number(layer.loudness_target).toFixed(1)} LUFS`"></span>
+                            </div>
+                            <input type="range"
+                                   class="range range-xs range-warning w-full"
+                                   min="-36"
+                                   max="-6"
+                                   step="0.5"
+                                   :value="layer.loudness_target"
+                                   @input="loud(Number($event.target.value))" />
+                            <p x-show="reading" class="font-mono text-[7pt] opacity-40">
+                                Reads <span x-text="reading"></span> LUFS, so it plays <span x-text="makeup"></span> dB.
+                            </p>
+                            <p x-show="!reading" class="font-mono text-[7pt] opacity-40">
+                                Too quiet or too short to measure — left alone.
+                            </p>
+                        </div>
+                    </template>
+                    <p x-show="!loudOn" class="font-mono text-[7pt] opacity-40">
+                        Off: the fader alone decides how loud this layer sits.
+                    </p>
+                </section>
+            </div>
+        </template>
+    </div>
+</div>

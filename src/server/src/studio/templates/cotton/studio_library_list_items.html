@@ -1,0 +1,45 @@
+<c-vars sounds />
+<!--
+Library results. Clicking one either appends it as a new layer or fills the
+blank layer the settings pane asked about — `libraryTarget` (owned by
+c-studio-builder) carries that intent, and is null for a plain add.
+
+The serialized sounds ride along in a json_script so the click handler hands the
+store a real layer object rather than rebuilding one from data attributes.
+-->
+{{ sounds|json_script:"libraryCandidates" }}
+<li class="sticky top-0 z-10 bg-base-300 p-4 pt-8 pb-2 text-sm font-medium opacity-95">
+    <span x-text="libraryTarget === null ? 'Add a sound' : 'Choose a sound for this layer'"></span>
+</li>
+{% for sound in sounds %}
+    <!-- djlint:off -->
+    <li class="list-row"
+        x-data="{ get inMix() { return $store.soundLayers.layers.some(l => l.sound_id === {{ sound.id }}) } }"
+        :class="inMix ? 'pointer-events-none opacity-40' : 'cursor-pointer hover:bg-base-200'"
+        hx-get="{% url 'studio:carousel' %}"
+        hx-swap="none swap:300ms"
+        hx-on:htmx:before-swap="document.querySelectorAll('#card-figure, #card-body').forEach(el => el.classList.add('htmx-swapping'))"
+        @click="(() => {
+            if (inMix) return;
+            const candidates = JSON.parse(document.getElementById('libraryCandidates').textContent);
+            const chosen = candidates[{{ forloop.counter0 }}];
+            const store = $store.soundLayers;
+            store.swappingLayer = false;
+            if (libraryTarget === null) { if (!room()) return; store.addLayer(chosen); } else { store.setLayerSource(libraryTarget, chosen); }
+            libraryTarget = null;
+        })()">
+    <!-- djlint:on -->
+        <div>
+            <img class="size-10 rounded-box" src="{{ sound.artwork_url }}" alt="{{ sound.title }} artwork">
+        </div>
+        <div>
+            <div class="text-sm font-semibold">{{ sound.title }}</div>
+            <div class="text-xs font-semibold opacity-60">
+                <span x-show="inMix">Already in mix</span>
+                <span x-show="!inMix">{{ sound.artist }}</span>
+            </div>
+        </div>
+    </li>
+{% empty %}
+    <li class="p-4 text-xs opacity-60">Nothing in your library yet.</li>
+{% endfor %}

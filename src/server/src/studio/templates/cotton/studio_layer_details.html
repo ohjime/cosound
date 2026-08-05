@@ -1,0 +1,19 @@
+<!--
+The card's flavor panel. Same shape as the mixer's, reading whatever the
+settings pane last wrote — the two are the same store, so typing on the left
+shows up here as you type.
+-->
+<template x-if="$store.soundLayers.isEmpty">
+    <div class="font-serif text-[8pt] font-extralight font-stretch-95% italic opacity-50">
+        <p class="py-1 font-serif text-xs font-bold not-italic font-stretch-95%">[ empty ]</p>
+        <span>Layers you add show up here, and on the card above.</span>
+    </div>
+</template>
+<template x-if="!$store.soundLayers.isEmpty">
+    <div class="font-serif text-[8pt] font-extralight font-stretch-95% italic">
+        <p class="py-1 font-serif text-xs font-bold not-italic font-stretch-95%"
+           x-text="'[ ' + ($store.soundLayers.currentLayer.tags || 'untagged') + ' ]'"></p>
+        <span x-text="$store.soundLayers.currentLayer.flavor"></span>
+        <span x-show="!$store.soundLayers.currentLayer.flavor" class="opacity-40">No flavor text yet.</span>
+    </div>
+</template>

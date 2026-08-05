@@ -1,0 +1,147 @@
+{% extends "core/base.html" %}
+{% load studio_extras %}
+{% block title %}
+    Studio
+{% endblock title %}
+{% block content %}
+    <c-core-loader hx_get="{% url 'studio:initial' %}" />
+{% endblock content %}
+<!--
+The studio's pages, as partials. The template is served whole by
+`studio_index` for the standalone page (cosound.ca/studio/ and the root of
+studio.*): the loader in the content block fetches #initial over htmx. The home
+page's STUDIO tab fetches the same #initial into its #tab_content region, so
+both routes render the exact same builder from one set of partials.
+-->
+
+<!--
+The Create page: a two-pane mix builder in normal page flow — the page scrolls,
+the panes size to their content. How the panes divide the mix lives in
+cotton/studio_builder.html.
+-->
+{% partialdef page %}
+    <div class="flex w-full flex-col items-center gap-6 px-4 py-6 md:px-8">
+        <div class="motion-preset-blur-down motion-duration-700 motion-delay-200 flex w-full max-w-6xl flex-col items-center">
+            <div id="studio-stage" class="flex w-full flex-col items-center">
+                {% include "studio/index.html#stage" %}
+            </div>
+        </div>
+    </div>
+{% endpartialdef %}
+
+<!--
+The htmx entry point `studio:initial` serves: the standalone page's loader and
+the home page's STUDIO tab both fetch this.
+-->
+{% partialdef initial %}
+    {% include "studio/index.html#page" %}
+{% endpartialdef %}
+
+<!--
+Whatever this viewer is allowed to see. Resolves its own gating state via the
+studio_artist tag so it renders identically from the studio's own view and from
+login's post-login swap. Only the artist case gets the builder; the two refusals
+stay single cards on a deck.
+-->
+{% partialdef stage %}
+    {% studio_artist as artist %}
+    {% if artist %}
+        {% include "studio/index.html#builder" %}
+    {% else %}
+        <c-core-deck id="deck">
+            {% if user.is_authenticated %}
+                {% include "studio/index.html#not_artist" %}
+            {% else %}
+                {% include "studio/index.html#gate" %}
+            {% endif %}
+        </c-core-deck>
+    {% endif %}
+{% endpartialdef %}
+
+<!--
+The builder itself. `seed_layers` is the mix the page opens on — normally the
+single blank layer studio.views._blank_layer hands over, so the artist lands on
+something to fill in rather than an empty canvas.
+-->
+{% partialdef builder %}
+    <c-studio-builder artist_name="{{ artist.name }}" :sounds="seed_layers" />
+{% endpartialdef %}
+
+<!-- The panels the library picker swaps into the card, mirroring the mixer's
+     swap_view: both regions are replaced out-of-band in one response. -->
+{% partialdef library_view %}
+    <c-mixer-card-figure hx-swap-oob="outerHTML">
+        <c-studio-library-list :sounds="sounds" />
+    </c-mixer-card-figure>
+    <c-mixer-card-body hx-swap-oob="outerHTML">
+        <c-studio-library-search count="{{ collection_size }}" />
+    </c-mixer-card-body>
+{% endpartialdef %}
+
+{% partialdef library_list_items %}
+    <c-studio-library-list-items :sounds="sounds" />
+{% endpartialdef %}
+
+<!-- Closing the picker: put the carousel and the flavor panel back. -->
+{% partialdef default_view %}
+    <c-mixer-card-figure hx-swap-oob="outerHTML">
+        <template x-if="!$store.soundLayers.isEmpty">
+            <c-mixer-layer-carousel />
+        </template>
+    </c-mixer-card-figure>
+    <c-mixer-card-body hx-swap-oob="outerHTML">
+        <c-studio-layer-details />
+    </c-mixer-card-body>
+{% endpartialdef %}
+
+<!--
+Signed out: invite a login. The login card stacks onto this same deck.
+`?from=studio` tells login_card to use the studio's post-login partial even when
+the builder is embedded in the home page's STUDIO tab, where the page URL alone
+no longer says "studio".
+-->
+{% partialdef gate %}
+    <c-core-card showExit="false" bgColor="bg-[#1f3f23]" ringColor="ring-[#2d2d2d]">
+        <div class="flex flex-col flex-1 items-center justify-center gap-4 px-8 py-12 text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor" class="size-12 opacity-40">
+                <path d="M480-400q-50 0-85-35t-35-85v-240q0-50 35-85t85-35q50 0 85 35t35 85v240q0 50-35 85t-85 35Zm0-240Zm-40 520v-123q-104-14-172-93t-68-184h80q0 83 58.5 141.5T480-320q83 0 141.5-58.5T680-520h80q0 105-68 184t-172 93v123h-80Zm40-360q17 0 28.5-12.5T520-520v-240q0-17-11.5-28.5T480-800q-17 0-28.5 11.5T440-760v240q0 17 11.5 28.5T480-480Z" />
+            </svg>
+            <h2 class="font-serif text-xl font-semibold tracking-wide">Artists only</h2>
+            <p class="text-sm opacity-70">Sign in to start building a mix.</p>
+            <button type="button" class="btn btn-primary btn-sm mt-2" hx-get="{% url 'login:login_card' %}?from=studio" hx-trigger="click[!document.getElementById('login-card')]" hx-swap="none">
+                Sign in
+            </button>
+        </div>
+    </c-core-card>
+{% endpartialdef %}
+
+<!--
+Signed in, but no Artist profile is attached to this account.
+-->
+{% partialdef not_artist %}
+    <c-core-card showExit="false" bgColor="bg-[#3f1f23]" ringColor="ring-[#2d2d2d]">
+        <div class="flex flex-col flex-1 items-center justify-center gap-4 px-8 py-12 text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor" class="size-12 opacity-40">
+                <path d="m40-120 440-760 440 760H40Zm138-80h604L480-720 178-200Zm302-40q17 0 28.5-11.5T520-280q0-17-11.5-28.5T480-320q-17 0-28.5 11.5T440-280q0 17 11.5 28.5T480-240Zm-40-120h80v-200h-80v200Zm40-100Z" />
+            </svg>
+            <h2 class="font-serif text-xl font-semibold tracking-wide">Not an artist account</h2>
+            <p class="text-sm opacity-70">
+                <span class="font-mono">{{ user.username }}</span> isn't linked to
+                an artist profile, so there's nothing to build here yet.
+            </p>
+        </div>
+    </c-core-card>
+{% endpartialdef %}
+
+<!--
+Login landed: re-render the stage (now the builder) and refresh the chip. The
+chip renders as #user-details wherever the hosting page shows one (the home
+page's below-deck section does); when no chip is on the page the OOB swap is
+simply dropped.
+-->
+{% partialdef post_login %}
+    <div id="studio-stage" hx-swap-oob="outerHTML" class="flex w-full flex-col items-center">
+        {% include "studio/index.html#stage" %}
+    </div>
+    <c-core-user-details oob="true" />
+{% endpartialdef %}

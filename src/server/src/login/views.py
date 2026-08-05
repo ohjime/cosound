@@ -14,6 +14,7 @@ from login.utils import (
     get_login_state,
     send_login_code,
 )
+from studio.utils import is_studio_url
 
 
 def login_card(request):
@@ -22,6 +23,11 @@ def login_card(request):
         referer = request.headers.get("HX-Current-URL", "")
         if "/vote" in referer:
             request.session["post_login_partial"] = "vote/index.html#post_login"
+        elif is_studio_url(referer) or request.GET.get("from") == "studio":
+            # The referer covers /studio/ and studio.*; the query param covers
+            # the studio gate embedded in the home page's STUDIO tab, where the
+            # page URL alone no longer says "studio".
+            request.session["post_login_partial"] = "studio/index.html#post_login"
         else:
             request.session.pop("post_login_partial", None)
         return add_card(

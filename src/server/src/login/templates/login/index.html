@@ -102,13 +102,6 @@
     </c-core-modal>
 {% endpartialdef %}
 
-{% partialdef post_logout %}
-    <div id="subheading" hx-swap-oob="outerHTML">
-        <c-core-subheader />
-    </div>
-    <div id="feed" hx-swap-oob="outerHTML" class="text-xs text-neutral-content/50"></div>
-{% endpartialdef %}
-
 {% partialdef post_login %}
     <c-core-user-details oob="true" />
 {% endpartialdef %}

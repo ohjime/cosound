@@ -31,6 +31,10 @@
         "**/cosound.json": true,
         ".claude/": true,
         ".old/": true,
+        ".old.zip": true,
+        "**/.dockerignore": true,
+        "src/server/Dockerfile": true,
+        "src/server/vite/static/": true,
     },
     "files.watcherExclude": {
         "**/routeTree.gen.ts": true
@@ -80,7 +84,7 @@
     "djlint.formatJs": true,
     "djlint.formatCss": true,
     "djlint.useVenv": true,
-    "djlint.pythonPath": "${workspaceFolder}/src/server/.venv/bin/python",
+    "djlint.executablePath": "${workspaceFolder}/src/server/.venv/bin/python",
     "djlint.maxAttributeLength": 80,
     "djlint.maxLineLength": 120,
     "editor.suggest.showWords": false,
@@ -92,13 +96,4 @@
         "H021",
     ],
     "python-envs.defaultEnvManager": "ms-python.python:venv",
-    "vscode-color-picker.languages": [
-        "javascript",
-        "javascriptreact",
-        "typescript",
-        "typescriptreact",
-        "postcss",
-        "xml",
-        "django-html"
-    ],
 }

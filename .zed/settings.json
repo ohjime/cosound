@@ -1,0 +1,48 @@
+// Folder-specific settings
+//
+// For a full list of overridable settings, and general information on folder-specific settings,
+// see the documentation: https://zed.dev/docs/configuring-zed#settings-files
+{
+  // Zed labels our Django templates as plain "HTML", and its default
+  // `"formatter": "auto"` resolves that to its bundled Prettier. Prettier has no
+  // concept of Django: it treats `{% ... %}` as inline text and re-fills it to
+  // printWidth, which happily breaks a tag across two lines. Django's lexer is
+  // line-bounded (`tag_re` in django/template/base.py has no re.DOTALL), so a
+  // split tag stops being a tag and orphans its closer — that is what produced
+  // `TemplateSyntaxError: Invalid block tag ... 'endpartialdef'` on /studio/.
+  //
+  // djLint is Django-aware and keeps every tag on one line. It reads its config
+  // (custom_blocks incl. partialdef, custom_html for cotton's c-* tags) from
+  // src/server/pyproject.toml — the same tool VS Code already uses here.
+  //
+  // Paths are relative to the worktree root, which is the cwd Zed runs external
+  // formatters in — so this file survives the checkout moving and is safe to
+  // commit. (An earlier absolute-path version broke silently when the repo was
+  // moved: Zed logs `Formatter failed, skipping` and does NOT fall back to
+  // Prettier, so saves simply stopped formatting.)
+  //
+  // `--configuration` is required and not optional sugar: djLint discovers its
+  // config by walking up from the cwd, and the cwd here is the worktree root,
+  // one level ABOVE src/server/pyproject.toml. Without the flag it silently
+  // runs with stock defaults — no custom_blocks, no custom_html.
+  //
+  // `-` makes djLint read the buffer from stdin and write to stdout, which is
+  // what Zed's external formatter expects. Passing `{buffer_path}` as well (as
+  // some snippets online do) is a no-op: djLint ignores the extra positional
+  // when `-` is present, and it does not affect config discovery.
+  "languages": {
+    "HTML": {
+      "formatter": {
+        "external": {
+          "command": "src/server/.venv/bin/djlint",
+          "arguments": [
+            "--reformat",
+            "--configuration",
+            "src/server/pyproject.toml",
+            "-"
+          ]
+        }
+      }
+    }
+  }
+}

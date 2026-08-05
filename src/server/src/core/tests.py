@@ -3,14 +3,36 @@ from unittest.mock import patch
 
 from django.contrib.auth.models import Permission
 from django.contrib.messages import get_messages
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from django.utils import timezone
 from taggit.models import Tag
 
+from core.management.commands.refresh import Command, REFRESH_INTERVAL_SECONDS
 from core.models import Cosound, Listener, Manager, Player, Prediction, Sound, User
 from core.predict import _predict_for_player
 from vote.models import Vote
+
+
+class RefreshSchedulerTests(SimpleTestCase):
+    @patch(
+        "core.management.commands.refresh.time.sleep",
+        side_effect=KeyboardInterrupt,
+    )
+    @patch("core.management.commands.refresh.Player.objects.all", return_value=[])
+    @patch("core.management.commands.refresh._get_predictor")
+    def test_waits_thirty_seconds_between_player_refreshes(
+        self,
+        _get_predictor,
+        _players,
+        sleep,
+    ):
+        with self.assertRaises(SystemExit) as stopped:
+            Command().handle()
+
+        self.assertEqual(stopped.exception.code, 0)
+        self.assertEqual(REFRESH_INTERVAL_SECONDS, 30)
+        sleep.assert_called_once_with(30)
 
 
 class ListenerTestPointAdminTests(TestCase):
@@ -392,14 +414,28 @@ class PredictorTests(TestCase):
         self.assertEqual(self.player.playing.layers[0].sound_id, existing_sound.pk)
         self.assertEqual(self.player.playing.layers[0].sound_gain, 0.25)
 
-    def test_no_recent_voters_leaves_prediction_unchanged(self):
+    def test_no_recent_votes_clear_existing_prediction_and_api_layers(self):
         existing_sound = self.make_sound("existing", "existing")
         self.player.playing = Prediction.new()
         self.player.playing.add_layer(existing_sound.pk, gain=0.5)
         self.player.save()
+        stale_listener = self.make_listener(existing_sound)
+        self.vote(
+            stale_listener,
+            created_at=timezone.now() - timedelta(minutes=5, seconds=1),
+        )
 
-        self.assertEqual(self.predict(), 0)
+        with patch("core.predict.random.choice") as choice:
+            self.assertEqual(self.predict(), 0)
 
         self.player.refresh_from_db()
-        self.assertEqual(self.player.playing.layers[0].sound_id, existing_sound.pk)
-        self.assertEqual(self.player.playing.layers[0].sound_gain, 0.5)
+        self.assertIsInstance(self.player.playing, Prediction)
+        self.assertEqual(self.player.playing.layers, [])
+        choice.assert_not_called()
+
+        response = self.client.get(
+            "/api/player",
+            headers={"X-API-Key": self.player.token},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["layers"], [])

@@ -10,6 +10,10 @@ from vote.models import Vote
 def _predict_for_player(player_id: int) -> int:
     player = Player.objects.get(pk=player_id)
     recent_votes = Vote.recent(player, minutes=5)
+    if not recent_votes:
+        player.update(Prediction.new())
+        return 0
+
     active_listeners = sorted(
         Vote.get_listeners(recent_votes),
         key=lambda listener: listener.pk,

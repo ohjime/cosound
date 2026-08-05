@@ -8,6 +8,9 @@ from core.models import Cosound, Player
 from django.conf import settings
 
 
+REFRESH_INTERVAL_SECONDS = 30
+
+
 def _get_predictor() -> Any:
     """Resolve the predictor, falling back to core.predict.random_predictor if not configured."""
     predictor_path = getattr(settings, "COSOUND_CORE_PREDICTOR", None)
@@ -55,7 +58,7 @@ class Command(BaseCommand):
                             continue
                 else:
                     self.stdout.write(self.style.WARNING("No Active Players Found."))
-                time.sleep(180)
+                time.sleep(REFRESH_INTERVAL_SECONDS)
 
         except KeyboardInterrupt:
             self.stdout.write(self.style.WARNING("\nScheduler stopped by user."))

@@ -3,13 +3,13 @@
         <c-mixer-loading />
         <figure class="relative ring-7 ring-neutral-content/70 rounded-t-md mx-6 mt-7 overflow-visible bg-base-300">
             <div class="static aspect-square w-full rounded-t-md overflow-hidden">
-                <div class="absolute z-10 top-0 right-1/2 translate-x-1/2 -translate-y-1/2 ring-4 ring-neutral-content/70 flex justify-center rounded-md overflow-hidden bg-white">
+                <c-mixer-indicator-dock>
                     <c-mixer-card-header>
                         <c-mixer-layer-indicator />
                     </c-mixer-card-header>
-                </div>
+                </c-mixer-indicator-dock>
                 <c-mixer-card-figure>
-                    <c-mixer-layer-carousel />
+                    <c-mixer-layer-carousel artist_url="{% url 'app:artist_details' %}" swap_url="{% url 'mixer:swap' %}" />
                 </c-mixer-card-figure>
             </div>
             <c-mixer-arrows />
@@ -29,14 +29,16 @@
             </div>
         </div>
         <div class="absolute z-10 bottom-0 left-1/2 -translate-x-1/2 ring-6 ring-[#2d2d2d]/60 drop-shadow-2xl flex justify-center rounded-t-2xl overflow-hidden bg-base-100 w-fit">
-            <c-mixer-layer-options />
+
+             <c-mixer-master />
+
         </div>
     </c-core-card>
 {% endpartialdef %}
 
 {% partialdef default_view %}
     <c-mixer-card-figure hx-swap-oob="outerHTML">
-        <c-mixer-layer-carousel />
+        <c-mixer-layer-carousel artist_url="{% url 'app:artist_details' %}" swap_url="{% url 'mixer:swap' %}" />
     </c-mixer-card-figure>
     <c-mixer-card-body hx-swap-oob="outerHTML">
         <div class="italic font-serif font-extralight text-xs font-stretch-95%">

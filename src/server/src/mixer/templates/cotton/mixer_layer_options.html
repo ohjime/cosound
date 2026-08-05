@@ -1,6 +1,21 @@
+<c-vars disabled="" />
+<!--
+`disabled` renders the pill inert. The studio shows it that way: the card keeps
+the mixer's familiar Keep / Swap controls in their usual place, but every one of
+those actions is driven from the settings pane instead. A disabled button emits
+no click, so the htmx requests below never fire — the attributes can stay.
+
+Keep is off on a blank layer too, wherever the pill is live: it posts
+`currentLayer.sound_id`, and a layer nobody has chosen a sound for has no id to
+post. That guard sits in the else branch of the static attribute rather than
+next to it, because a falsy `:disabled` *removes* the attribute — the two
+together would hand the studio a working Keep button. Swap stays live either
+way: it is how a blank layer stops being blank.
+-->
 <div class="join">
 
     <button class="btn btn-sm"
+            {% if disabled %}disabled{% else %}:disabled="$store.soundLayers.currentIsDraft"{% endif %}
             x-show="!$store.soundLayers.swappingLayer"
             x-cloak
             hx-post="{% url 'mixer:keep_sound' %}"
@@ -29,6 +44,7 @@
     </button>
 
     <button class="btn btn-sm"
+            {% if disabled %}disabled{% endif %}
             x-show="$store.soundLayers.swappingLayer"
             x-cloak
             hx-get="{% url 'mixer:carousel' %}"
@@ -45,6 +61,7 @@
     </button>
 
     <button class="btn btn-sm"
+            {% if disabled %}disabled{% endif %}
             :class="{ 'btn-active btn-disabled': $store.soundLayers.swappingLayer }"
             hx-get="{% url 'mixer:swap' %}"
             hx-swap="none swap:300ms"

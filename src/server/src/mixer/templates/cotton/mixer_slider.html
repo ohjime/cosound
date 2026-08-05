@@ -1,6 +1,14 @@
+<!--
+The fader, with mute on its left and solo on its right.
+
+All three go inert on a blank layer as well as while the picker is open: there
+is no voice to fade, silence or isolate until the layer has a sound in it, and
+the fader's own `_disabled()` already collects every other reason it cannot be
+touched.
+-->
 <div class="z-20 flex flex-row items-center justify-center w-full px-5.5 gap-3">
     <button type="button"
-            :disabled="$store.soundLayers.swappingLayer"
+            :disabled="$store.soundLayers.swappingLayer || $store.soundLayers.currentIsDraft"
             class="btn btn-xs btn-circle border-none focus:outline-none bg-neutral-content text-white disabled:cursor-not-allowed"
             :class="!$store.soundLayers.swappingLayer && $store.soundLayers.isSilenced($store.soundLayers.currentLayer) ? '!bg-amber-500 !text-amber-900' : ''"
             @click="$store.soundLayers.toggleMute($store.soundLayers.currentLayer)">
@@ -22,7 +30,7 @@
             _startY: 0,
             _isTouch: false,
             _raf: null,
-            _disabled() { return $store.soundLayers.swappingLayer || $store.soundLayers.tracksLoading || !$store.soundLayers.started; },
+            _disabled() { return $store.soundLayers.swappingLayer || $store.soundLayers.tracksLoading || !$store.soundLayers.started || $store.soundLayers.currentIsDraft; },
             _faded() { return $store.soundLayers.isSilenced($store.soundLayers.currentLayer); },
             _animate(to) {
                 cancelAnimationFrame(this._raf);
@@ -95,7 +103,7 @@
         </div>
     </div>
     <button type="button"
-            :disabled="$store.soundLayers.swappingLayer"
+            :disabled="$store.soundLayers.swappingLayer || $store.soundLayers.currentIsDraft"
             class="btn btn-xs btn-circle border-none focus:outline-none bg-neutral-content text-white disabled:cursor-not-allowed"
             :class="!$store.soundLayers.swappingLayer && $store.soundLayers.currentLayer.isolated ? '!bg-amber-500 !text-amber-900' : ''"
             @click="$store.soundLayers.toggleIsolate($store.soundLayers.currentLayer)">

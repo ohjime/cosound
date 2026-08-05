@@ -14,20 +14,24 @@
      class="absolute inset-0 z-50 rounded-b-4xl rounded-t-3xl bg-neutral-900/90 flex items-center justify-center">
 
     <!-- Loading state -->
-    <div x-show="$store.soundLayers.tracksLoading"
-         class="flex flex-col items-center gap-3 text-white">
+    <div x-show="$store.soundLayers.tracksLoading && !$store.soundLayers.loadError" class="flex flex-col items-center gap-3 text-white">
 
         <div class="radial-progress text-primary brightness-110"
              :style="`--value:${$store.soundLayers.layers.length ? Math.round($store.soundLayers.loadedCount / $store.soundLayers.layers.length * 100) : 0}`"
              role="progressbar">
-            <span x-text="`${$store.soundLayers.loadedCount} / ${$store.soundLayers.layers.length}`"
-                  class="text-xs text-white"></span>
+            <span x-text="`${$store.soundLayers.loadedCount} / ${$store.soundLayers.layers.length}`" class="text-xs text-white"></span>
         </div>
         Loading sounds...
     </div>
 
+    <div x-show="$store.soundLayers.loadError" class="flex max-w-64 flex-col items-center gap-3 text-center text-white">
+        <strong>One of the sounds could not be loaded.</strong>
+        <span class="text-xs opacity-70" x-text="$store.soundLayers.loadError"></span>
+        <button type="button" class="btn btn-sm" @click="$store.soundLayers.initialize()">Try again</button>
+    </div>
+
     <!-- Ready state: tap anywhere to start -->
-    <div x-show="!$store.soundLayers.tracksLoading"
+    <div x-show="!$store.soundLayers.tracksLoading && !$store.soundLayers.loadError"
          x-transition:enter="transition ease-out duration-500"
          x-transition:enter-start="opacity-0"
          x-transition:enter-end="opacity-100"

@@ -37,6 +37,15 @@ def list_output_devices() -> list[tuple[int, dict]]:
     ]
 
 
+def list_input_devices() -> list[tuple[int, dict]]:
+    """All devices with at least one input channel, as (index, info)."""
+    return [
+        (index, device)
+        for index, device in enumerate(sd.query_devices())
+        if int(device.get("max_input_channels", 0)) > 0
+    ]
+
+
 def _hostapi_name(info: dict) -> str:
     try:
         return sd.query_hostapis()[info["hostapi"]]["name"]
@@ -103,5 +112,67 @@ def detect_output(device=None) -> OutputDevice:
         samplerate=samplerate,
         hostapi=_hostapi_name(info),
         lfe_channels=_guess_lfe_channels(name, channels),
+        raw=dict(info),
+    )
+
+
+@dataclass
+class InputDevice:
+    """What we can reliably learn about a selected input (microphone) device."""
+
+    index: int | None  # None == system default input
+    name: str
+    channels: int  # max_input_channels
+    samplerate: int  # device default sample rate
+    hostapi: str
+    raw: dict = field(default_factory=dict)
+
+
+def _resolve_input_index(device) -> tuple[int | None, dict]:
+    """Map an index / name-substring / None onto a concrete input device info dict."""
+    if device is None:
+        info = sd.query_devices(kind="input")
+        return info.get("index"), info
+
+    normalized = int(device) if str(device).isdigit() else device
+    try:
+        info = sd.query_devices(normalized, kind="input")
+        idx = info.get("index", normalized if isinstance(normalized, int) else None)
+        return idx, info
+    except Exception:
+        pass
+
+    name = str(device).lower()
+    for index, candidate in list_input_devices():
+        if name in str(candidate.get("name", "")).lower():
+            return index, candidate
+
+    raise ValueError(f"No input device matched {device!r}.")
+
+
+def detect_input(device=None) -> InputDevice | None:
+    """Resolve and probe a microphone into an :class:`InputDevice`.
+
+    Unlike :func:`detect_output`, a microphone is optional: this returns
+    ``None`` (never raises) when no matching input device is available, so
+    callers can gracefully disable mic-driven features.
+    """
+    try:
+        index, info = _resolve_input_index(device)
+    except Exception:
+        return None
+
+    channels = int(info.get("max_input_channels", 0))
+    if channels <= 0:
+        return None
+
+    samplerate = int(info.get("default_samplerate", 0)) or 48000
+    name = str(info.get("name", "Unknown"))
+    return InputDevice(
+        index=index,
+        name=name,
+        channels=channels,
+        samplerate=samplerate,
+        hostapi=_hostapi_name(info),
         raw=dict(info),
     )

@@ -456,13 +456,14 @@ class CosoundPlayerApp(App):
     }
     """
 
-    def __init__(self, api_key: str, manifest: dict, player) -> None:
+    def __init__(self, api_key: str, manifest: dict, player, mic_controller=None) -> None:
         # ansi_color keeps the ansi_* CSS colors mapped to the terminal's own
         # palette instead of Textual's built-in theme approximation.
         super().__init__(ansi_color=True)
         self.api_key = api_key
         self.manifest = manifest
         self.player = player
+        self.mic_controller = mic_controller
         self._cosound_signature = None
         self._current_entry: CosoundEntry | None = None
         self._last_gains: dict[str, float] = {}
@@ -477,6 +478,10 @@ class CosoundPlayerApp(App):
                 yield Static(
                     form_row("SPEAKER SYSTEM", self._speaker_summary()),
                     id="speaker-system",
+                )
+                yield Static(
+                    form_row("MICROPHONE", self._mic_summary()),
+                    id="microphone",
                 )
         with VerticalScroll(id="body"):
             with Vertical(id="history"):
@@ -496,6 +501,12 @@ class CosoundPlayerApp(App):
         if not channels:
             return name
         return f"{name} ({channels} CHANNEL{'S' if channels != 1 else ''})"
+
+    def _mic_summary(self) -> str:
+        mic = self.mic_controller
+        if mic is None or not mic.available:
+            return "None detected (auto gain off)"
+        return f"{mic.device_obj.name} (auto gain on)"
 
     def on_mount(self) -> None:
         self._show_volume(self.player.master_gain)
@@ -598,6 +609,12 @@ class CosoundPlayerApp(App):
     # --- Real-time peak meters ---
 
     def _update_meters(self) -> None:
+        # The slider always shows the ceiling the user set; the label also
+        # shows what's actually playing right now, since the mic scales it
+        # below that ceiling as the room gets quieter.
+        if self.mic_controller is not None and self.mic_controller.available:
+            self._show_volume(self.mic_controller.get_max_gain())
+
         entry = self._current_entry
         if entry is None or not entry.is_mounted:
             return
@@ -609,12 +626,28 @@ class CosoundPlayerApp(App):
 
     # --- Volume / mute controls ---
 
-    def _show_volume(self, gain: float) -> None:
-        self.query_one("#volume-label", Static).update(f"VOL {round(gain * 100)}%")
+    def _show_volume(self, max_gain: float) -> None:
+        mic = self.mic_controller
+        if mic is not None and mic.available:
+            if not mic.calibrated:
+                self.query_one("#volume-label", Static).update(
+                    f"VOL {round(max_gain * 100)}% (calibrating…)"
+                )
+                return
+            now = round(self.player.master_gain * 100)
+            self.query_one("#volume-label", Static).update(
+                f"VOL {round(max_gain * 100)}% (NOW {now}%)"
+            )
+            return
+        self.query_one("#volume-label", Static).update(f"VOL {round(max_gain * 100)}%")
 
     @on(VolumeSlider.Changed)
     def _on_volume_changed(self, event: VolumeSlider.Changed) -> None:
-        self.player.set_master_gain(event.value)
+        mic = self.mic_controller
+        if mic is not None and mic.available:
+            mic.set_max_gain(event.value)
+        else:
+            self.player.set_master_gain(event.value)
         self._show_volume(event.value)
 
     @on(Button.Pressed, "#mute")

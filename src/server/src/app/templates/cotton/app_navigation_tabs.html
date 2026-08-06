@@ -6,31 +6,36 @@ fragment into `target` (app/home.html's #tab_content) on change — a radio only
 fires change when it becomes checked, so re-clicking the active tab fetches
 nothing.
 
-MIXER and STUDIO fragments each bring their own c-mixer-player, so picking a
-tab remounts the soundLayers store over that tab's layers, and the htmx cleanup
-hook in soundscape-store.js stops the outgoing tab's audio when its player root
-leaves the DOM.
+LISTEN and DESIGNER each return the same preserved mixer workspace. In its
+normal card view HTMX moves that live element between their layouts, retaining
+the mix and audio. A picker is transient and surface-specific, so changing tabs
+while one is open removes the old workspace id: the incoming tab then mounts a
+clean card rather than preserving the wrong picker.
 -->
-<div class="tabs tabs-lift">
+<!-- Explicit widths and a single flex row avoid daisyUI's radio-tab sizing bug
+     in iOS WebKit. -->
+<div class="tabs tabs-lift flex-nowrap">
     <input type="radio"
            name="home_tabs"
-           class="tab"
+           class="tab w-auto"
            aria-label="ABOUT US"
            hx-get="{% url 'app:home_tab_about' %}"
            hx-target="{{ target }}"
            hx-swap="innerHTML" />
     <input type="radio"
            name="home_tabs"
-           class="tab"
+           class="tab w-auto"
            aria-label="LISTEN"
            checked="checked"
+           @change="window.CosoundSoundscape?.prepareWorkspaceTransfer()"
            hx-get="{% url 'app:home_tab_mixer' %}"
            hx-target="{{ target }}"
            hx-swap="innerHTML" />
     <input type="radio"
            name="home_tabs"
-           class="tab"
+           class="tab w-auto"
            aria-label="DESIGNER"
+           @change="window.CosoundSoundscape?.prepareWorkspaceTransfer()"
            hx-get="{% url 'studio:initial' %}"
            hx-target="{{ target }}"
            hx-swap="innerHTML" />

@@ -2,6 +2,7 @@ import '../css/main.css';
 import Alpine from 'alpinejs';
 import htmx from 'htmx.org/dist/htmx.esm.js';
 import { Observer } from 'tailwindcss-intersect';
+import { cardDemo } from './card-demo.js';
 import { layerCarousel } from './layer-carousel.js';
 import { installExploreLayerLinks } from './explore-layer-links.js';
 import { installSoundscapeBridge } from './soundscape-store.js';
@@ -18,6 +19,7 @@ installSoundSelectorGuard();
 installExploreLayerLinks();
 // Components have to be registered before start(), or the elements that use
 // them are already past initialisation by the time the name exists.
+Alpine.data('cardDemo', cardDemo);
 Alpine.data('layerCarousel', layerCarousel);
 Alpine.data('studioBuilder', studioBuilder);
 Alpine.data('trimTrack', trimTrack);

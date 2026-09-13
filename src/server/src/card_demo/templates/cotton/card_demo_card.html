@@ -1,0 +1,230 @@
+<c-vars sounds />
+<div class="w-full" x-data="cardDemo" data-card-demo>
+    <style>
+        [data-card-demo] {
+            --card-width: 18.5rem;
+            --card-height: 31.5rem;
+            max-width: var(--card-width);
+        }
+
+        [data-card-demo] #card-demo-deck {
+            max-width: none;
+        }
+
+        [data-card-demo] [data-core-card] {
+            height: var(--card-height);
+            border-radius: 1.125rem;
+        }
+    </style>
+    <div data-card-demo-sounds hidden>{{ sounds|json_script:"card-demo-sounds" }}</div>
+    <c-core-deck id="card-demo-deck">
+        <c-core-card showExit="false" bgColor="bg-[#1f3f23]" ringColor="ring-[#2d2d2d]">
+            {% if sounds %}
+            <figure class="relative mx-6 mt-7 overflow-visible rounded-t-md bg-base-300 ring-7 ring-neutral-content/70">
+                <div class="static aspect-square w-full overflow-hidden rounded-t-md">
+                    <div
+                        class="absolute top-0 left-1/2 z-30 flex -translate-x-1/2 -translate-y-1/2 justify-center overflow-hidden rounded-md bg-white ring-4 ring-neutral-content/70">
+                        <div id="card-demo-header" class="flex w-full">
+                            <div class="join w-fit ring-4">
+                                <template x-for="(layer, index) in layers" :key="layer.sound_id">
+                                    <button type="button"
+                                        class="btn btn-sm join-item h-7 w-7.5 rounded-none border-none btn-neutral font-mono"
+                                        :class="currentIndex === index ? '!text-white text-xl font-extrabold' : 'text-gray-300 text-xs font-light'"
+                                        :style="`opacity: ${(isSilenced(layer) ? 50 : 50 + layer.gain * 0.5) / 100};`"
+                                        :aria-label="`Show sound layer ${index + 1}`"
+                                        :aria-pressed="currentIndex === index"
+                                        @click="currentIndex === index ? toggleMute(layer) : select(index)"
+                                        x-text="index + 1"></button>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="card-demo-figure" class="grid h-full w-full">
+                        <div aria-hidden="true" class="col-start-1 row-start-1 aspect-square w-68 max-w-full"></div>
+                        <div class="col-start-1 row-start-1 min-h-0 min-w-0">
+                            <div class="relative h-full w-full">
+                                <div x-ref="carousel" @scroll.debounce.5ms="updateActive()"
+                                    class="carousel h-full w-full">
+                                    <template x-for="layer in layers" :key="layer.sound_id">
+                                        <div data-card-demo-layer
+                                            class="carousel-item relative h-full w-full transition-[filter] duration-300 ease-out"
+                                            :style="`filter: grayscale(${grayscaleFor(layer)}%)`">
+                                            <template x-if="layer.artwork_url">
+                                                <c-core-image bind_src="layer.artwork_url" bind_alt="layer.sound_title"
+                                                    class="h-full w-full" />
+                                            </template>
+                                            <div x-show="!layer.artwork_url"
+                                                class="h-full w-full bg-gradient-to-br from-emerald-950 via-emerald-800 to-lime-950"
+                                                aria-hidden="true"></div>
+                                            <div
+                                                class="pointer-events-none absolute inset-x-0 top-0 z-10 h-1/2 bg-gradient-to-b from-black/80 to-transparent">
+                                            </div>
+                                            <div
+                                                class="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-12 bg-gradient-to-t from-black/60 to-transparent">
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                                <div
+                                    class="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between p-3 pt-8 font-serif font-thin italic text-white text-shadow-lg">
+                                    <div class="pr-12 text-left text-lg leading-tight"
+                                        x-text="currentLayer?.sound_title"></div>
+                                    <button type="button"
+                                        class="pointer-events-auto absolute top-6.5 right-3 grid size-8 place-items-center rounded-full bg-black/25 text-white shadow-md backdrop-blur-sm transition hover:scale-105 hover:bg-black/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                                        :aria-label="currentLayer?.saved ? 'Remove from favourite sounds' : 'Add to favourite sounds'"
+                                        :aria-pressed="Boolean(currentLayer?.saved)"
+                                        @click="toggleFavorite(currentLayer)">
+                                        <svg class="size-5 drop-shadow-md transition-colors"
+                                            :class="currentLayer?.saved ? 'fill-red-500 text-red-500' : 'fill-transparent text-white'"
+                                            xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2.2"
+                                            stroke="currentColor" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z" />
+                                        </svg>
+                                    </button>
+                                    <div class="self-end pb-1 pr-1 text-right text-sm opacity-90"
+                                        x-text="currentLayer?.sound_artist"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <button type="button" @click="move(-1)" :disabled="isFirst" aria-label="Previous carousel panel"
+                    class="absolute -left-11.5 top-1/2 z-10 flex w-20 -translate-y-1/2 scale-x-75 scale-y-150 cursor-pointer items-center justify-center text-amber-600 stroke-white disabled:cursor-not-allowed disabled:text-neutral-600 disabled:stroke-neutral-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-full w-full" viewBox="0 -960 960 960"
+                        fill="currentColor">
+                        <path d="M560-280 360-480l200-200v400Z" stroke-width="40" stroke-linejoin="round" />
+                    </svg>
+                </button>
+                <button type="button" @click="move(1)" :disabled="isLast" aria-label="Next carousel panel"
+                    class="absolute -right-11.5 top-1/2 z-10 flex w-20 -translate-y-1/2 scale-x-75 scale-y-150 cursor-pointer items-center justify-center text-amber-600 stroke-white disabled:cursor-not-allowed disabled:text-neutral-600 disabled:stroke-neutral-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-full w-full" viewBox="0 -960 960 960"
+                        fill="currentColor">
+                        <path d="M400-280v-400l200 200-200 200Z" stroke-width="40" stroke-linejoin="round" />
+                    </svg>
+                </button>
+            </figure>
+            <div class="z-20 flex w-full flex-row items-center justify-center gap-3 px-5.5">
+                <div class="tooltip tooltip-right z-30 shrink-0"
+                    :data-tip="currentLayer?.mute ? 'Unmute this layer' : 'Mute this layer'">
+                    <button type="button" :aria-label="currentLayer?.mute ? 'Unmute this layer' : 'Mute this layer'"
+                        :aria-pressed="Boolean(currentLayer?.mute)"
+                        class="btn btn-xs btn-circle border-none bg-neutral-content text-white focus:outline-none"
+                        :class="isSilenced(currentLayer) ? '!bg-amber-500 !text-amber-900' : ''"
+                        @click="toggleMute(currentLayer)">
+                        <svg class="size-[1.7em] fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                            fill="currentColor">
+                            <path
+                                d="M3,9H7L12,4V20L7,15H3V9M16.59,12L14,9.41L15.41,8L18,10.59L20.59,8L22,9.41L19.41,12L22,14.59L20.59,16L18,13.41L15.41,16L14,14.59L16.59,12Z" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="w-full min-w-0 touch-none select-none" x-data="{ dragging: false }"
+                    @pointermove.window="if (dragging) setGainFromPointer($event, $refs.track)"
+                    @pointerup.window="dragging = false" @pointercancel.window="dragging = false">
+                    <div x-ref="track" role="slider" tabindex="0" aria-label="Current layer volume" aria-valuemin="0"
+                        aria-valuemax="100" :aria-valuenow="Math.round(currentLayer?.gain || 0)"
+                        class="relative my-6 h-2 w-full cursor-pointer rounded-full bg-amber-500 transition-[filter]"
+                        :class="isSilenced(currentLayer) ? 'grayscale' : ''"
+                        @pointerdown="dragging = true; setGainFromPointer($event, $refs.track)"
+                        @keydown.left.prevent="stepGain(-5)" @keydown.down.prevent="stepGain(-5)"
+                        @keydown.right.prevent="stepGain(5)" @keydown.up.prevent="stepGain(5)">
+                        <div class="pointer-events-none absolute top-1/2 flex size-22 -translate-x-1/2 -translate-y-16 scale-x-125 scale-y-75 items-center justify-center transition-[filter,scale,opacity] duration-300"
+                            :class="isSilenced(currentLayer) ? 'grayscale' : ''"
+                            :style="`left: ${currentLayer?.gain || 0}%`">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"
+                                class="pointer-events-none rotate-90 text-amber-600 stroke-white drop-shadow-md"
+                                fill="currentColor">
+                                <path d="M400-280v-400l200 200-200 200Z" stroke-width="40" stroke-linejoin="round" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="tooltip tooltip-left z-30 shrink-0"
+                    :data-tip="currentLayer?.isolated ? 'Stop isolating this layer' : 'Isolate this layer'">
+                    <button type="button"
+                        :aria-label="currentLayer?.isolated ? 'Stop isolating this layer' : 'Isolate this layer'"
+                        :aria-pressed="Boolean(currentLayer?.isolated)"
+                        class="btn btn-xs btn-circle shrink-0 border-none bg-neutral-content text-white focus:outline-none"
+                        :class="currentLayer?.isolated ? '!bg-amber-500 !text-amber-900' : ''"
+                        @click="toggleIsolate(currentLayer)">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"
+                            class="size-[1.5em] fill-current">
+                            <path
+                                d="M160-200v-280q0-66 25-124.5t68.5-102Q297-750 355.5-775T480-800q66 0 124.5 25t102 68.5Q750-663 775-604.5T800-480v280H640v-240h80v-40q0-100-70-170t-170-70q-100 0-170 70t-70 170v40h80v240H160Z" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div
+                class="relative mx-4 mb-4 min-h-0 flex-1 rounded-xs rounded-b-2xl bg-white/65 text-black ring-5 ring-amber-600/60">
+                <div class="h-full overflow-y-auto px-4 py-2">
+                    <div id="card-demo-body" class="h-full w-full">
+                        <div class="font-serif text-[8pt] font-extralight italic font-stretch-95%">
+                            <p class="py-1 font-serif text-xs font-bold not-italic font-stretch-95%"
+                                x-text="'[ ' + (currentLayer?.tags || 'untagged') + ' ]'"></p>
+                            <span x-text="currentLayer?.flavor"></span>
+                            <span x-show="!currentLayer?.flavor" class="opacity-40">No flavor text yet.</span>
+                        </div>
+                    </div>
+                </div>
+                <div
+                    class="pointer-events-none absolute inset-x-0 bottom-0 h-6 rounded-b-2xl bg-gradient-to-t from-neutral-content/80 to-transparent">
+                </div>
+            </div>
+            <div
+                class="absolute bottom-0 left-1/2 z-10 flex w-fit -translate-x-1/2 justify-center rounded-t-2xl bg-base-100 ring-6 ring-[#2d2d2d]/60 drop-shadow-2xl">
+                <div id="card-demo-master" class="join rounded-xl">
+                    <div class="tooltip tooltip-top" data-tip="Lower all Sounds">
+                        <button type="button" class="btn btn-sm btn-soft join-item py-2" aria-label="Lower all Sounds"
+                            @click="adjustAll(-10)">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor"
+                                class="size-[2em]">
+                                <path
+                                    d="M200-360v-240h160l200-200v640L360-360H200Zm440 40v-322q45 21 72.5 65t27.5 97q0 53-27.5 96T640-320ZM480-606l-86 86H280v80h114l86 86v-252ZM380-480Z" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="tooltip tooltip-top" :data-tip="paused ? 'Resume this Cosound' : 'Pause this Cosound'">
+                        <button type="button" class="btn btn-sm join-item py-2"
+                            :class="paused ? 'btn-success btn-soft' : 'btn-soft'"
+                            :aria-label="paused ? 'Resume this Cosound' : 'Pause this Cosound'" :aria-pressed="paused"
+                            @click="paused = !paused">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor"
+                                class="size-[3em]">
+                                <path
+                                    d="M200-312v-336l240 168-240 168Zm320-8v-320h80v320h-80Zm160 0v-320h80v320h-80Z" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="tooltip tooltip-top" :data-tip="mixSaved ? 'Saved for this demo' : 'Save this Cosound'">
+                        <button type="button" class="btn btn-sm btn-soft join-item py-2"
+                            :class="mixSaved ? 'btn-success' : ''" aria-label="Save this Cosound"
+                            :aria-pressed="mixSaved" @click="mixSaved = !mixSaved">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor"
+                                class="size-[2em]">
+                                <path
+                                    d="M840-680v480q0 33-23.5 56.5T760-120H200q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h480l160 160Zm-80 34L646-760H200v560h560v-446ZM565-275q35-35 35-85t-35-85q-35-35-85-35t-85 35q-35 35-35 85t35 85q35 35 85 35t85-35ZM240-560h360v-160H240v160Zm-40-86v446-560 114Z" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="tooltip tooltip-top" data-tip="Raise all Sounds">
+                        <button type="button" class="btn btn-sm btn-soft join-item py-2" aria-label="Raise all Sounds"
+                            @click="adjustAll(10)">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor"
+                                class="size-[2em]">
+                                <path
+                                    d="M560-131v-82q90-26 145-100t55-168q0-94-55-168T560-749v-82q124 28 202 125.5T840-481q0 127-78 224.5T560-131ZM120-360v-240h160l200-200v640L280-360H120Zm440 40v-322q47 22 73.5 66t26.5 96q0 51-26.5 94.5T560-320ZM400-606l-86 86H200v80h114l86 86v-252ZM300-480Z" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="grid min-h-96 place-items-center px-8 text-center text-white">
+                <p class="font-serif italic">Add sounds to the collection to populate this card.</p>
+            </div>
+            {% endif %}
+        </c-core-card>
+    </c-core-deck>
+</div>

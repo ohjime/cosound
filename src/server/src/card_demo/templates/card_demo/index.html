@@ -1,0 +1,9 @@
+{% extends "core/base.html" %}
+{% block title %}
+    Card Demo
+{% endblock title %}
+{% block content %}
+    <main class="-mx-6 min-h-dvh grid place-items-center overflow-hidden bg-base-100 px-6 py-10">
+        <c-card-demo-card :sounds="sounds" />
+    </main>
+{% endblock content %}

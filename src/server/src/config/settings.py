@@ -172,6 +172,7 @@ INSTALLED_APPS = [
     "anymail",
     "core",
     "app",
+    "card_demo",
     "explore",
     "vote",
     "library",

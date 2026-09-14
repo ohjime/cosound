@@ -27,6 +27,20 @@ def _api_get(path: str, api_key: str) -> dict:
         return json.loads(response.read().decode("utf-8"))
 
 
+def _api_post(path: str, api_key: str, payload: dict) -> dict:
+    request = urllib.request.Request(
+        f"{API_BASE_URL}{path}",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "X-API-Key": api_key,
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(request) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
 def get_latest_manifest(api_key: str) -> dict:
     """Fetch the player's sound library: {sound_id: remote_url}."""
     return _api_get("/manifest", api_key)
@@ -63,6 +77,20 @@ def get_player_info(api_key: str) -> dict:
                 for sound_id, gain in cosound.items()
             ],
         }
+
+
+def acknowledge_exposure(
+    api_key: str,
+    exposure_id: str,
+    *,
+    transition_seconds: float,
+) -> dict:
+    """Best-effort caller hook after the player queues a server exposure."""
+    return _api_post(
+        f"/exposures/{exposure_id}/ack",
+        api_key,
+        {"transition_seconds": transition_seconds},
+    )
 
 
 def get_sound(sound_id, remote_path) -> str:

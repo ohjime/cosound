@@ -1,20 +1,60 @@
+import random
 from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.auth.models import Permission
 from django.contrib.messages import get_messages
-from django.test import SimpleTestCase, TestCase
+from django.core.management.base import CommandError
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from taggit.models import Tag
 
-from core.management.commands.refresh import Command, REFRESH_INTERVAL_SECONDS
-from core.models import Cosound, Listener, Manager, Player, Prediction, Sound, User
-from core.predict import _predict_for_player
+from core.management.commands.refresh import Command, REFRESH_INTERVAL_SECONDS, _get_predictor
+from core.models import (
+    AlgorithmDecision,
+    Cosound,
+    Listener,
+    Manager,
+    PlaybackExposure,
+    Player,
+    Prediction,
+    Sound,
+    User,
+)
+from core.predict import (
+    _predict_for_player,
+    _stable_predict_for_player,
+    stable_preference_predictor,
+)
+from core.prediction import (
+    ListenerEvidence,
+    Mix,
+    MixLayer,
+    SelectionConfig,
+    SoundEvidence,
+    VoteEvidence,
+    enumerate_candidates,
+    select_mix,
+)
 from vote.models import Vote
 
 
 class RefreshSchedulerTests(SimpleTestCase):
+    @override_settings(
+        COSOUND_CORE_PREDICTOR="core.predict.stable_preference_predictor"
+    )
+    def test_can_select_the_stable_predictor_by_setting(self):
+        self.assertIs(_get_predictor(), stable_preference_predictor)
+
+    @override_settings(COSOUND_CORE_PREDICTOR="core.predict.does_not_exist")
+    def test_invalid_predictor_path_fails_instead_of_silently_using_random(self):
+        with self.assertRaisesMessage(
+            CommandError,
+            "Could not import COSOUND_CORE_PREDICTOR='core.predict.does_not_exist'",
+        ):
+            _get_predictor()
+
     @patch(
         "core.management.commands.refresh.time.sleep",
         side_effect=KeyboardInterrupt,
@@ -191,8 +231,446 @@ class PredictorTests(TestCase):
         )
         self.manager = Manager.objects.create(user=manager_user, name="Manager")
         self.player = Player.objects.create(manager=self.manager, name="Player")
-        self.cosound = Cosound.objects.create(hashid="vote", hashset="vote")
-        self.listener_number = 0
+
+    def make_sound(self, title):
+        return Sound.objects.create(
+            file=f"sounds/{title}.mp3",
+            title=title,
+            embeddings=[0.0] * 5,
+        )
+
+    def predict(self):
+        with patch.object(Player, "announce"):
+            return _predict_for_player(self.player.pk)
+
+    def test_builds_three_random_layers_from_the_library(self):
+        sounds = [self.make_sound(f"sound-{i}") for i in range(5)]
+        self.player.sounds.add(*sounds)
+
+        self.assertEqual(self.predict(), 1)
+
+        self.player.refresh_from_db()
+        layers = self.player.playing.layers
+        self.assertEqual(len(layers), 3)
+        sound_ids = [layer.sound_id for layer in layers]
+        self.assertEqual(len(set(sound_ids)), 3)
+        self.assertTrue(set(sound_ids) <= {sound.pk for sound in sounds})
+        for layer in layers:
+            self.assertGreaterEqual(layer.sound_gain, 0.0)
+            self.assertLessEqual(layer.sound_gain, 1.0)
+
+    def test_uses_the_whole_library_when_there_are_fewer_than_three_sounds(self):
+        first = self.make_sound("first")
+        second = self.make_sound("second")
+        self.player.sounds.add(first, second)
+
+        self.assertEqual(self.predict(), 1)
+
+        self.player.refresh_from_db()
+        self.assertEqual(len(self.player.playing.layers), 2)
+        self.assertEqual(
+            {layer.sound_id for layer in self.player.playing.layers},
+            {first.pk, second.pk},
+        )
+
+    def test_does_not_use_sounds_outside_the_library(self):
+        library_sound = self.make_sound("library")
+        self.make_sound("outside")
+        self.player.sounds.add(library_sound)
+
+        self.assertEqual(self.predict(), 1)
+
+        self.player.refresh_from_db()
+        self.assertEqual(
+            [layer.sound_id for layer in self.player.playing.layers],
+            [library_sound.pk],
+        )
+
+    def test_empty_library_clears_existing_prediction(self):
+        existing_sound = self.make_sound("existing")
+        self.player.playing = Prediction.new()
+        self.player.playing.add_layer(existing_sound.pk, gain=0.5)
+        self.player.save()
+
+        self.assertEqual(self.predict(), 0)
+
+        self.player.refresh_from_db()
+        self.assertEqual(self.player.playing.layers, [])
+
+    def test_random_rollback_closes_stable_exposure_attribution(self):
+        sound = self.make_sound("sound")
+        self.player.sounds.add(sound)
+        decision = AlgorithmDecision.objects.create(
+            player=self.player,
+            policy_version="stable-preference-mixer-v1",
+            outcome="selected",
+        )
+        exposure = PlaybackExposure.objects.create(
+            player=self.player,
+            opening_decision=decision,
+            mix_key=f"{sound.pk}@1.000000",
+            layers=[{"sound_id": sound.pk, "sound_gain": 1.0}],
+        )
+        self.player.current_exposure = exposure
+        self.player.save(update_fields=["current_exposure"])
+
+        self.assertEqual(self.predict(), 1)
+
+        self.player.refresh_from_db()
+        exposure.refresh_from_db()
+        self.assertIsNone(self.player.current_exposure)
+        self.assertEqual(exposure.status, PlaybackExposure.ENDED)
+        self.assertIsNotNone(exposure.ended_at)
+
+
+class StableSelectionTests(SimpleTestCase):
+    rain = SoundEvidence(1, ("rain",))
+    cafe = SoundEvidence(2, ("cafe",))
+
+    def test_candidate_counts_are_complete_and_unique(self):
+        toy = tuple(SoundEvidence(index) for index in range(1, 7))
+        real_size = tuple(SoundEvidence(index) for index in range(1, 18))
+
+        toy_candidates = enumerate_candidates(toy)
+        real_candidates = enumerate_candidates(real_size)
+
+        self.assertEqual(len(toy_candidates), 41)
+        self.assertEqual(len({mix.key for mix in toy_candidates}), 41)
+        self.assertEqual(len(real_candidates), 833)
+        self.assertEqual(
+            [
+                sum(len(mix.layers) == count for mix in real_candidates)
+                for count in (1, 2, 3)
+            ],
+            [17, 136, 680],
+        )
+        two_to_three_layers = enumerate_candidates(
+            real_size,
+            min_layers=2,
+            max_layers=3,
+        )
+        self.assertEqual(len(two_to_three_layers), 816)
+        self.assertTrue(
+            all(2 <= len(mix.layers) <= 3 for mix in two_to_three_layers)
+        )
+
+    def test_candidate_and_listener_order_do_not_change_the_winner(self):
+        listeners = (
+            ListenerEvidence("rain-listener", saved_sounds=(self.rain,)),
+            ListenerEvidence("cafe-listener", saved_sounds=(self.cafe,)),
+        )
+        arguments = {
+            "current_mix": None,
+            "last_change_at": None,
+            "decision_time": timezone.now(),
+        }
+
+        first = select_mix(
+            sounds=(self.rain, self.cafe),
+            listeners=listeners,
+            **arguments,
+        )
+        permuted = select_mix(
+            sounds=(self.cafe, self.rain),
+            listeners=tuple(reversed(listeners)),
+            **arguments,
+        )
+
+        self.assertEqual(first.selected_mix.key, permuted.selected_mix.key)
+        self.assertEqual(first.as_dict(), permuted.as_dict())
+
+    def test_invalid_or_duplicate_layers_fail_clearly(self):
+        with self.assertRaisesRegex(ValueError, "gain"):
+            MixLayer(1, float("nan"))
+        with self.assertRaisesRegex(ValueError, "same sound"):
+            Mix((MixLayer(1, 1.0), MixLayer(1, 0.5)))
+        with self.assertRaisesRegex(ValueError, "boolean"):
+            VoteEvidence("1@1.000000", positive=1)
+        with self.assertRaisesRegex(ValueError, "saved_sounds"):
+            ListenerEvidence(
+                "listener",
+                saved_sounds=(SoundEvidence(1), SoundEvidence(1)),
+            )
+        with self.assertRaisesRegex(ValueError, "unique sound IDs"):
+            select_mix(
+                sounds=(SoundEvidence(1), SoundEvidence(1)),
+                listeners=(ListenerEvidence("listener"),),
+                current_mix=None,
+                last_change_at=None,
+                decision_time=timezone.now(),
+            )
+        with self.assertRaisesRegex(ValueError, "unique listener keys"):
+            select_mix(
+                sounds=(SoundEvidence(1),),
+                listeners=(
+                    ListenerEvidence("listener"),
+                    ListenerEvidence("listener"),
+                ),
+                current_mix=None,
+                last_change_at=None,
+                decision_time=timezone.now(),
+            )
+        with self.assertRaisesRegex(ValueError, "shorter than hold_seconds"):
+            SelectionConfig(hold_seconds=120, maximum_stay_seconds=60)
+        with self.assertRaisesRegex(ValueError, "cannot exceed"):
+            SelectionConfig(min_layers=3, max_layers=2)
+
+    def test_saved_tag_affinity_selects_a_matching_single(self):
+        listener = ListenerEvidence("listener", saved_sounds=(self.rain,))
+
+        result = select_mix(
+            sounds=(self.cafe, self.rain),
+            listeners=(listener,),
+            current_mix=None,
+            last_change_at=None,
+            decision_time=timezone.now(),
+        )
+
+        self.assertEqual(result.selected_mix.sound_ids, (self.rain.sound_id,))
+        self.assertEqual(result.reason, "selected")
+
+    def test_minimum_layers_prevents_single_layer_selection(self):
+        listener = ListenerEvidence("listener", saved_sounds=(self.rain,))
+
+        result = select_mix(
+            sounds=(self.rain, self.cafe, SoundEvidence(3, ("forest",))),
+            listeners=(listener,),
+            current_mix=None,
+            last_change_at=None,
+            decision_time=timezone.now(),
+            config=SelectionConfig(min_layers=2, max_layers=3),
+        )
+
+        self.assertGreaterEqual(len(result.selected_mix.layers), 2)
+        self.assertLessEqual(len(result.selected_mix.layers), 3)
+
+    def test_house_fallback_respects_minimum_layers(self):
+        result = select_mix(
+            sounds=(SoundEvidence(2), SoundEvidence(5), SoundEvidence(8)),
+            listeners=(),
+            current_mix=None,
+            last_change_at=None,
+            decision_time=timezone.now(),
+            config=SelectionConfig(
+                min_layers=2,
+                max_layers=3,
+                house_sound_id=5,
+            ),
+        )
+
+        self.assertEqual(result.reason, "house_mix_no_active_listeners")
+        self.assertEqual(len(result.selected_mix.layers), 2)
+        self.assertIn(5, result.selected_mix.sound_ids)
+
+    def test_minimum_layers_degrades_to_a_smaller_library(self):
+        result = select_mix(
+            sounds=(self.rain,),
+            listeners=(ListenerEvidence("listener"),),
+            current_mix=None,
+            last_change_at=None,
+            decision_time=timezone.now(),
+            config=SelectionConfig(min_layers=2, max_layers=3),
+        )
+
+        self.assertEqual(result.selected_mix.sound_ids, (self.rain.sound_id,))
+
+    def test_disagreement_penalty_can_select_a_balanced_mix(self):
+        listeners = (
+            ListenerEvidence("rain-listener", saved_sounds=(self.rain,)),
+            ListenerEvidence("cafe-listener", saved_sounds=(self.cafe,)),
+        )
+
+        result = select_mix(
+            sounds=(self.rain, self.cafe),
+            listeners=listeners,
+            current_mix=None,
+            last_change_at=None,
+            decision_time=timezone.now(),
+        )
+
+        self.assertEqual(result.selected_mix.sound_ids, (1, 2))
+        self.assertAlmostEqual(result.selected_score.mean, 0.625)
+        self.assertAlmostEqual(result.selected_score.disagreement, 0.0)
+
+    def test_exact_mix_downvote_only_changes_that_candidate(self):
+        rain_mix = Mix((MixLayer(1, 1.0),))
+        listener = ListenerEvidence(
+            "listener",
+            saved_sounds=(self.rain,),
+            votes=(VoteEvidence(rain_mix.key, positive=False),),
+        )
+
+        result = select_mix(
+            sounds=(self.rain, self.cafe),
+            listeners=(listener,),
+            current_mix=None,
+            last_change_at=None,
+            decision_time=timezone.now(),
+        )
+
+        self.assertNotEqual(result.selected_mix.key, rain_mix.key)
+
+    def test_hold_retains_the_current_mix(self):
+        now = timezone.now()
+        current = Mix((MixLayer(1, 1.0),))
+
+        result = select_mix(
+            sounds=(self.rain, self.cafe),
+            listeners=(ListenerEvidence("listener", saved_sounds=(self.cafe,)),),
+            current_mix=current,
+            last_change_at=now - timedelta(seconds=119),
+            decision_time=now,
+        )
+
+        self.assertEqual(result.selected_mix, current)
+        self.assertEqual(result.reason, "minimum_hold")
+        self.assertFalse(result.changed)
+
+    def test_reachable_candidates_allow_at_most_one_layer_edit(self):
+        sounds = tuple(SoundEvidence(index, (str(index),)) for index in range(1, 5))
+        current = Mix((MixLayer(1, 1.0),))
+
+        result = select_mix(
+            sounds=sounds,
+            listeners=(ListenerEvidence("listener"),),
+            current_mix=current,
+            last_change_at=timezone.now() - timedelta(minutes=3),
+            decision_time=timezone.now(),
+        )
+
+        self.assertEqual(result.candidate_count, 14)
+        self.assertEqual(result.reachable_count, 7)
+
+    def test_exploration_probability_is_recorded_exactly(self):
+        config = SelectionConfig(
+            exploration_probability=0.05,
+            exploration_size=2,
+        )
+
+        result = select_mix(
+            sounds=(self.rain, self.cafe),
+            listeners=(ListenerEvidence("listener", saved_sounds=(self.rain,)),),
+            current_mix=None,
+            last_change_at=None,
+            decision_time=timezone.now(),
+            config=config,
+            rng=random.Random(0),
+        )
+
+        self.assertFalse(result.explored)
+        self.assertAlmostEqual(result.selected_action_probability, 0.975)
+        self.assertEqual(len(result.action_probabilities), 2)
+        self.assertAlmostEqual(sum(dict(result.action_probabilities).values()), 1.0)
+
+    def test_maximum_stay_forces_one_layer_edit(self):
+        now = timezone.now()
+        sounds = tuple(SoundEvidence(index) for index in range(1, 5))
+        current = Mix(
+            (
+                MixLayer(1, 1 / (3**0.5)),
+                MixLayer(2, 1 / (3**0.5)),
+                MixLayer(3, 1 / (3**0.5)),
+            )
+        )
+        listener = ListenerEvidence(
+            "listener",
+            votes=(VoteEvidence(current.key, positive=True),),
+        )
+
+        result = select_mix(
+            sounds=sounds,
+            listeners=(listener,),
+            current_mix=current,
+            last_change_at=now - timedelta(seconds=301),
+            decision_time=now,
+            config=SelectionConfig(
+                hold_seconds=120,
+                maximum_stay_seconds=300,
+            ),
+        )
+
+        old_ids = set(current.sound_ids)
+        new_ids = set(result.selected_mix.sound_ids)
+        self.assertEqual(result.reason, "maximum_stay")
+        self.assertTrue(result.changed)
+        self.assertNotEqual(old_ids, new_ids)
+        self.assertLessEqual(max(len(new_ids - old_ids), len(old_ids - new_ids)), 1)
+        self.assertEqual(len(result.selected_mix.layers), len(current.layers))
+
+    def test_maximum_stay_rotates_without_active_listeners(self):
+        now = timezone.now()
+        current = Mix((MixLayer(1, 1.0), MixLayer(2, 1.0)))
+
+        result = select_mix(
+            sounds=(SoundEvidence(1), SoundEvidence(2), SoundEvidence(3)),
+            listeners=(),
+            current_mix=current,
+            last_change_at=now - timedelta(seconds=11),
+            decision_time=now,
+            config=SelectionConfig(
+                hold_seconds=0,
+                maximum_stay_seconds=10,
+                house_sound_id=None,
+            ),
+        )
+
+        self.assertEqual(result.reason, "maximum_stay")
+        self.assertNotEqual(result.selected_mix.sound_ids, current.sound_ids)
+        self.assertEqual(len(result.selected_mix.layers), 2)
+
+    def test_maximum_stay_can_be_indefinite(self):
+        now = timezone.now()
+        current = Mix((MixLayer(1, 1.0),))
+
+        result = select_mix(
+            sounds=(SoundEvidence(1), SoundEvidence(2)),
+            listeners=(),
+            current_mix=current,
+            last_change_at=now - timedelta(days=365),
+            decision_time=now,
+            config=SelectionConfig(
+                hold_seconds=0,
+                maximum_stay_seconds=None,
+            ),
+        )
+
+        self.assertEqual(result.reason, "retained_no_active_listeners")
+        self.assertEqual(result.selected_mix, current)
+
+    def test_maximum_stay_retains_when_no_layer_edit_exists(self):
+        now = timezone.now()
+        current = Mix((MixLayer(1, 1.0),))
+
+        result = select_mix(
+            sounds=(SoundEvidence(1),),
+            listeners=(),
+            current_mix=current,
+            last_change_at=now - timedelta(seconds=11),
+            decision_time=now,
+            config=SelectionConfig(
+                hold_seconds=0,
+                maximum_stay_seconds=10,
+            ),
+        )
+
+        self.assertEqual(result.reason, "maximum_stay_unavailable")
+        self.assertFalse(result.changed)
+        self.assertEqual(result.reachable_count, 0)
+
+
+class StablePredictorIntegrationTests(TestCase):
+    def setUp(self):
+        manager_user = User.objects.create_user(
+            username="stable-manager",
+            email="stable-manager@example.com",
+        )
+        listener_user = User.objects.create_user(
+            username="stable-listener",
+            email="stable-listener@example.com",
+        )
+        self.manager = Manager.objects.create(user=manager_user, name="Manager")
+        self.listener = Listener.objects.create(user=listener_user)
+        self.player = Player.objects.create(manager=self.manager, name="Player")
 
     def make_sound(self, title, *tags):
         sound = Sound.objects.create(
@@ -203,239 +681,153 @@ class PredictorTests(TestCase):
         sound.tags.add(*tags)
         return sound
 
-    def make_listener(self, *sounds):
-        self.listener_number += 1
-        number = self.listener_number
-        user = User.objects.create_user(
-            username=f"listener-{number}",
-            email=f"listener-{number}@example.com",
-            password="password",
-        )
-        listener = Listener.objects.create(user=user)
-        listener.collection.add(*sounds)
-        return listener
-
-    def vote(self, listener, *, player=None, created_at=None, value=Vote.UPVOTE):
-        vote = Vote.objects.create(
-            voter=listener,
-            player=player or self.player,
-            cosound=self.cosound,
+    def make_active(self, sound, *, value=Vote.UPVOTE):
+        cosound = Cosound.get_or_create_from_layers([(sound.pk, 1.0)])
+        return Vote.objects.create(
+            voter=self.listener,
+            player=self.player,
+            cosound=cosound,
             value=value,
         )
-        if created_at is not None:
-            Vote.objects.filter(pk=vote.pk).update(created_at=created_at)
-        return vote
 
-    def predict(self):
+    def test_stable_predictor_selects_records_and_holds(self):
+        rain = self.make_sound("rain", "rain")
+        cafe = self.make_sound("cafe", "cafe")
+        self.player.sounds.add(rain, cafe)
+        self.listener.collection.add(rain)
+        self.make_active(cafe)
+
         with patch.object(Player, "announce"):
-            return _predict_for_player(self.player.pk)
-
-    def test_only_voters_from_the_last_five_minutes_are_active(self):
-        rock = self.make_sound("rock", "rock")
-        jazz = self.make_sound("jazz", "jazz")
-        self.player.sounds.add(rock, jazz)
-        recent_listener = self.make_listener(rock)
-        stale_listener = self.make_listener(jazz)
-        other_player_listener = self.make_listener(jazz)
-        other_player = Player.objects.create(
-            manager=self.manager,
-            name="Other Player",
-        )
-        now = timezone.now()
-        self.vote(recent_listener, created_at=now - timedelta(minutes=4, seconds=59))
-        self.vote(stale_listener, created_at=now - timedelta(minutes=5, seconds=1))
-        self.vote(other_player_listener, player=other_player)
-
-        self.assertEqual(self.predict(), 1)
+            self.assertEqual(_stable_predict_for_player(self.player.pk), 1)
 
         self.player.refresh_from_db()
+        first_exposure = self.player.current_exposure
+        self.assertIsNotNone(first_exposure)
+        self.assertEqual(self.player.playing.layers[0].sound_id, rain.pk)
+        self.assertEqual(AlgorithmDecision.objects.count(), 1)
+        decision = AlgorithmDecision.objects.get()
+        self.assertEqual(decision.trace["schema_version"], "1")
+        self.assertEqual(decision.trace["decision_id"], str(decision.decision_id))
+        self.assertIn("active listener equally", decision.trace["explanation"])
+
+        with patch.object(Player, "announce"):
+            self.assertEqual(_stable_predict_for_player(self.player.pk), 1)
+
+        self.player.refresh_from_db()
+        self.assertEqual(self.player.current_exposure, first_exposure)
+        self.assertEqual(AlgorithmDecision.objects.count(), 2)
         self.assertEqual(
-            [layer.sound_id for layer in self.player.playing.layers],
-            [rock.pk],
+            AlgorithmDecision.objects.latest("decided_at").outcome,
+            "minimum_hold",
         )
 
-    def test_multiple_votes_from_one_listener_produce_one_layer(self):
-        sound = self.make_sound("ambient", "ambient")
+    def test_predictor_failure_retains_the_previous_mix(self):
+        sound = self.make_sound("existing", "ambient")
         self.player.sounds.add(sound)
-        listener = self.make_listener(sound)
-        self.vote(listener)
-        self.vote(listener, value=Vote.DOWNVOTE)
-        self.vote(listener)
-
-        self.assertEqual(self.predict(), 1)
-
-        self.player.refresh_from_db()
-        self.assertEqual(len(self.player.playing.layers), 1)
-        self.assertEqual(self.player.playing.layers[0].sound_gain, 1.0)
-
-    def test_each_listener_contributes_a_layer_from_their_own_top_tag(self):
-        library_rock = self.make_sound("library-rock", "rock")
-        library_jazz = self.make_sound("library-jazz", "jazz")
-        self.player.sounds.add(library_rock, library_jazz)
-        rock_one = self.make_sound("rock-one", "rock")
-        rock_two = self.make_sound("rock-two", "rock")
-        jazz_one = self.make_sound("jazz-one", "jazz")
-        jazz_two = self.make_sound("jazz-two", "jazz")
-        rock_listener = self.make_listener(rock_one, rock_two)
-        jazz_listener = self.make_listener(jazz_one, jazz_two)
-        self.vote(rock_listener)
-        self.vote(jazz_listener)
-
-        self.assertEqual(self.predict(), 1)
-
-        self.player.refresh_from_db()
-        self.assertEqual(
-            [layer.sound_id for layer in self.player.playing.layers],
-            [library_rock.pk, library_jazz.pk],
-        )
-        self.assertEqual(
-            [layer.sound_gain for layer in self.player.playing.layers],
-            [1.0, 1.0],
-        )
-
-    def test_tied_usable_top_tags_are_selected_randomly(self):
-        rock = self.make_sound("library-rock", "rock")
-        jazz = self.make_sound("library-jazz", "jazz")
-        self.player.sounds.add(rock, jazz)
-        collected = self.make_sound("collected", "rock", "jazz")
-        listener = self.make_listener(collected)
-        self.vote(listener)
-        jazz_tag_id = jazz.tags.get().pk
-
-        def choose_jazz(options):
-            if isinstance(options[0], int):
-                return jazz_tag_id
-            return options[0]
-
-        with patch("core.predict.random.choice", side_effect=choose_jazz) as choice:
-            self.assertEqual(self.predict(), 1)
-
-        self.player.refresh_from_db()
-        self.assertEqual(self.player.playing.layers[0].sound_id, jazz.pk)
-        self.assertEqual(choice.call_count, 2)
-
-    def test_uses_a_matching_tag_when_another_tied_top_tag_is_unavailable(self):
-        jazz = self.make_sound("library-jazz", "jazz")
-        self.player.sounds.add(jazz)
-        collected = self.make_sound("collected", "jazz", "unavailable")
-        listener = self.make_listener(collected)
-        self.vote(listener)
-
-        self.assertEqual(self.predict(), 1)
-
-        self.player.refresh_from_db()
-        self.assertEqual(self.player.playing.layers[0].sound_id, jazz.pk)
-
-    def test_does_not_fall_back_to_a_less_frequent_tag(self):
-        jazz = self.make_sound("library-jazz", "jazz")
-        self.player.sounds.add(jazz)
-        unavailable_one = self.make_sound("unavailable-one", "unavailable")
-        unavailable_two = self.make_sound("unavailable-two", "unavailable")
-        collected_jazz = self.make_sound("collected-jazz", "jazz")
-        listener = self.make_listener(
-            unavailable_one,
-            unavailable_two,
-            collected_jazz,
-        )
-        self.vote(listener)
-
-        self.assertEqual(self.predict(), 0)
-
-        self.player.refresh_from_db()
-        self.assertEqual(self.player.playing.layers, [])
-
-    def test_selected_sound_is_restricted_to_the_players_library(self):
-        library_sound = self.make_sound("library", "ambient")
-        outside_sound = self.make_sound("outside", "ambient")
-        self.player.sounds.add(library_sound)
-        listener = self.make_listener(outside_sound)
-        self.vote(listener)
-
-        self.assertEqual(self.predict(), 1)
-
-        self.player.refresh_from_db()
-        self.assertEqual(self.player.playing.layers[0].sound_id, library_sound.pk)
-
-    def test_same_top_tag_uses_distinct_matching_sounds(self):
-        library_one = self.make_sound("library-one", "ambient")
-        library_two = self.make_sound("library-two", "ambient")
-        self.player.sounds.add(library_one, library_two)
-        listener_one = self.make_listener(
-            self.make_sound("collected-one", "ambient")
-        )
-        listener_two = self.make_listener(
-            self.make_sound("collected-two", "ambient")
-        )
-        self.vote(listener_one)
-        self.vote(listener_two)
-
-        self.assertEqual(self.predict(), 1)
-
-        self.player.refresh_from_db()
-        sound_ids = [layer.sound_id for layer in self.player.playing.layers]
-        self.assertEqual(len(sound_ids), 2)
-        self.assertEqual(set(sound_ids), {library_one.pk, library_two.pk})
-
-    def test_same_top_tag_with_one_matching_sound_adds_it_only_once(self):
-        library_sound = self.make_sound("library", "ambient")
-        self.player.sounds.add(library_sound)
-        listener_one = self.make_listener(
-            self.make_sound("collected-one", "ambient")
-        )
-        listener_two = self.make_listener(
-            self.make_sound("collected-two", "ambient")
-        )
-        self.vote(listener_one)
-        self.vote(listener_two)
-
-        self.assertEqual(self.predict(), 1)
-
-        self.player.refresh_from_db()
-        self.assertEqual(
-            [layer.sound_id for layer in self.player.playing.layers],
-            [library_sound.pk],
-        )
-
-    def test_empty_and_unmatched_collections_leave_prediction_unchanged(self):
-        existing_sound = self.make_sound("existing", "existing")
-        self.player.playing = Prediction.new()
-        self.player.playing.add_layer(existing_sound.pk, gain=0.25)
+        playing = Prediction.new()
+        playing.add_layer(sound.pk, 1.0)
+        self.player.playing = playing
         self.player.save()
-        empty_listener = self.make_listener()
-        unmatched = self.make_sound("unmatched", "unmatched")
-        unmatched_listener = self.make_listener(unmatched)
-        self.vote(empty_listener)
-        self.vote(unmatched_listener)
 
-        self.assertEqual(self.predict(), 0)
+        with (
+            patch(
+                "core.prediction.live.select_mix",
+                side_effect=RuntimeError("boom"),
+            ),
+            patch("core.prediction.live.logger.exception") as log_exception,
+        ):
+            self.assertEqual(_stable_predict_for_player(self.player.pk), 0)
 
         self.player.refresh_from_db()
-        self.assertEqual(len(self.player.playing.layers), 1)
-        self.assertEqual(self.player.playing.layers[0].sound_id, existing_sound.pk)
-        self.assertEqual(self.player.playing.layers[0].sound_gain, 0.25)
+        log_exception.assert_called_once()
+        self.assertEqual(self.player.playing.layers[0].sound_id, sound.pk)
+        self.assertEqual(AlgorithmDecision.objects.count(), 1)
+        self.assertEqual(AlgorithmDecision.objects.get().outcome, "error")
 
-    def test_no_recent_votes_clear_existing_prediction_and_api_layers(self):
-        existing_sound = self.make_sound("existing", "existing")
-        self.player.playing = Prediction.new()
-        self.player.playing.add_layer(existing_sound.pk, gain=0.5)
+    def test_no_active_listener_retains_current_and_bootstraps_exposure(self):
+        sound = self.make_sound("existing", "ambient")
+        self.player.sounds.add(sound)
+        playing = Prediction.new()
+        playing.add_layer(sound.pk, 1.0)
+        self.player.playing = playing
         self.player.save()
-        stale_listener = self.make_listener(existing_sound)
-        self.vote(
-            stale_listener,
-            created_at=timezone.now() - timedelta(minutes=5, seconds=1),
-        )
 
-        with patch("core.predict.random.choice") as choice:
-            self.assertEqual(self.predict(), 0)
+        self.assertEqual(_stable_predict_for_player(self.player.pk), 1)
 
         self.player.refresh_from_db()
-        self.assertIsInstance(self.player.playing, Prediction)
-        self.assertEqual(self.player.playing.layers, [])
-        choice.assert_not_called()
-
-        response = self.client.get(
-            "/api/player",
-            headers={"X-API-Key": self.player.token},
+        self.assertIsNotNone(self.player.current_exposure)
+        self.assertEqual(
+            AlgorithmDecision.objects.get().outcome,
+            "retained_no_active_listeners",
         )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["layers"], [])
+
+    def test_stale_exposure_is_closed_and_replaced(self):
+        sound = self.make_sound("current", "ambient")
+        other = self.make_sound("old", "noise")
+        self.player.sounds.add(sound, other)
+        playing = Prediction.new()
+        playing.add_layer(sound.pk, 1.0)
+        self.player.playing = playing
+        old_decision = AlgorithmDecision.objects.create(
+            player=self.player,
+            policy_version="stable-preference-mixer-v1",
+            outcome="selected",
+        )
+        stale_exposure = PlaybackExposure.objects.create(
+            player=self.player,
+            opening_decision=old_decision,
+            mix_key=f"{other.pk}@1.000000",
+            layers=[{"sound_id": other.pk, "sound_gain": 1.0}],
+        )
+        self.player.current_exposure = stale_exposure
+        self.player.save(update_fields=["playing", "current_exposure"])
+
+        self.assertEqual(_stable_predict_for_player(self.player.pk), 1)
+
+        self.player.refresh_from_db()
+        stale_exposure.refresh_from_db()
+        self.assertEqual(stale_exposure.status, PlaybackExposure.ENDED)
+        self.assertIsNotNone(stale_exposure.ended_at)
+        self.assertNotEqual(self.player.current_exposure, stale_exposure)
+        self.assertEqual(
+            self.player.current_exposure.mix_key,
+            f"{sound.pk}@1.000000",
+        )
+
+    @override_settings(
+        COSOUND_MINIMUM_HOLD_SECONDS=0,
+        COSOUND_MAX_STAY_SECONDS=1,
+    )
+    def test_maximum_stay_closes_exposure_and_changes_one_sound(self):
+        first = self.make_sound("first", "ambient")
+        second = self.make_sound("second", "nature")
+        self.player.sounds.add(first, second)
+        playing = Prediction.new()
+        playing.add_layer(first.pk, 1.0)
+        self.player.playing = playing
+        opening_decision = AlgorithmDecision.objects.create(
+            player=self.player,
+            policy_version="stable-preference-mixer-v1",
+            outcome="selected",
+        )
+        old_exposure = PlaybackExposure.objects.create(
+            player=self.player,
+            opening_decision=opening_decision,
+            mix_key=f"{first.pk}@1.000000",
+            layers=[{"sound_id": first.pk, "sound_gain": 1.0}],
+            commanded_at=timezone.now() - timedelta(seconds=2),
+        )
+        self.player.current_exposure = old_exposure
+        self.player.save(update_fields=["playing", "current_exposure"])
+
+        with patch.object(Player, "announce"):
+            self.assertEqual(_stable_predict_for_player(self.player.pk), 1)
+
+        self.player.refresh_from_db()
+        old_exposure.refresh_from_db()
+        self.assertEqual(old_exposure.status, PlaybackExposure.ENDED)
+        self.assertEqual(self.player.playing.layers[0].sound_id, second.pk)
+        self.assertEqual(
+            AlgorithmDecision.objects.latest("decided_at").outcome,
+            "maximum_stay",
+        )

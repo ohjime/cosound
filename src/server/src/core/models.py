@@ -1,6 +1,7 @@
 import datetime
 import hashlib
 import secrets
+import uuid
 from datetime import datetime, timezone
 from decimal import ROUND_UP, Decimal
 from typing import List
@@ -8,6 +9,7 @@ from typing import List
 from django.contrib.auth.models import AbstractUser
 from django.db import models as DjangoDB
 from django.db import transaction
+from django.utils import timezone as django_timezone
 from django_pydantic_field import SchemaField
 from pgvector.django import VectorField
 from pydantic import BaseModel, Field
@@ -319,6 +321,13 @@ class Player(DjangoDB.Model):
     )
     bio = DjangoDB.TextField(blank=True, max_length=200)
     location = DjangoDB.CharField(max_length=255, blank=True)
+    current_exposure = DjangoDB.ForeignKey(
+        "PlaybackExposure",
+        on_delete=DjangoDB.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="current_for_players",
+    )
 
     def __str__(self):
         return self.name
@@ -338,3 +347,80 @@ class Player(DjangoDB.Model):
     def announce(self, prediction: Prediction) -> None:
         print(f"New Prediction for \033[1m{self.name}\033[22m:")
         print(prediction.summary())
+
+
+class AlgorithmDecision(DjangoDB.Model):
+    """One versioned predictor decision, including holds and no-action results."""
+
+    decision_id = DjangoDB.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+    player = DjangoDB.ForeignKey(
+        Player,
+        on_delete=DjangoDB.CASCADE,
+        related_name="algorithm_decisions",
+    )
+    policy_version = DjangoDB.CharField(max_length=64)
+    configuration = DjangoDB.JSONField(default=dict)
+    decided_at = DjangoDB.DateTimeField(default=django_timezone.now, db_index=True)
+    previous_layers = DjangoDB.JSONField(default=list)
+    selected_layers = DjangoDB.JSONField(default=list)
+    active_listener_ids = DjangoDB.JSONField(default=list)
+    input_snapshot = DjangoDB.JSONField(default=dict)
+    outcome = DjangoDB.CharField(max_length=64)
+    selected_score = DjangoDB.FloatField(null=True, blank=True)
+    selected_action_probability = DjangoDB.FloatField(default=1.0)
+    exploration = DjangoDB.BooleanField(default=False)
+    trace = DjangoDB.JSONField(default=dict)
+
+    class Meta:
+        ordering = ["decided_at", "decision_id"]
+
+
+class PlaybackExposure(DjangoDB.Model):
+    """A server-commanded playback interval with optional player acknowledgement."""
+
+    COMMANDED = "commanded"
+    PLAYER_ACKNOWLEDGED = "player_acknowledged"
+    ENDED = "ended"
+    FAILED = "failed"
+    STATUS_CHOICES = [
+        (COMMANDED, "Commanded"),
+        (PLAYER_ACKNOWLEDGED, "Player acknowledged"),
+        (ENDED, "Ended"),
+        (FAILED, "Failed"),
+    ]
+
+    exposure_id = DjangoDB.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+    player = DjangoDB.ForeignKey(
+        Player,
+        on_delete=DjangoDB.CASCADE,
+        related_name="playback_exposures",
+    )
+    opening_decision = DjangoDB.OneToOneField(
+        AlgorithmDecision,
+        on_delete=DjangoDB.CASCADE,
+        related_name="opened_exposure",
+    )
+    mix_key = DjangoDB.CharField(max_length=255, db_index=True)
+    layers = DjangoDB.JSONField(default=list)
+    commanded_at = DjangoDB.DateTimeField(default=django_timezone.now, db_index=True)
+    acknowledged_at = DjangoDB.DateTimeField(null=True, blank=True)
+    transition_seconds = DjangoDB.FloatField(null=True, blank=True)
+    estimated_audible_at = DjangoDB.DateTimeField(null=True, blank=True)
+    ended_at = DjangoDB.DateTimeField(null=True, blank=True)
+    status = DjangoDB.CharField(
+        max_length=32,
+        choices=STATUS_CHOICES,
+        default=COMMANDED,
+    )
+    updated_at = DjangoDB.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["commanded_at", "exposure_id"]

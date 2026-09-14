@@ -20,7 +20,7 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Button, Static
 
-from app.client import get_player_info
+from app.client import CROSSFADE_INTERVAL, acknowledge_exposure, get_player_info
 from app.utils import the_love_life_you_wish_you_had
 
 REFRESH_INTERVAL = 30  # In Seconds
@@ -464,6 +464,7 @@ class CosoundPlayerApp(App):
         self.manifest = manifest
         self.player = player
         self._cosound_signature = None
+        self._acknowledged_exposure_id: str | None = None
         self._current_entry: CosoundEntry | None = None
         self._last_gains: dict[str, float] = {}
 
@@ -514,6 +515,14 @@ class CosoundPlayerApp(App):
             )
         )
 
+    def _transition_seconds(self) -> float:
+        """Return the audio engine's configured fade time when available."""
+        fade_samples = getattr(self.player, "fade_samples", None)
+        sample_rate = getattr(self.player, "fs", None)
+        if fade_samples is not None and sample_rate:
+            return max(0.0, float(fade_samples) / float(sample_rate))
+        return float(CROSSFADE_INTERVAL)
+
     @work(thread=True, exclusive=True, group="refresh")
     def refresh_cosound(self) -> None:
         self.call_from_thread(self._show_refreshing)
@@ -525,12 +534,37 @@ class CosoundPlayerApp(App):
 
         # Same cosound as last time: leave audio and the history list alone.
         changed = self._signature_of(info) != self._cosound_signature
+        layers = info.get("layers", [])
+        all_layers_available = all(
+            self.manifest.get(str(layer["sound_id"])) for layer in layers
+        )
         if changed:
-            for layer in info.get("layers", []):
+            for layer in layers:
                 local_path = self.manifest.get(str(layer["sound_id"]))
                 if local_path:
                     self.player.queue_sound(local_path, layer["gain"])
             self.player.dequeue_cosound()
+
+        exposure_id = info.get("exposure_id")
+        needs_acknowledgement = (
+            exposure_id and exposure_id != self._acknowledged_exposure_id
+        )
+        if needs_acknowledgement and all_layers_available:
+            try:
+                acknowledge_exposure(
+                    self.api_key,
+                    exposure_id,
+                    transition_seconds=self._transition_seconds() if changed else 0.0,
+                )
+            except Exception as error:
+                # Retry on the next poll; telemetry must never block playback/UI.
+                self.log(f"Exposure acknowledgement failed: {error}")
+            else:
+                self._acknowledged_exposure_id = exposure_id
+        elif needs_acknowledgement:
+            self.log("Exposure acknowledgement skipped: a layer is unavailable")
+        elif exposure_id is None:
+            self._acknowledged_exposure_id = None
 
         self.call_from_thread(self._apply_state, info, changed)
 

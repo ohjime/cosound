@@ -1,7 +1,18 @@
+import json
+
 from django.test import TestCase
 from django.urls import reverse
 
-from core.models import Cosound, Listener, Sound, User
+from core.models import (
+    AlgorithmDecision,
+    Cosound,
+    Listener,
+    Manager,
+    PlaybackExposure,
+    Player,
+    Sound,
+    User,
+)
 from library.models import SoundMix
 
 
@@ -101,3 +112,98 @@ class AppTabBodyTests(TestCase):
             content.index("Sound, chosen by the room"),
             content.index("Two sensors, two different signals"),
         )
+
+
+class PlayerExposureApiTests(TestCase):
+    def setUp(self):
+        manager_user = User.objects.create_user(
+            username="api-manager",
+            email="api-manager@example.com",
+        )
+        manager = Manager.objects.create(user=manager_user, name="Manager")
+        self.player = Player.objects.create(manager=manager, name="Player")
+        decision = AlgorithmDecision.objects.create(
+            player=self.player,
+            policy_version="test-v1",
+            outcome="selected",
+        )
+        self.exposure = PlaybackExposure.objects.create(
+            player=self.player,
+            opening_decision=decision,
+            mix_key="1@1.000000",
+            layers=[{"sound_id": 1, "sound_gain": 1.0}],
+        )
+        self.player.current_exposure = self.exposure
+        self.player.save(update_fields=["current_exposure"])
+
+    @property
+    def auth_headers(self):
+        return {"X-API-Key": self.player.token}
+
+    def test_player_response_adds_backward_compatible_exposure_ids(self):
+        response = self.client.get("/api/player", headers=self.auth_headers)
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["exposure_id"], str(self.exposure.exposure_id))
+        self.assertEqual(
+            payload["decision_id"],
+            str(self.exposure.opening_decision_id),
+        )
+        self.assertIn("layers", payload)
+
+    def test_acknowledgement_is_authenticated_and_idempotent(self):
+        path = f"/api/exposures/{self.exposure.exposure_id}/ack"
+        response = self.client.post(
+            path,
+            data=json.dumps({"transition_seconds": 10}),
+            content_type="application/json",
+            headers=self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.exposure.refresh_from_db()
+        first_acknowledged_at = self.exposure.acknowledged_at
+        self.assertEqual(self.exposure.status, PlaybackExposure.PLAYER_ACKNOWLEDGED)
+        self.assertEqual(self.exposure.transition_seconds, 10)
+
+        repeated = self.client.post(
+            path,
+            data=json.dumps({"transition_seconds": 30}),
+            content_type="application/json",
+            headers=self.auth_headers,
+        )
+
+        self.assertEqual(repeated.status_code, 200)
+        self.exposure.refresh_from_db()
+        self.assertEqual(self.exposure.acknowledged_at, first_acknowledged_at)
+        self.assertEqual(self.exposure.transition_seconds, 10)
+
+    def test_another_player_cannot_acknowledge_the_exposure(self):
+        other = Player.objects.create(manager=self.player.manager, name="Other")
+
+        response = self.client.post(
+            f"/api/exposures/{self.exposure.exposure_id}/ack",
+            data=json.dumps({"transition_seconds": 10}),
+            content_type="application/json",
+            headers={"X-API-Key": other.token},
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.exposure.refresh_from_db()
+        self.assertIsNone(self.exposure.acknowledged_at)
+
+    def test_exposure_that_is_no_longer_current_cannot_be_acknowledged(self):
+        self.player.current_exposure = None
+        self.player.save(update_fields=["current_exposure"])
+
+        response = self.client.post(
+            f"/api/exposures/{self.exposure.exposure_id}/ack",
+            data=json.dumps({"transition_seconds": 10}),
+            content_type="application/json",
+            headers=self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.exposure.refresh_from_db()
+        self.assertIsNone(self.exposure.acknowledged_at)

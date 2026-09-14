@@ -401,4 +401,31 @@ UNFOLD = {
     },
 }
 
-# COSOUND_CORE_PREDICTOR = "app.predict.predictor_v1"
+# Keep the current random behavior unless a deployment explicitly opts into
+# the stable demo predictor with
+# COSOUND_CORE_PREDICTOR=core.predict.stable_preference_predictor.
+COSOUND_CORE_PREDICTOR = os.environ.get(
+    "COSOUND_CORE_PREDICTOR",
+    "core.predict.random_predictor",
+)
+COSOUND_MIN_LAYERS = int(os.environ.get("COSOUND_MIN_LAYERS", "1"))
+COSOUND_MAX_LAYERS = int(os.environ.get("COSOUND_MAX_LAYERS", "3"))
+COSOUND_ACTIVE_LISTENER_MINUTES = int(
+    os.environ.get("COSOUND_ACTIVE_LISTENER_MINUTES", "5")
+)
+COSOUND_MINIMUM_HOLD_SECONDS = int(
+    os.environ.get("COSOUND_MINIMUM_HOLD_SECONDS", "120")
+)
+_maximum_stay_seconds = os.environ.get("COSOUND_MAX_STAY_SECONDS", "").strip()
+COSOUND_MAX_STAY_SECONDS = (
+    int(_maximum_stay_seconds) if _maximum_stay_seconds else None
+)
+COSOUND_DISAGREEMENT_PENALTY = float(
+    os.environ.get("COSOUND_DISAGREEMENT_PENALTY", "0.25")
+)
+COSOUND_EXPLORATION_PROBABILITY = float(
+    os.environ.get("COSOUND_EXPLORATION_PROBABILITY", "0")
+)
+COSOUND_EXPLORATION_SIZE = int(os.environ.get("COSOUND_EXPLORATION_SIZE", "5"))
+_house_sound_id = os.environ.get("COSOUND_HOUSE_SOUND_ID", "5").strip()
+COSOUND_HOUSE_SOUND_ID = int(_house_sound_id) if _house_sound_id else None

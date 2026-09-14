@@ -1,66 +1,50 @@
 import random
-from collections import Counter, defaultdict
 
+from django.db import transaction
 from django.tasks import task
+from django.utils import timezone
 
-from core.models import Player, Prediction, Sound
-from vote.models import Vote
+from core.models import PlaybackExposure, Player, Prediction
+from core.prediction.live import run_stable_prediction
 
 
 def _predict_for_player(player_id: int) -> int:
-    player = Player.objects.get(pk=player_id)
-    recent_votes = Vote.recent(player, minutes=5)
-    if not recent_votes:
-        player.update(Prediction.new())
-        return 0
+    """Run the existing random predictor.
 
-    active_listeners = sorted(
-        Vote.get_listeners(recent_votes),
-        key=lambda listener: listener.pk,
-    )
-    next_prediction = Prediction.new()
-    selected_sound_ids: set[int] = set()
+    Keep this behavior available as the default and rollback path while the
+    stable predictor is evaluated.
+    """
+    with transaction.atomic():
+        player = Player.objects.select_for_update().get(pk=player_id)
+        library = player.library()
+        next_prediction = Prediction.new()
 
-    library_by_tag: dict[int, list[Sound]] = defaultdict(list)
-    for sound in player.sounds.prefetch_related("tags"):
-        for tag in sound.tags.all():
-            library_by_tag[tag.pk].append(sound)
+        if library:
+            for sound in random.sample(library, k=min(3, len(library))):
+                next_prediction.add_layer(
+                    sound_id=sound.pk,
+                    gain=random.uniform(0.0, 1.0),
+                )
 
-    for listener in active_listeners:
-        tag_counts: Counter[int] = Counter()
-        for sound in listener.collection.prefetch_related("tags"):
-            tag_counts.update(tag.pk for tag in sound.tags.all())
-
-        if not tag_counts:
-            continue
-
-        highest_count = max(tag_counts.values())
-        usable_top_tags = [
-            tag_id
-            for tag_id, count in tag_counts.items()
-            if count == highest_count and library_by_tag[tag_id]
-        ]
-        if not usable_top_tags:
-            continue
-
-        selected_tag = random.choice(usable_top_tags)
-        unused_sounds = [
-            sound
-            for sound in library_by_tag[selected_tag]
-            if sound.pk not in selected_sound_ids
-        ]
-        if not unused_sounds:
-            continue
-
-        selected_sound = random.choice(unused_sounds)
-        next_prediction.add_layer(sound_id=selected_sound.pk, gain=1.0)
-        selected_sound_ids.add(selected_sound.pk)
+        current_exposure = player.current_exposure
+        if current_exposure is not None and current_exposure.ended_at is None:
+            current_exposure.ended_at = timezone.now()
+            current_exposure.status = PlaybackExposure.ENDED
+            current_exposure.save(
+                update_fields=["ended_at", "status", "updated_at"]
+            )
+        player.playing = next_prediction
+        player.current_exposure = None
+        player.save(update_fields=["playing", "current_exposure"])
 
     if next_prediction:
-        player.update(next_prediction)
         player.announce(next_prediction)
         return 1
     return 0
+
+
+def _stable_predict_for_player(player_id: int) -> int:
+    return run_stable_prediction(player_id)
 
 
 @task
@@ -70,3 +54,12 @@ def random_predictor(
     **kwargs,
 ) -> int:
     return _predict_for_player(player_id)
+
+
+@task
+def stable_preference_predictor(
+    player_id: int,
+    *args,
+    **kwargs,
+) -> int:
+    return _stable_predict_for_player(player_id)

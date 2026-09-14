@@ -1,0 +1,1257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Stakeholder overview of CoSound's Stable Preference Mixer pilot algorithm, controls, data capture, risks, and next steps." />
+  <title>CoSound Stable Preference Mixer — Stakeholder Overview</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #13283a;
+      --muted: #60707c;
+      --paper: #f6f2e9;
+      --surface: #fffdf8;
+      --line: #d9d4c8;
+      --navy: #173f53;
+      --teal: #087f78;
+      --teal-soft: #dff1ed;
+      --coral: #d9634c;
+      --coral-soft: #f8e7df;
+      --gold: #ad7a16;
+      --gold-soft: #f7edcf;
+      --green: #28724f;
+      --green-soft: #e0efe5;
+      --shadow: 0 18px 50px rgba(19, 40, 58, 0.09);
+      --radius: 20px;
+      --max: 1180px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      background: var(--paper);
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    a { color: inherit; }
+
+    a:focus-visible,
+    summary:focus-visible {
+      outline: 3px solid var(--coral);
+      outline-offset: 4px;
+      border-radius: 4px;
+    }
+
+    .shell {
+      width: min(calc(100% - 40px), var(--max));
+      margin-inline: auto;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid rgba(217, 212, 200, 0.86);
+      background: rgba(246, 242, 233, 0.94);
+      backdrop-filter: blur(14px);
+    }
+
+    .topbar-inner {
+      min-height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      font-size: 0.87rem;
+      font-weight: 800;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .brand-mark {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--navy);
+      color: white;
+      font-family: Georgia, serif;
+      font-size: 1.15rem;
+    }
+
+    nav {
+      display: flex;
+      gap: 20px;
+      color: var(--muted);
+      font-size: 0.83rem;
+      font-weight: 700;
+    }
+
+    nav a {
+      text-decoration: none;
+    }
+
+    nav a:hover { color: var(--teal); }
+
+    .hero {
+      padding: 82px 0 60px;
+    }
+
+    .eyebrow {
+      margin: 0 0 16px;
+      color: var(--teal);
+      font-size: 0.78rem;
+      font-weight: 850;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3 {
+      margin-top: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      line-height: 1.08;
+    }
+
+    h1 {
+      max-width: 900px;
+      margin-bottom: 22px;
+      font-size: clamp(2.65rem, 7vw, 5.5rem);
+      font-weight: 500;
+      letter-spacing: -0.045em;
+    }
+
+    h2 {
+      margin-bottom: 16px;
+      font-size: clamp(2rem, 4vw, 3.25rem);
+      font-weight: 500;
+      letter-spacing: -0.03em;
+    }
+
+    h3 {
+      margin-bottom: 8px;
+      font-size: 1.35rem;
+      font-weight: 600;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.55fr);
+      gap: 56px;
+      align-items: end;
+    }
+
+    .lede {
+      max-width: 760px;
+      margin: 0;
+      color: #405462;
+      font-size: clamp(1.08rem, 2vw, 1.35rem);
+      line-height: 1.55;
+    }
+
+    .status-panel {
+      padding: 26px;
+      border-top: 5px solid var(--coral);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .status-label {
+      margin: 0 0 4px;
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .status-value {
+      margin: 0 0 10px;
+      font-family: Georgia, serif;
+      font-size: 1.45rem;
+      line-height: 1.2;
+    }
+
+    .status-detail {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .snapshot {
+      margin-top: 46px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border: 1px solid var(--line);
+      background: var(--surface);
+    }
+
+    .snapshot-item {
+      min-height: 146px;
+      padding: 23px;
+      border-right: 1px solid var(--line);
+    }
+
+    .snapshot-item:last-child { border-right: 0; }
+
+    .snapshot-number {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--navy);
+      font-family: Georgia, serif;
+      font-size: 2.2rem;
+      line-height: 1;
+    }
+
+    .snapshot-title {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 800;
+    }
+
+    .snapshot-copy {
+      color: var(--muted);
+      font-size: 0.86rem;
+      line-height: 1.45;
+    }
+
+    .snapshot-control {
+      display: inline-block;
+      margin-top: 11px;
+      padding: 3px 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 0.66rem;
+      font-weight: 850;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+    }
+
+    .snapshot-control.configurable {
+      border-color: #acd3c0;
+      background: var(--green-soft);
+      color: #215d42;
+    }
+
+    section {
+      padding: 74px 0;
+      scroll-margin-top: 72px;
+    }
+
+    section + section { border-top: 1px solid var(--line); }
+
+    .section-head {
+      max-width: 760px;
+      margin-bottom: 38px;
+    }
+
+    .section-head p:last-child {
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: 1.04rem;
+    }
+
+    .callout {
+      margin: 0;
+      padding: 20px 22px;
+      border-left: 5px solid var(--teal);
+      background: var(--teal-soft);
+    }
+
+    .callout strong { color: #075f5a; }
+
+    .callout.warning {
+      border-left-color: var(--coral);
+      background: var(--coral-soft);
+    }
+
+    .callout.warning strong { color: #9b3927; }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 11px;
+      align-items: stretch;
+    }
+
+    .flow-step {
+      position: relative;
+      min-height: 186px;
+      padding: 22px 18px 18px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+    }
+
+    .flow-step:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      top: 50%;
+      right: -18px;
+      z-index: 2;
+      width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: var(--paper);
+      color: var(--teal);
+      font-weight: 900;
+      transform: translateY(-50%);
+    }
+
+    .flow-index {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 22px;
+      border-radius: 50%;
+      background: var(--navy);
+      color: #fff;
+      font-size: 0.76rem;
+      font-weight: 850;
+    }
+
+    .flow-step h3 {
+      font-family: inherit;
+      font-size: 0.98rem;
+      font-weight: 850;
+      line-height: 1.25;
+    }
+
+    .flow-step p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.45;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 28px;
+    }
+
+    .explain-block {
+      padding: 30px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+    }
+
+    .explain-block p:last-child { margin-bottom: 0; }
+
+    .formula {
+      margin: 22px 0;
+      padding: 18px;
+      border: 1px solid #c7ded8;
+      background: #edf7f4;
+      color: #164e4b;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.9rem;
+      overflow-wrap: anywhere;
+    }
+
+    .plain-language {
+      color: var(--muted);
+      font-size: 0.91rem;
+    }
+
+    .edit-demo {
+      margin-top: 28px;
+      padding: 32px;
+      border: 1px solid var(--line);
+      background: var(--navy);
+      color: white;
+    }
+
+    .edit-demo h3 { font-family: inherit; }
+
+    .mixes {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      margin: 26px 0 20px;
+    }
+
+    .mix {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .layer {
+      display: inline-flex;
+      align-items: center;
+      min-height: 40px;
+      padding: 7px 13px;
+      border: 1px solid rgba(255,255,255,0.34);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      font-size: 0.86rem;
+      font-weight: 750;
+    }
+
+    .layer.changed {
+      border-color: #f5b1a3;
+      background: var(--coral);
+    }
+
+    .mix-arrow {
+      color: #9bd0c9;
+      font-size: 2rem;
+      font-weight: 300;
+    }
+
+    .edit-caption {
+      max-width: 740px;
+      margin: 0 auto;
+      color: #cadae0;
+      text-align: center;
+      font-size: 0.9rem;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 1080px;
+    }
+
+    th, td {
+      padding: 17px 18px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--navy);
+      color: #fff;
+      font-size: 0.74rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: #faf7f0; }
+
+    td:first-child {
+      width: 18%;
+      font-weight: 800;
+    }
+
+    td:nth-child(2) { width: 23%; }
+    td:nth-child(3), td:nth-child(4) { width: 15%; }
+
+    code {
+      padding: 0.14em 0.35em;
+      border-radius: 4px;
+      background: #ebe7dd;
+      color: #254356;
+      font-size: 0.85em;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 0.74rem;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .pill.current { background: var(--gold-soft); color: #79520b; }
+    .pill.recommended { background: var(--green-soft); color: #215d42; }
+    .pill.off { background: #e8ebed; color: #4c5c66; }
+    .pill.configurable { background: var(--teal-soft); color: #075f5a; }
+    .pill.fixed { background: #e8ebed; color: #4c5c66; }
+
+    .setting-name {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.72rem;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .configuration-key {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 18px;
+      margin-bottom: 18px;
+      color: var(--muted);
+      font-size: 0.86rem;
+    }
+
+    .configuration-key span:not(.pill) { margin-right: 7px; }
+
+    .parameter-note {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .data-chain {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border: 1px solid var(--line);
+      background: var(--surface);
+    }
+
+    .data-node {
+      position: relative;
+      padding: 28px;
+      border-right: 1px solid var(--line);
+    }
+
+    .data-node:last-child { border-right: 0; }
+
+    .data-node:not(:last-child)::after {
+      content: "+";
+      position: absolute;
+      top: 28px;
+      right: -13px;
+      z-index: 1;
+      width: 26px;
+      height: 26px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--coral);
+      color: white;
+      font-weight: 900;
+    }
+
+    .data-node small {
+      display: block;
+      margin-bottom: 10px;
+      color: var(--teal);
+      font-size: 0.7rem;
+      font-weight: 850;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+    }
+
+    .data-node p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .quality-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-top: 20px;
+    }
+
+    .quality {
+      padding: 7px 11px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface);
+      color: #4b5f6c;
+      font-size: 0.78rem;
+      font-weight: 750;
+    }
+
+    .proof {
+      margin-top: 30px;
+      display: grid;
+      grid-template-columns: 0.75fr 1.25fr;
+      gap: 0;
+      border: 1px solid var(--line);
+      background: var(--surface);
+    }
+
+    .proof-result {
+      display: grid;
+      place-items: center;
+      min-height: 250px;
+      padding: 30px;
+      background: var(--teal);
+      color: white;
+      text-align: center;
+    }
+
+    .proof-score {
+      display: block;
+      font-family: Georgia, serif;
+      font-size: 4.3rem;
+      line-height: 1;
+    }
+
+    .proof-score-label {
+      display: block;
+      margin-top: 7px;
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+    }
+
+    .proof-copy { padding: 34px; }
+    .proof-copy p:last-child { margin-bottom: 0; }
+
+    .risk-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 22px 34px;
+    }
+
+    .risk {
+      display: grid;
+      grid-template-columns: 36px 1fr;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .risk-index {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border: 1px solid #e6b2a7;
+      border-radius: 50%;
+      background: var(--coral-soft);
+      color: #9c3c2a;
+      font-size: 0.75rem;
+      font-weight: 900;
+    }
+
+    .risk h3 {
+      margin-bottom: 4px;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 850;
+    }
+
+    .risk p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .roadmap {
+      counter-reset: roadmap;
+      display: grid;
+      gap: 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .roadmap-item {
+      counter-increment: roadmap;
+      display: grid;
+      grid-template-columns: 74px minmax(0, 0.85fr) minmax(0, 1.15fr) 120px;
+      gap: 22px;
+      align-items: start;
+      padding: 27px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .roadmap-item::before {
+      content: counter(roadmap, decimal-leading-zero);
+      color: var(--coral);
+      font-family: Georgia, serif;
+      font-size: 2rem;
+      line-height: 1;
+    }
+
+    .roadmap-item h3 {
+      margin: 0;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 850;
+      line-height: 1.4;
+    }
+
+    .roadmap-item p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .roadmap-phase {
+      justify-self: end;
+      padding: 5px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 0.7rem;
+      font-weight: 850;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .decision-banner {
+      margin-top: 34px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      align-items: center;
+      padding: 27px 30px;
+      background: var(--navy);
+      color: #fff;
+    }
+
+    .decision-banner p { margin: 0; }
+
+    .decision-state {
+      padding: 8px 12px;
+      border: 1px solid rgba(255,255,255,0.4);
+      border-radius: 999px;
+      color: #d7e7e8;
+      font-size: 0.77rem;
+      font-weight: 850;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    details {
+      margin-top: 28px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+    }
+
+    summary {
+      padding: 18px 20px;
+      cursor: pointer;
+      font-weight: 850;
+    }
+
+    .technical {
+      padding: 0 20px 20px;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .technical ul { margin-bottom: 0; }
+
+    footer {
+      padding: 34px 0 48px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .footer-inner {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .footer-inner p { margin: 0; }
+
+    @media (max-width: 980px) {
+      .hero-grid { grid-template-columns: 1fr; gap: 32px; }
+      .status-panel { max-width: 520px; }
+      .snapshot { grid-template-columns: repeat(2, 1fr); }
+      .snapshot-item:nth-child(2) { border-right: 0; }
+      .snapshot-item:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+      .flow { grid-template-columns: repeat(3, 1fr); }
+      .flow-step:nth-child(3)::after { display: none; }
+      .data-chain { grid-template-columns: repeat(2, 1fr); }
+      .data-node:nth-child(2) { border-right: 0; }
+      .data-node:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+      .data-node:nth-child(2)::after { display: none; }
+    }
+
+    @media (max-width: 720px) {
+      .shell { width: min(calc(100% - 28px), var(--max)); }
+      nav { display: none; }
+      .hero { padding-top: 54px; }
+      h1 { font-size: clamp(2.45rem, 15vw, 4rem); }
+      section { padding: 56px 0; }
+      .snapshot, .two-col, .flow, .data-chain, .proof, .risk-grid {
+        grid-template-columns: 1fr;
+      }
+      .snapshot-item,
+      .snapshot-item:nth-child(2),
+      .data-node,
+      .data-node:nth-child(2) {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .snapshot-item:last-child,
+      .data-node:last-child { border-bottom: 0; }
+      .flow-step::after,
+      .data-node::after { display: none !important; }
+      .mixes { flex-direction: column; }
+      .mix-arrow { transform: rotate(90deg); }
+      .roadmap-item {
+        grid-template-columns: 50px 1fr;
+        gap: 12px 16px;
+      }
+      .roadmap-item p,
+      .roadmap-phase { grid-column: 2; }
+      .roadmap-phase { justify-self: start; }
+      .decision-banner { grid-template-columns: 1fr; }
+      .decision-state { justify-self: start; }
+      .footer-inner { flex-direction: column; gap: 6px; }
+    }
+
+    @media print {
+      :root { --paper: #fff; --surface: #fff; --shadow: none; }
+      body { background: white; font-size: 10.5pt; }
+      .topbar { position: static; background: white; }
+      nav { display: none; }
+      .hero { padding-top: 36px; }
+      section { padding: 42px 0; break-inside: avoid; }
+      .flow-step, .explain-block, .edit-demo, .table-wrap, .proof, details { break-inside: avoid; }
+      details > * { display: block; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="shell topbar-inner">
+      <div class="brand" aria-label="CoSound">
+        <span class="brand-mark" aria-hidden="true">C</span>
+        CoSound pilot brief
+      </div>
+      <nav aria-label="Page sections">
+        <a href="#algorithm">Algorithm</a>
+        <a href="#parameters">Parameters</a>
+        <a href="#data">Data</a>
+        <a href="#risks">Risks</a>
+        <a href="#next">Next steps</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="shell hero">
+      <div class="hero-grid">
+        <div>
+          <p class="eyebrow">Stable Preference Mixer · v1</p>
+          <h1>A calmer, explainable way to choose the room’s sound.</h1>
+          <p class="lede">CoSound’s pilot algorithm turns recent listener activity, saved-sound tags, and votes on exact mixes into a stable two-to-three-layer soundscape. It is deliberately simple enough to explain today—and instrumented to create better evidence for future machine-learning work.</p>
+        </div>
+        <aside class="status-panel" aria-label="Current status">
+          <p class="status-label">Current status</p>
+          <p class="status-value">Built on the pilot branch</p>
+          <p class="status-detail">Locally validated. Not production-deployed. A vote-page synchronization issue should be resolved before a wider live pilot.</p>
+        </aside>
+      </div>
+
+      <div class="snapshot" aria-label="At a glance">
+        <div class="snapshot-item">
+          <span class="snapshot-number">30s</span>
+          <span class="snapshot-title">Decision cadence</span>
+          <span class="snapshot-copy">The existing scheduler asks for a decision every thirty seconds.</span>
+          <span class="snapshot-control">Fixed system cadence</span>
+        </div>
+        <div class="snapshot-item">
+          <span class="snapshot-number">2–3</span>
+          <span class="snapshot-title">Recommended layers</span>
+          <span class="snapshot-copy">The demo profile avoids unexpectedly sparse one-layer rooms.</span>
+          <span class="snapshot-control configurable">Configurable</span>
+        </div>
+        <div class="snapshot-item">
+          <span class="snapshot-number">1 edit</span>
+          <span class="snapshot-title">Per transition</span>
+          <span class="snapshot-copy">A change adds, removes, or replaces at most one layer.</span>
+          <span class="snapshot-control">Fixed v1 guardrail</span>
+        </div>
+        <div class="snapshot-item">
+          <span class="snapshot-number">0%</span>
+          <span class="snapshot-title">Recommended exploration</span>
+          <span class="snapshot-copy">The launch profile is deterministic, but operators can set any rate from 0% to 100%.</span>
+          <span class="snapshot-control configurable">Configurable</span>
+        </div>
+      </div>
+    </div>
+
+    <section id="algorithm">
+      <div class="shell">
+        <div class="section-head">
+          <p class="eyebrow">The current algorithm</p>
+          <h2>Score every valid mix. Choose the best reachable one.</h2>
+          <p>This is an explainable heuristic, not an ML or RL model. It works with CoSound’s existing Player, Sound, Listener, Vote, Prediction, and Cosound data rather than introducing a second product model.</p>
+        </div>
+
+        <div class="flow" aria-label="Algorithm decision flow">
+          <article class="flow-step">
+            <span class="flow-index">1</span>
+            <h3>Read the room</h3>
+            <p>Use the player’s assigned library and listeners who voted there recently.</p>
+          </article>
+          <article class="flow-step">
+            <span class="flow-index">2</span>
+            <h3>Build options</h3>
+            <p>Enumerate every valid layer combination with fixed, balanced gains.</p>
+          </article>
+          <article class="flow-step">
+            <span class="flow-index">3</span>
+            <h3>Estimate fit</h3>
+            <p>Combine a weak tag-based prior with votes on each exact mix.</p>
+          </article>
+          <article class="flow-step">
+            <span class="flow-index">4</span>
+            <h3>Score the group</h3>
+            <p>Average people equally, then apply a small disagreement penalty.</p>
+          </article>
+          <article class="flow-step">
+            <span class="flow-index">5</span>
+            <h3>Apply guardrails</h3>
+            <p>Honor the hold time and allow no more than one layer edit.</p>
+          </article>
+          <article class="flow-step">
+            <span class="flow-index">6</span>
+            <h3>Play and record</h3>
+            <p>Create an exposure record and link later feedback to what played.</p>
+          </article>
+        </div>
+
+        <div class="two-col" style="margin-top: 28px;">
+          <article class="explain-block">
+            <h3>Individual preference estimate</h3>
+            <p>Saved sounds contribute weak evidence through their tags. A direct vote only affects the complete mix that received the vote—not every sound inside it.</p>
+            <div class="formula">listener score = (positive votes + 2 × weak tag prior) ÷ (all votes + 2)</div>
+            <p class="plain-language">With no evidence, a mix begins neutral at 0.50. One downvote on that exact mix lowers it to about 0.33; an untried mix remains at 0.50.</p>
+          </article>
+          <article class="explain-block">
+            <h3>Group decision</h3>
+            <p>Each active listener gets the same social weight. More history may sharpen an estimate, but it never gives someone more control over the room.</p>
+            <div class="formula">group score = average listener score − 0.25 × disagreement</div>
+            <p class="plain-language">Ties are deterministic: retain the current valid mix first, then prefer fewer layers, then use a canonical mix key.</p>
+          </article>
+        </div>
+
+        <div class="edit-demo">
+          <h3>What “one layer edit” means</h3>
+          <div class="mixes" aria-label="Example one-layer replacement">
+            <div class="mix" aria-label="Before">
+              <span class="layer">Crackle</span>
+              <span class="layer changed">Arrival</span>
+              <span class="layer">Growth</span>
+            </div>
+            <span class="mix-arrow" aria-hidden="true">→</span>
+            <div class="mix" aria-label="After">
+              <span class="layer">Crackle</span>
+              <span class="layer changed">Agadiri Breeze</span>
+              <span class="layer">Growth</span>
+            </div>
+          </div>
+          <p class="edit-caption">A transition can add one layer, remove one layer, or make a one-for-one replacement. At a forced-change deadline, tied choices prefer keeping the same layer count, so replacement is the usual result.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="parameters">
+      <div class="shell">
+        <div class="section-head">
+          <p class="eyebrow">Controls and proposed demo profile</p>
+          <h2>The behavior is adjustable without rewriting the algorithm.</h2>
+          <p>Every item in the table is configurable at process startup. “Code default” preserves compatibility with the old system. “Recommended demo” is the profile proposed for a controlled stakeholder run after restarting the worker and scheduler.</p>
+        </div>
+
+        <div class="configuration-key" aria-label="Configuration legend">
+          <span><span class="pill configurable">Configurable</span> No code change</span>
+          <span><span class="pill fixed">Fixed v1</span> Requires a design/code change</span>
+          <span><span class="pill recommended">Recommended</span> Proposed demo value</span>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Control</th>
+                <th scope="col">Runtime setting</th>
+                <th scope="col">Code default</th>
+                <th scope="col">Recommended demo</th>
+                <th scope="col">What it changes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Predictor</td>
+                <td><span class="pill configurable">Configurable</span><span class="setting-name">COSOUND_CORE_PREDICTOR</span></td>
+                <td><span class="pill current">Random</span></td>
+                <td><span class="pill recommended">Stable mixer</span></td>
+                <td>The stable algorithm is opt-in; the random predictor remains the immediate rollback path.</td>
+              </tr>
+              <tr>
+                <td>Layer range</td>
+                <td><span class="pill configurable">Configurable</span><span class="setting-name">COSOUND_MIN_LAYERS<br />COSOUND_MAX_LAYERS</span></td>
+                <td><strong>1–3</strong></td>
+                <td><span class="pill recommended">2–3 layers</span></td>
+                <td>Sets the inclusive minimum and maximum number of simultaneous sounds. Both must be at least 1, and minimum cannot exceed maximum. If a library is smaller than the minimum, available sounds are used rather than silence.</td>
+              </tr>
+              <tr>
+                <td>Minimum hold</td>
+                <td><span class="pill configurable">Configurable</span><span class="setting-name">COSOUND_MINIMUM_HOLD_SECONDS</span></td>
+                <td><strong>120 seconds</strong></td>
+                <td><span class="pill recommended">120 seconds</span></td>
+                <td>Accepts 0 seconds or more. It prevents elective changes while a new mix settles. The thirty-second scheduler may act on the first tick after the hold ends.</td>
+              </tr>
+              <tr>
+                <td>Maximum stay</td>
+                <td><span class="pill configurable">Configurable</span><span class="setting-name">COSOUND_MAX_STAY_SECONDS</span></td>
+                <td><span class="pill current">Indefinite</span></td>
+                <td><span class="pill recommended">300–600 seconds</span></td>
+                <td>Blank means indefinite. A positive value forces at least one sound ID to change at the deadline, within the one-edit constraint, and cannot be shorter than the minimum hold.</td>
+              </tr>
+              <tr>
+                <td>Active-listener window</td>
+                <td><span class="pill configurable">Configurable</span><span class="setting-name">COSOUND_ACTIVE_LISTENER_MINUTES</span></td>
+                <td><strong>5 minutes</strong></td>
+                <td><span class="pill recommended">5 minutes</span></td>
+                <td>Treats someone as active when they have voted at this player during the recent window. This is an activity proxy, not physical presence.</td>
+              </tr>
+              <tr>
+                <td>Disagreement penalty</td>
+                <td><span class="pill configurable">Configurable</span><span class="setting-name">COSOUND_DISAGREEMENT_PENALTY</span></td>
+                <td><strong>0.25</strong></td>
+                <td><span class="pill recommended">0.25</span></td>
+                <td>Accepts any non-negative value. Higher values more strongly lower the rank of mixes that split listeners; 0 removes the penalty.</td>
+              </tr>
+              <tr>
+                <td>Exploration rate</td>
+                <td><span class="pill configurable">Configurable</span><span class="setting-name">COSOUND_EXPLORATION_PROBABILITY</span></td>
+                <td><span class="pill off">0% · off</span></td>
+                <td><span class="pill off">0% · off</span></td>
+                <td>Accepts 0 to 1: for example, 0.05 means a 5% exploration chance. It samples only from the configured top reachable choices and logs exact selection probabilities.</td>
+              </tr>
+              <tr>
+                <td>Exploration set size</td>
+                <td><span class="pill configurable">Configurable</span><span class="setting-name">COSOUND_EXPLORATION_SIZE</span></td>
+                <td><strong>Top 5</strong></td>
+                <td><span class="pill recommended">Top 5</span></td>
+                <td>Accepts 1 or more and controls how many of the highest-ranked reachable choices may be sampled when exploration is enabled.</td>
+              </tr>
+              <tr>
+                <td>House sound</td>
+                <td><span class="pill configurable">Configurable</span><span class="setting-name">COSOUND_HOUSE_SOUND_ID</span></td>
+                <td><strong>Sound ID 5</strong></td>
+                <td><span class="pill current">Verify per venue</span></td>
+                <td>A positive sound ID provides a fallback when the room has no active listener and no valid current mix; blank disables it. It is not a claim that everyone prefers that sound.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="parameter-note"><span class="pill fixed">Fixed v1</span> Gains are balanced at <code>1 ÷ √layers</code>—approximately 0.707 per layer for two sounds and 0.577 for three. The scheduler cadence is 30 seconds, transitions allow at most one layer edit, saved-tag prior strength is 0.25, direct-vote smoothing strength is 2, and score ties use eight-decimal precision. These mechanics currently require a design/code change rather than a runtime setting. A 17-sound library has 816 possible two-to-three-layer mixes; only one-edit-reachable options are considered during a transition.</p>
+      </div>
+    </section>
+
+    <section id="data">
+      <div class="shell">
+        <div class="section-head">
+          <p class="eyebrow">Learning value</p>
+          <h2>The pilot produces a traceable feedback chain.</h2>
+          <p>The implementation records more than “a vote happened.” It preserves which decision was made, how likely the chosen action was, which mix the player received, and how confidently a later vote can be attributed.</p>
+        </div>
+
+        <div class="data-chain" aria-label="Decision to feedback data chain">
+          <article class="data-node">
+            <small>Decision</small>
+            <h3>Why this mix?</h3>
+            <p>Inputs, versions, scores, constraints, prior mix, chosen layers, and a plain-language explanation.</p>
+          </article>
+          <article class="data-node">
+            <small>Probability</small>
+            <h3>How was it chosen?</h3>
+            <p>The selected action’s probability and the non-zero action set, including exploration when enabled.</p>
+          </article>
+          <article class="data-node">
+            <small>Exposure</small>
+            <h3>What was sent?</h3>
+            <p>Command time, exact gains, player acknowledgement, estimated audible time, end time, and status.</p>
+          </article>
+          <article class="data-node">
+            <small>Feedback</small>
+            <h3>What did people say?</h3>
+            <p>The listener, raw vote, time, player context, exact exposure link, and attribution quality.</p>
+          </article>
+        </div>
+
+        <div class="quality-row" aria-label="Vote attribution grades">
+          <span class="quality">Unattributed</span>
+          <span class="quality">Server current</span>
+          <span class="quality">Transition uncertain</span>
+          <span class="quality">Player acknowledged</span>
+        </div>
+
+        <div class="proof">
+          <div class="proof-result">
+            <div>
+              <span class="proof-score">0.33</span>
+              <span class="proof-score-label">Score after one downvote</span>
+            </div>
+          </div>
+          <div class="proof-copy">
+            <p class="eyebrow">Observed local behavior</p>
+            <h3>A player-acknowledged vote changed the ranking as designed.</h3>
+            <p>In the local test, one downvote on the exact three-layer exposure moved its neutral estimate from 0.50 to approximately 0.33. An untried mix remained neutral at 0.50 and became preferable. This also exposed why the demo should use a two-layer minimum: the old compatible configuration could choose a one-layer alternative.</p>
+            <p><strong>Interpretation:</strong> the feedback loop works, but one vote is intentionally influential in a cold-start demo. More evidence will stabilize relative rankings.</p>
+          </div>
+        </div>
+
+        <div class="callout" style="margin-top: 26px;">
+          <strong>What this enables later:</strong> supervised preference benchmarks and carefully scoped contextual-bandit evaluation within actions the pilot actually covered. The logs do not automatically make the system “RL-ready,” nor do they support unbiased claims about actions that had zero probability.
+        </div>
+      </div>
+    </section>
+
+    <section id="risks">
+      <div class="shell">
+        <div class="section-head">
+          <p class="eyebrow">Known limitations</p>
+          <h2>Useful for a demo, with boundaries we should keep visible.</h2>
+          <p>The algorithm is intentionally narrow. These are the main product and evidence-quality limitations to carry into pilot decisions.</p>
+        </div>
+
+        <div class="callout warning" style="margin-bottom: 34px;">
+          <strong>Immediate pilot risk:</strong> the vote page loads the displayed player layers once and can become stale while the physical player continues to update. A visitor could think they are voting on the old display while the server attributes the vote to the current exposure. Fix or explicitly refresh this view before gathering stakeholder-facing pilot data.
+        </div>
+
+        <div class="risk-grid">
+          <article class="risk">
+            <span class="risk-index">01</span>
+            <div>
+              <h3>Activity is not presence</h3>
+              <p>A vote in the last five minutes is a useful proxy, but it does not prove the person is still physically in the room.</p>
+            </div>
+          </article>
+          <article class="risk">
+            <span class="risk-index">02</span>
+            <div>
+              <h3>Saved sounds are a snapshot</h3>
+              <p>The system sees someone’s current collection, not when each sound was saved or removed.</p>
+            </div>
+          </article>
+          <article class="risk">
+            <span class="risk-index">03</span>
+            <div>
+              <h3>Acknowledgement is estimated playback</h3>
+              <p>The player can confirm receipt and queueing, but not prove that a human heard the exact mix acoustically.</p>
+            </div>
+          </article>
+          <article class="risk">
+            <span class="risk-index">04</span>
+            <div>
+              <h3>No learned sound compatibility</h3>
+              <p>The selector understands tags and exact-mix votes, not whether two recordings blend well in the acoustic or musical sense.</p>
+            </div>
+          </article>
+          <article class="risk">
+            <span class="risk-index">05</span>
+            <div>
+              <h3>Forced novelty has a tradeoff</h3>
+              <p>A finite maximum stay guarantees motion, but can replace a mix people still like. The trace labels those forced changes explicitly.</p>
+            </div>
+          </article>
+          <article class="risk">
+            <span class="risk-index">06</span>
+            <div>
+              <h3>Exploration is initially limited</h3>
+              <p>With exploration off, data is safer for the demo but less useful for estimating what unchosen alternatives would have done.</p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="next">
+      <div class="shell">
+        <div class="section-head">
+          <p class="eyebrow">Next steps</p>
+          <h2>Move from “locally working” to a credible controlled pilot.</h2>
+          <p>The sequence below protects the visitor experience first, then improves evidence quality, then creates the conditions for future learned approaches.</p>
+        </div>
+
+        <div class="roadmap">
+          <article class="roadmap-item">
+            <h3>Synchronize the vote page</h3>
+            <p>Refresh the displayed layers when the live exposure changes and make the exposure being voted on explicit. This is the main data-integrity and user-trust gate.</p>
+            <span class="roadmap-phase">Before pilot</span>
+          </article>
+          <article class="roadmap-item">
+            <h3>Run the agreed demo profile</h3>
+            <p>Restart the scheduler and worker with the stable predictor, 2–3 layers, a 120-second hold, a 300–600-second maximum stay, and exploration off. Confirm the loaded settings in the recorded trace.</p>
+            <span class="roadmap-phase">Before pilot</span>
+          </article>
+          <article class="roadmap-item">
+            <h3>Complete a short staged soak</h3>
+            <p>Observe changes, votes, acknowledgements, and fallbacks over several hours. Verify that no normal decision drops below two layers and that forced changes replace only one layer.</p>
+            <span class="roadmap-phase">Pilot prep</span>
+          </article>
+          <article class="roadmap-item">
+            <h3>Add a decision review view</h3>
+            <p>Give operators a simple way to inspect “why this mix,” current exposure status, attribution quality, and recent outcomes without opening a database shell.</p>
+            <span class="roadmap-phase">Pilot</span>
+          </article>
+          <article class="roadmap-item">
+            <h3>Set data governance</h3>
+            <p>Agree on retention, pseudonymization, consent language, access, and export format before treating live traces as a reusable training dataset.</p>
+            <span class="roadmap-phase">Pilot</span>
+          </article>
+          <article class="roadmap-item">
+            <h3>Benchmark before learning online</h3>
+            <p>After enough attributed feedback, compare simple offline models against this transparent baseline. Introduce limited exploration only with an explicit experiment and safety review.</p>
+            <span class="roadmap-phase">After data</span>
+          </article>
+        </div>
+
+        <div class="decision-banner">
+          <p><strong>Recommended decision:</strong> approve a controlled local or staging demo after the vote-page synchronization fix and a configuration-verified soak test. Keep the random predictor available as rollback.</p>
+          <span class="decision-state">Conditional go</span>
+        </div>
+
+        <details>
+          <summary>Implementation and verification notes</summary>
+          <div class="technical">
+            <ul>
+              <li>Algorithm modules: <code>core/prediction/domain.py</code>, <code>selector.py</code>, and <code>live.py</code>.</li>
+              <li>Live task entry point: <code>core.predict.stable_preference_predictor</code>.</li>
+              <li>Persistence: <code>AlgorithmDecision</code>, <code>PlaybackExposure</code>, and nullable vote-to-exposure attribution.</li>
+              <li>Focused validation currently passes 36 server tests plus the player-client test; Django system checks and migration-drift checks also pass.</li>
+              <li>The broader suite previously showed three unrelated existing library-template failures; those are outside this pilot’s selection logic.</li>
+              <li>Work is on branch <code>feature/demo-algorithm-live-pilot</code> and is not presented here as a production deployment.</li>
+            </ul>
+          </div>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="shell footer-inner">
+      <p>CoSound Stable Preference Mixer · Stakeholder overview</p>
+      <p>Implementation snapshot · September 13, 2026</p>
+    </div>
+  </footer>
+</body>
+</html>

@@ -119,4 +119,24 @@ def random_predictor(
     *args,
     **kwargs,
 ) -> int:
+    """The tag-affinity predictor this project ran before the stable mixer.
+
+    Kept registered as the rollback path: setting
+    ``COSOUND_CORE_PREDICTOR=core.predict.random_predictor`` restores it
+    without a deploy of new code.
+    """
     return _predict_for_player(player_id)
+
+
+@task
+def stable_preference_predictor(
+    player_id: int,
+    *args,
+    **kwargs,
+) -> int:
+    """The default predictor. See ``core.prediction`` for the policy."""
+    # Imported here so that core.predict stays importable during migrations,
+    # which reference it for historical Prediction fields.
+    from core.prediction.live import run_stable_prediction
+
+    return run_stable_prediction(player_id)

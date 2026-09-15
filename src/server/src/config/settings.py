@@ -436,4 +436,52 @@ UNFOLD = {
     },
 }
 
-# COSOUND_CORE_PREDICTOR = "app.predict.predictor_v1"
+# ─── Sound selection ─────────────────────────────────────────────────────────
+#
+# Which predictor the refresh scheduler runs. This one IS environment-readable
+# on purpose: it is the rollback switch, and in the Docker deployment a change
+# to env/.env plus a restart is immediate, where editing this file means
+# rebuilding the image. Point it at core.predict.random_predictor to fall back
+# to the earlier tag-affinity predictor.
+COSOUND_CORE_PREDICTOR = os.environ.get(
+    "COSOUND_CORE_PREDICTOR",
+    "core.predict.stable_preference_predictor",
+)
+
+# Stable preference mixer policy. These are deliberately plain values rather
+# than environment reads: they are not secrets and not deployment wiring, they
+# are how the algorithm behaves, and a room's character should be reviewable
+# and diffable rather than depending on what happens to be in a .env on one
+# machine. core.prediction.selector.SelectionConfig validates them, and its
+# dataclass defaults are kept identical to these.
+
+# How many sounds may play at once. This drives candidate enumeration, which
+# grows as the sum of binomials — at 1-3 layers, 17 sounds is 833 candidates,
+# 50 is 20,875 and 100 is 166,750 — so raising MAX_LAYERS is not free.
+COSOUND_MIN_LAYERS = 1
+COSOUND_MAX_LAYERS = 3
+
+# A listener counts as present if they have voted in this many minutes.
+COSOUND_ACTIVE_LISTENER_MINUTES = 5
+
+# Hold a chosen mix at least this long before reconsidering, so the room does
+# not churn. None for MAX_STAY means a well-liked mix may stay indefinitely;
+# set a number of seconds to force eventual rotation.
+COSOUND_MINIMUM_HOLD_SECONDS = 120
+COSOUND_MAX_STAY_SECONDS = None
+
+# How much to penalise a mix that splits the room. The group score is
+# mean(listener scores) - penalty * stdev, so a larger value prefers consensus
+# over a mix some people love and others dislike.
+COSOUND_DISAGREEMENT_PENALTY = 0.25
+
+# Occasionally pick something other than the top-scoring mix, to learn what
+# else the room likes. Probability 0 disables it; SIZE is how many of the
+# highest-ranked candidates exploration may choose among.
+COSOUND_EXPLORATION_PROBABILITY = 0.0
+COSOUND_EXPLORATION_SIZE = 5
+
+# Off by design. The selector's house fallback keeps a room playing when nobody
+# is voting, which contradicts the sleeping state: an inactive player is meant
+# to fall silent and wait to be woken. Set a sound id to re-enable it.
+COSOUND_HOUSE_SOUND_ID = None

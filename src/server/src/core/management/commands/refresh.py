@@ -2,7 +2,7 @@ import time
 import sys
 import logging
 from typing import cast, Any
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.utils.module_loading import import_string
 from core.models import Cosound, Player
 from django.conf import settings
@@ -12,13 +12,20 @@ REFRESH_INTERVAL_SECONDS = 30
 
 
 def _get_predictor() -> Any:
-    """Resolve the predictor, falling back to core.predict.random_predictor if not configured."""
+    """Resolve the configured predictor and fail clearly on an invalid path.
+
+    Silently falling back on ImportError meant a typo in the setting looked
+    like the algorithm simply behaving oddly, which is an expensive thing to
+    debug from the sound in the room.
+    """
     predictor_path = getattr(settings, "COSOUND_CORE_PREDICTOR", None)
     if predictor_path:
         try:
             return import_string(predictor_path)
-        except ImportError:
-            pass
+        except ImportError as error:
+            raise CommandError(
+                f"Could not import COSOUND_CORE_PREDICTOR={predictor_path!r}"
+            ) from error
     # Fallback to core default
     from core.predict import random_predictor
 

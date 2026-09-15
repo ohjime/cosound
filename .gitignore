@@ -62,3 +62,4 @@ src/server/vite/static/
 .claude/settings.json
 src/player/conditioned/
 .old.zip
+src.alt/

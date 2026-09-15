@@ -92,6 +92,16 @@ prompt_optional "FIRST_ADMIN_EMAIL"    FIRST_ADMIN_EMAIL    "admin@cosound.ca"
 prompt_optional "FIRST_ADMIN_USERNAME" FIRST_ADMIN_USERNAME "admin"
 prompt          "FIRST_ADMIN_PASSWORD" FIRST_ADMIN_PASSWORD "" secret
 
+echo ""
+echo "--- Sound selection ---"
+echo "Only the predictor choice lives here, so it can be rolled back with a"
+echo "restart instead of an image rebuild. How the algorithm behaves (layer"
+echo "counts, hold time, disagreement penalty, house sound) is set in"
+echo "src/server/src/config/settings.py."
+echo "Roll back with: core.predict.random_predictor"
+prompt_optional "COSOUND_CORE_PREDICTOR" COSOUND_CORE_PREDICTOR \
+    "core.predict.stable_preference_predictor"
+
 # ── write file ────────────────────────────────────────────────────────────────
 
 cat > "$ENV_FILE" <<EOF
@@ -105,6 +115,10 @@ PROD_HOSTS=${PROD_HOSTS}
 WEB_CONCURRENCY=1
 VOTE_THROTTLE_SECONDS=60
 SERVER_REFRESH_INTERVAL=30
+
+# --- Sound selection ---
+# Rollback switch only. Algorithm tuning lives in config/settings.py.
+COSOUND_CORE_PREDICTOR=${COSOUND_CORE_PREDICTOR}
 
 # --- Postgres ---
 POSTGRES_USER=${POSTGRES_USER}

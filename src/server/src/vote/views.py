@@ -17,6 +17,7 @@ from vote.utils import (
     build_vote_page_context,
     get_throttle_seconds_left,
     local_discussion_context,
+    resolve_vote_attribution,
     serialize_player_for_carousel,
     serialize_recent_votes,
 )
@@ -214,12 +215,15 @@ def submit_vote(request):
             ]
             cosound = Cosound.get_or_create_from_layers(layers)
             value = int(choice)
+            exposure, attribution_quality = resolve_vote_attribution(player)
             Vote.objects.create(
                 voter=listener,
                 player=player,
                 cosound=cosound,
                 value=value,
                 section=context.get("section") or "",
+                exposure=exposure,
+                attribution_quality=attribution_quality,
             )
 
             response = HttpResponse("")

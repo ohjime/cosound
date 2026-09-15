@@ -11,6 +11,20 @@ class Vote(db_models.Model):  # Database Class
     UPVOTE = 1
     DOWNVOTE = -1
 
+    # How well we can trust that this vote is about the mix we think it is.
+    # Only the first two are reachable today: the remaining two require the
+    # player to confirm it has queued a mix, and nothing asks it to.
+    UNATTRIBUTED = "unattributed"
+    SERVER_CURRENT = "server_current"
+    TRANSITION_UNCERTAIN = "transition_uncertain"
+    PLAYER_ACKNOWLEDGED = "player_acknowledged"
+    ATTRIBUTION_CHOICES = [
+        (UNATTRIBUTED, "Unattributed"),
+        (SERVER_CURRENT, "Server current exposure"),
+        (TRANSITION_UNCERTAIN, "Player transition uncertain"),
+        (PLAYER_ACKNOWLEDGED, "Player acknowledged exposure"),
+    ]
+
     voter = db_models.ForeignKey(
         Listener,
         on_delete=db_models.CASCADE,
@@ -25,6 +39,18 @@ class Vote(db_models.Model):  # Database Class
     )
     value = db_models.IntegerField()
     section = db_models.CharField(max_length=255, blank=True, default="")
+    exposure = db_models.ForeignKey(
+        "core.PlaybackExposure",
+        on_delete=db_models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="votes",
+    )
+    attribution_quality = db_models.CharField(
+        max_length=32,
+        choices=ATTRIBUTION_CHOICES,
+        default=UNATTRIBUTED,
+    )
     created_at = db_models.DateTimeField(auto_now_add=True)
     updated_at = db_models.DateTimeField(auto_now=True)
 

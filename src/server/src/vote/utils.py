@@ -11,6 +11,57 @@ from core.models import Listener, Player, Sound
 VOTE_THROTTLE_WINDOW = timedelta(seconds=getattr(settings, "VOTE_THROTTLE_SECONDS", 60))
 
 
+def resolve_vote_attribution(player):
+    """Find the exposure a vote is about, and say how much to trust the link.
+
+    A vote is only evidence if we know which mix it referred to. The player's
+    open exposure is that answer, but only while it still describes what is
+    actually playing: an exposure that has been closed, or whose mix key has
+    drifted from ``player.playing``, tells us nothing and is dropped rather
+    than guessed at.
+
+    Returns ``(exposure_or_None, attribution_quality)``. Today the best
+    available grade is ``SERVER_CURRENT`` — the server commanded this mix and
+    believes it is playing. Confirming that the speakers actually reached it
+    needs an acknowledgement from the player, which nothing sends yet.
+    """
+    from core.prediction.domain import Mix, MixLayer
+    from vote.models import Vote
+
+    exposure = player.current_exposure
+    if exposure is None:
+        return None, Vote.UNATTRIBUTED
+
+    try:
+        playing_mix_key = Mix(
+            tuple(
+                MixLayer(layer.sound_id, layer.sound_gain)
+                for layer in player.playing.layers
+                if layer.sound_gain > 0
+            )
+        ).key
+    except ValueError:
+        # A mix that cannot even be constructed (a duplicate sound, a gain out
+        # of range) cannot be matched against, so treat it as no evidence.
+        playing_mix_key = None
+
+    if (
+        exposure.player_id != player.pk
+        or exposure.ended_at is not None
+        or exposure.mix_key != playing_mix_key
+    ):
+        return None, Vote.UNATTRIBUTED
+
+    if exposure.acknowledged_at is None:
+        return exposure, Vote.SERVER_CURRENT
+    if (
+        exposure.estimated_audible_at is not None
+        and timezone.now() < exposure.estimated_audible_at
+    ):
+        return exposure, Vote.TRANSITION_UNCERTAIN
+    return exposure, Vote.PLAYER_ACKNOWLEDGED
+
+
 def build_vote_context(request):
     token = request.GET.get("player")
     section = request.GET.get("section") or None

@@ -350,6 +350,13 @@ class Player(DjangoDB.Model):
     )
     bio = DjangoDB.TextField(blank=True, max_length=200)
     location = DjangoDB.CharField(max_length=255, blank=True)
+    current_exposure = DjangoDB.ForeignKey(
+        "PlaybackExposure",
+        on_delete=DjangoDB.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="current_for_players",
+    )
 
     def __str__(self):
         return self.name
@@ -421,6 +428,107 @@ class Player(DjangoDB.Model):
     def announce(self, prediction: Prediction) -> None:
         print(f"New Prediction for \033[1m{self.name}\033[22m:")
         print(prediction.summary())
+
+
+class AlgorithmDecision(DjangoDB.Model):
+    """One versioned predictor decision, including holds and no-action results.
+
+    Append-only: nothing in the request path reads these rows. They exist so a
+    mix that surprised the room can be explained afterwards, which is why a
+    hold is recorded as faithfully as a change.
+    """
+
+    decision_id = DjangoDB.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+    player = DjangoDB.ForeignKey(
+        Player,
+        on_delete=DjangoDB.CASCADE,
+        related_name="algorithm_decisions",
+    )
+    policy_version = DjangoDB.CharField(max_length=64)
+    configuration = DjangoDB.JSONField(default=dict)
+    decided_at = DjangoDB.DateTimeField(default=timezone.now, db_index=True)
+    previous_layers = DjangoDB.JSONField(default=list)
+    selected_layers = DjangoDB.JSONField(default=list)
+    active_listener_ids = DjangoDB.JSONField(default=list)
+    input_snapshot = DjangoDB.JSONField(default=dict)
+    outcome = DjangoDB.CharField(max_length=64)
+    selected_score = DjangoDB.FloatField(null=True, blank=True)
+    selected_action_probability = DjangoDB.FloatField(default=1.0)
+    exploration = DjangoDB.BooleanField(default=False)
+    trace = DjangoDB.JSONField(default=dict)
+
+    class Meta:
+        ordering = ["decided_at", "decision_id"]
+
+    def __str__(self):
+        return f"{self.player_id} {self.outcome} at {self.decided_at:%Y-%m-%d %H:%M}"
+
+
+class PlaybackExposure(DjangoDB.Model):
+    """A server-commanded playback interval.
+
+    Two things depend on it. The predictor reads ``commanded_at`` to know how
+    long the current mix has been up, which is what the minimum hold is
+    measured against; and a Vote points at the exposure that was live when it
+    was cast, so a vote can later be tied to the exact mix it was about rather
+    than to whatever is playing by the time anyone looks.
+
+    ``acknowledged_at``, ``transition_seconds`` and ``estimated_audible_at``
+    are filled in only by a player confirming it has queued the mix. No such
+    call exists here, so they stay null and ``last_change_at`` falls back to
+    ``commanded_at``. The fields are kept so that adding the acknowledgement
+    later is a pure addition.
+    """
+
+    COMMANDED = "commanded"
+    PLAYER_ACKNOWLEDGED = "player_acknowledged"
+    ENDED = "ended"
+    FAILED = "failed"
+    STATUS_CHOICES = [
+        (COMMANDED, "Commanded"),
+        (PLAYER_ACKNOWLEDGED, "Player acknowledged"),
+        (ENDED, "Ended"),
+        (FAILED, "Failed"),
+    ]
+
+    exposure_id = DjangoDB.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+    player = DjangoDB.ForeignKey(
+        Player,
+        on_delete=DjangoDB.CASCADE,
+        related_name="playback_exposures",
+    )
+    opening_decision = DjangoDB.OneToOneField(
+        AlgorithmDecision,
+        on_delete=DjangoDB.CASCADE,
+        related_name="opened_exposure",
+    )
+    mix_key = DjangoDB.CharField(max_length=255, db_index=True)
+    layers = DjangoDB.JSONField(default=list)
+    commanded_at = DjangoDB.DateTimeField(default=timezone.now, db_index=True)
+    acknowledged_at = DjangoDB.DateTimeField(null=True, blank=True)
+    transition_seconds = DjangoDB.FloatField(null=True, blank=True)
+    estimated_audible_at = DjangoDB.DateTimeField(null=True, blank=True)
+    ended_at = DjangoDB.DateTimeField(null=True, blank=True)
+    status = DjangoDB.CharField(
+        max_length=32,
+        choices=STATUS_CHOICES,
+        default=COMMANDED,
+    )
+    updated_at = DjangoDB.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["commanded_at", "exposure_id"]
+
+    def __str__(self):
+        return f"{self.player_id} {self.mix_key} ({self.status})"
 
 
 def validate_authors(authors):

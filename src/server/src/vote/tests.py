@@ -1,14 +1,18 @@
 import json
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from core.models import (
+    AlgorithmDecision,
     Artist,
     Cosound,
     Listener,
     Manager,
+    PlaybackExposure,
     Player,
     Prediction,
     Sound,
@@ -84,12 +88,101 @@ class SubmitVoteTests(TestCase):
         trigger = json.loads(response.headers["HX-Trigger"])
         self.assertIn("vote-success", trigger)
         self.assertEqual(trigger["vote-success"]["voters"][0]["id"], vote.pk)
+        # With no exposure open, there is nothing to attribute the vote to.
+        self.assertIsNone(vote.exposure)
+        self.assertEqual(vote.attribution_quality, Vote.UNATTRIBUTED)
 
     def test_upvote_records_vote_without_changing_collection(self):
         self.assert_vote_preserves_collection(choice="1", expected_value=1)
 
     def test_downvote_records_vote_without_changing_collection(self):
         self.assert_vote_preserves_collection(choice="0", expected_value=0)
+
+    def make_current_exposure(self):
+        decision = AlgorithmDecision.objects.create(
+            player=self.player,
+            policy_version="test-v1",
+            outcome="selected",
+        )
+        exposure = PlaybackExposure.objects.create(
+            player=self.player,
+            opening_decision=decision,
+            mix_key=f"{self.playing_sound.pk}@0.750000",
+            layers=[{"sound_id": self.playing_sound.pk, "sound_gain": 0.75}],
+        )
+        self.player.current_exposure = exposure
+        self.player.save(update_fields=["current_exposure"])
+        return exposure
+
+    def test_vote_links_to_unacknowledged_current_exposure(self):
+        exposure = self.make_current_exposure()
+
+        response = self.submit_vote("1")
+
+        self.assertEqual(response.status_code, 200)
+        vote = Vote.objects.get()
+        self.assertEqual(vote.exposure, exposure)
+        self.assertEqual(vote.attribution_quality, Vote.SERVER_CURRENT)
+
+    def test_mismatched_exposure_is_not_attributed(self):
+        exposure = self.make_current_exposure()
+        exposure.mix_key = "999@1.000000"
+        exposure.save(update_fields=["mix_key"])
+
+        response = self.submit_vote("1")
+
+        self.assertEqual(response.status_code, 200)
+        vote = Vote.objects.get()
+        self.assertIsNone(vote.exposure)
+        self.assertEqual(vote.attribution_quality, Vote.UNATTRIBUTED)
+
+    def test_ended_exposure_is_not_attributed(self):
+        exposure = self.make_current_exposure()
+        exposure.ended_at = timezone.now()
+        exposure.status = PlaybackExposure.ENDED
+        exposure.save(update_fields=["ended_at", "status"])
+
+        response = self.submit_vote("1")
+
+        self.assertEqual(response.status_code, 200)
+        vote = Vote.objects.get()
+        self.assertIsNone(vote.exposure)
+        self.assertEqual(vote.attribution_quality, Vote.UNATTRIBUTED)
+
+    # The two grades below are unreachable in production today: they need the
+    # player to acknowledge an exposure, and nothing asks it to. They are kept
+    # so the helper stays correct for whenever that acknowledgement is added.
+    def test_vote_during_acknowledged_transition_is_marked_uncertain(self):
+        exposure = self.make_current_exposure()
+        now = timezone.now()
+        exposure.acknowledged_at = now
+        exposure.transition_seconds = 10
+        exposure.estimated_audible_at = now + timedelta(seconds=10)
+        exposure.status = PlaybackExposure.PLAYER_ACKNOWLEDGED
+        exposure.save()
+
+        response = self.submit_vote("1")
+
+        self.assertEqual(response.status_code, 200)
+        vote = Vote.objects.get()
+        self.assertEqual(vote.exposure, exposure)
+        self.assertEqual(vote.attribution_quality, Vote.TRANSITION_UNCERTAIN)
+
+    def test_vote_after_transition_uses_acknowledged_attribution(self):
+        exposure = self.make_current_exposure()
+        now = timezone.now()
+        exposure.acknowledged_at = now - timedelta(seconds=20)
+        exposure.transition_seconds = 10
+        exposure.estimated_audible_at = now - timedelta(seconds=10)
+        exposure.status = PlaybackExposure.PLAYER_ACKNOWLEDGED
+        exposure.save()
+
+        response = self.submit_vote("1")
+
+        self.assertEqual(response.status_code, 200)
+        vote = Vote.objects.get()
+        self.assertEqual(vote.exposure, exposure)
+        self.assertEqual(vote.attribution_quality, Vote.PLAYER_ACKNOWLEDGED)
 
 
 class SleepingActivationTests(TestCase):

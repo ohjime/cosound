@@ -459,8 +459,8 @@ COSOUND_CORE_PREDICTOR = os.environ.get(
 # grows as the sum of binomials. Once a mix is playing only its one-edit
 # neighbours are built, but the initial evidence-based search still grows
 # quickly, so raising MAX_LAYERS is not free.
-COSOUND_MIN_LAYERS = 1
-COSOUND_MAX_LAYERS = 4
+COSOUND_MIN_LAYERS = 2
+COSOUND_MAX_LAYERS = 5
 
 # A listener counts as present if they have voted in this many minutes.
 COSOUND_ACTIVE_LISTENER_MINUTES = 5

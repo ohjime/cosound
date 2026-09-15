@@ -114,6 +114,9 @@ endif
 # --- Docker / production ---
 DC = docker compose -f docker/docker-compose.yml --project-directory . --env-file env/.env
 
+# Branch that docker-deploy checks out. Defaults to whatever this host is on.
+BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
+
 .PHONY: docker-env docker-build docker-up docker-down docker-restart docker-logs docker-logs-web docker-ps docker-shell docker-migrate docker-prune docker-deploy
 
 docker-env:
@@ -152,8 +155,15 @@ docker-migrate:
 docker-prune:
 	docker image prune -f
 
+# Deploy a branch: fetch, switch to it, fast-forward, rebuild, restart.
+# Override the branch with BRANCH=name (default: current checkout).
+#   make docker-deploy
+#   make docker-deploy BRANCH=merging/algorithm
 docker-deploy:
-	git pull --ff-only
+	@echo "Deploying $(BRANCH)..."
+	git fetch origin --prune
+	git checkout $(BRANCH)
+	git merge --ff-only origin/$(BRANCH)
 	$(DC) build web
 	$(DC) up -d
 	docker image prune -f

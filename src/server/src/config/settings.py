@@ -458,7 +458,7 @@ COSOUND_CORE_PREDICTOR = os.environ.get(
 # How many sounds may play at once. This drives candidate enumeration, which
 # grows as the sum of binomials — at 1-3 layers, 17 sounds is 833 candidates,
 # 50 is 20,875 and 100 is 166,750 — so raising MAX_LAYERS is not free.
-COSOUND_MIN_LAYERS = 1
+COSOUND_MIN_LAYERS = 2
 COSOUND_MAX_LAYERS = 3
 
 # A listener counts as present if they have voted in this many minutes.
@@ -468,7 +468,7 @@ COSOUND_ACTIVE_LISTENER_MINUTES = 5
 # not churn. None for MAX_STAY means a well-liked mix may stay indefinitely;
 # set a number of seconds to force eventual rotation.
 COSOUND_MINIMUM_HOLD_SECONDS = 120
-COSOUND_MAX_STAY_SECONDS = None
+COSOUND_MAX_STAY_SECONDS = 160
 
 # How much to penalise a mix that splits the room. The group score is
 # mean(listener scores) - penalty * stdev, so a larger value prefers consensus

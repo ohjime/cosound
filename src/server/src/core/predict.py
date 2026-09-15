@@ -198,6 +198,7 @@ def stable_preference_predictor(
     return run_stable_prediction(
         player_id,
         intent=kwargs.pop("intent", REFRESH_INTENT),
+        requesting_listener_id=kwargs.pop("listener_id", None),
     )
 
 
@@ -222,8 +223,16 @@ class Algorithm:
             ) from error
 
     @classmethod
-    def awaken(cls, player: Player) -> Prediction | None:
-        """Synchronously resume the configured policy for ``player``."""
+    def awaken(cls, player: Player, listener=None) -> Prediction | None:
+        """Synchronously resume the configured policy for ``player``.
+
+        ``listener`` is whoever asked for the activation, when a request can
+        name them. A tap that wakes a resting room casts no vote — there is no
+        mix yet to have an opinion about — so without this the policy sees an
+        empty room and falls back to a bootstrap that is identical every time.
+        Naming them lets it weigh their saved sounds instead. Policies that
+        have no use for it ignore the argument.
+        """
         if player.pk is None:
             raise ValueError("Cannot awaken an unsaved player")
         predictor = cls.configured_predictor()
@@ -232,6 +241,7 @@ class Algorithm:
                 completed = predictor.call(
                     player_id=player.pk,
                     intent=AWAKEN_INTENT,
+                    listener_id=listener.pk if listener is not None else None,
                 )
             except Player.DoesNotExist:
                 return None

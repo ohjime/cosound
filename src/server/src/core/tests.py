@@ -259,6 +259,82 @@ class ListenerTestPointAdminTests(TestCase):
         self.assertSetEqual(set(self.listener.collection.all()), {self.old_sound})
 
 
+class PlayerAdminAwakenTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = User.objects.create_superuser(
+            username="player-admin",
+            email="player-admin@example.com",
+            password="admin-password",
+        )
+        cls.manager = Manager.objects.create(user=cls.admin, name="Player manager")
+        cls.player = Player.objects.create(manager=cls.manager, name="Garden player")
+        cls.sound = Sound.objects.create(
+            file="sounds/garden.wav",
+            title="Garden birds",
+            embeddings=[0, 0, 0, 0, 0],
+        )
+
+    def setUp(self):
+        self.client.force_login(self.admin)
+
+    def submit_awake_edit(self):
+        return self.client.post(
+            reverse("admin:core_player_change", args=[self.player.pk]),
+            {
+                "name": self.player.name,
+                "manager": self.manager.pk,
+                "post": self.player.post_id,
+            },
+        )
+
+    def test_player_editor_delegates_waking_to_algorithm(self):
+        self.player.post.collection.add(self.sound)
+
+        with patch("core.predict.Algorithm.awaken", return_value=object()) as awaken:
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.submit_awake_edit()
+
+        self.assertEqual(response.status_code, 302)
+        awaken.assert_called_once()
+        self.assertEqual(awaken.call_args.args[0].pk, self.player.pk)
+
+    def test_player_editor_warns_when_algorithm_cannot_awaken(self):
+        with patch("core.predict.Algorithm.awaken", return_value=None) as awaken:
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.submit_awake_edit()
+
+        awaken.assert_called_once()
+        messages = [str(message) for message in get_messages(response.wsgi_request)]
+        self.assertIn(
+            "This player stayed asleep because the algorithm could not select a "
+            "playable mix.",
+            messages,
+        )
+
+    def test_player_editor_reports_post_commit_algorithm_failure(self):
+        self.player.post.collection.add(self.sound)
+
+        with (
+            patch(
+                "core.predict.Algorithm.awaken",
+                side_effect=RuntimeError("broken algorithm"),
+            ) as awaken,
+            patch("core.admin.logger.exception") as log_exception,
+        ):
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.submit_awake_edit()
+
+        self.assertEqual(response.status_code, 302)
+        awaken.assert_called_once()
+        log_exception.assert_called_once()
+        messages = [str(message) for message in get_messages(response.wsgi_request)]
+        self.assertIn(
+            "The player was saved, but its algorithm could not be resumed.",
+            messages,
+        )
+
+
 class PredictorTests(TestCase):
     def setUp(self):
         manager_user = User.objects.create_user(

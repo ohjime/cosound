@@ -136,6 +136,7 @@ def submit_vote(request):
             return response
 
     should_awaken = False
+    awaken_listener = None
 
     with transaction.atomic():
         player = (
@@ -180,6 +181,14 @@ def submit_vote(request):
             # only the selected policy knows whether a settings change makes
             # that mix stale or whether it should simply be retained.
             should_awaken = True
+            # The tap stays deliberately un-voted: silence, and a mix that is
+            # being repaired, are both things nobody can hold an opinion about.
+            # But the person holding the phone is in the room, so name them for
+            # the policy, which reads saved-sound tags and would otherwise open
+            # every room on the same fixed bootstrap mix. Look them up without
+            # creating anything: a listener we have never seen has no saved
+            # sounds, so they would add no evidence anyway.
+            awaken_listener = Listener.objects.filter(user=request.user).first()
         else:
             listener, _ = Listener.objects.get_or_create(user=request.user)
             seconds_left = get_throttle_seconds_left(listener)
@@ -212,7 +221,7 @@ def submit_vote(request):
             )
 
     if should_awaken:
-        prediction = Algorithm.awaken(player)
+        prediction = Algorithm.awaken(player, listener=awaken_listener)
         if prediction is None:
             has_available_sounds = player.post.collection.exists()
             response = HttpResponse("")

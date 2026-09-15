@@ -202,7 +202,7 @@ def _explain_selection(result, listeners, config: SelectionConfig) -> str:
     )
 
 
-def _listener_evidence(player, decision_time):
+def _listener_evidence(player, decision_time, requesting_listener_id=None):
     from core.models import Listener
     from vote.models import Vote
 
@@ -217,6 +217,16 @@ def _listener_evidence(player, decision_time):
         .values_list("voter_id", flat=True)
         .distinct()
     )
+    if (
+        requesting_listener_id is not None
+        and requesting_listener_id not in active_listener_ids
+    ):
+        # Someone asking to wake the room is present by definition, even though
+        # the tap itself cast no vote. They contribute saved-sound tags and no
+        # votes, which is exactly the weak evidence the prior is built for. The
+        # decision records them among active_listener_ids, so the log still
+        # says who the choice was made for.
+        active_listener_ids = sorted(active_listener_ids + [requesting_listener_id])
     listeners = list(
         Listener.objects.filter(pk__in=active_listener_ids)
         .prefetch_related("collection__tags")
@@ -375,6 +385,7 @@ def run_stable_prediction(
     player_id: int,
     *,
     intent: str = REFRESH_INTENT,
+    requesting_listener_id: int | None = None,
 ) -> int:
     if intent not in {REFRESH_INTENT, AWAKEN_INTENT}:
         raise ValueError(f"Unknown prediction intent: {intent!r}")
@@ -436,6 +447,7 @@ def run_stable_prediction(
             active_listener_ids, listeners, listener_snapshot = _listener_evidence(
                 player,
                 decision_time,
+                requesting_listener_id,
             )
 
         # --- Phase 2: score without holding anything ----------------------

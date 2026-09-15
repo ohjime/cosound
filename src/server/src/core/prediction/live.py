@@ -38,6 +38,7 @@ from core.models import (
     Player,
     Prediction,
 )
+from core.predict import AWAKEN_INTENT, PREDICTION_RETRY, REFRESH_INTENT
 from core.prediction.domain import (
     ListenerEvidence,
     Mix,
@@ -49,11 +50,11 @@ from core.prediction.selector import SelectionConfig, select_mix
 
 
 logger = logging.getLogger("core.predict")
-STABLE_POLICY_VERSION = "stable-preference-mixer-v1"
+STABLE_POLICY_VERSION = "stable-preference-mixer-v2"
 TRACE_SCHEMA_VERSION = "1"
 FEATURE_VERSION = "current-collection-tags-and-exact-mix-votes-v1"
 SCORING_VERSION = "tag-prior-beta-update-mean-disagreement-v1"
-CANDIDATE_VERSION = "subsets-up-to-3-equal-power-v1"
+CANDIDATE_VERSION = "configured-equal-power-subsets-v2"
 
 
 def _activity_window() -> timedelta:
@@ -175,6 +176,11 @@ def _explain_selection(result, listeners, config: SelectionConfig) -> str:
         )
     if result.reason == "no_feasible_mix":
         return "Returned no mix because this player has no available candidate sounds."
+    if result.reason == "neutral_bootstrap":
+        return (
+            "Awakened the room with the deterministic neutral mix selected by "
+            f"the configured {config.min_layers}-{config.max_layers}-layer policy."
+        )
     if result.selected_mix is None or result.selected_score is None:
         return f"Completed the decision with outcome {result.reason}."
 
@@ -316,20 +322,27 @@ def _lifecycle_gate(player, decision_time):
         minutes=int(window.total_seconds() // 60),
     )
     if not recent_votes:
-        # A freshly woken room is allowed to play its activation mix for one
-        # window before anyone has voted; after that, silence.
+        # A freshly awakened room keeps running the algorithm for one activity
+        # window before anyone has voted. This lets hold and maximum-stay rules
+        # govern the algorithm's bootstrap mix instead of freezing it until the
+        # room goes straight back to sleep.
         if (
             player.activated_at is not None
             and player.activated_at >= decision_time - window
             and player.playing
         ):
-            return 0
-        player.update(Prediction.new())
+            return None
+        current_exposure = player.current_exposure
+        if current_exposure is not None and current_exposure.ended_at is None:
+            _close_exposure(current_exposure, decision_time)
+        player.playing = Prediction.new()
+        player.current_exposure = None
+        player.save(update_fields=["playing", "current_exposure"])
         return 0
     return None
 
 
-def _record_error(player_id, config, decision_time, error) -> None:
+def _record_error(player_id, config, decision_time, intent, error) -> None:
     try:
         player = Player.objects.get(pk=player_id)
         AlgorithmDecision.objects.create(
@@ -347,6 +360,7 @@ def _record_error(player_id, config, decision_time, error) -> None:
             trace={
                 "policy_version": STABLE_POLICY_VERSION,
                 "reason": "error",
+                "intent": intent,
                 "error_type": type(error).__name__,
             },
         )
@@ -357,7 +371,14 @@ def _record_error(player_id, config, decision_time, error) -> None:
         )
 
 
-def run_stable_prediction(player_id: int) -> int:
+def run_stable_prediction(
+    player_id: int,
+    *,
+    intent: str = REFRESH_INTENT,
+) -> int:
+    if intent not in {REFRESH_INTENT, AWAKEN_INTENT}:
+        raise ValueError(f"Unknown prediction intent: {intent!r}")
+    awakening = intent == AWAKEN_INTENT
     decision_time = timezone.now()
     config = _stable_config()
     exploration_seed = (
@@ -373,13 +394,16 @@ def run_stable_prediction(player_id: int) -> int:
                 .select_related("post")
                 .get(pk=player_id)
             )
-            gated = _lifecycle_gate(player, decision_time)
-            if gated is not None:
-                return gated
+            if not awakening:
+                gated = _lifecycle_gate(player, decision_time)
+                if gated is not None:
+                    return gated
 
             library = list(
                 player.post.collection.prefetch_related("tags").order_by("pk")
             )
+            post_id = player.post_id
+            library_ids = tuple(sound.pk for sound in library)
             sounds = tuple(_sound_evidence(sound) for sound in library)
             current_mix = _mix_from_prediction(player.playing)
 
@@ -423,6 +447,7 @@ def run_stable_prediction(player_id: int) -> int:
             decision_time=decision_time,
             config=config,
             rng=random.Random(exploration_seed),
+            awaken=awakening,
         )
 
         trace = result.as_dict(top=config.exploration_size)
@@ -433,6 +458,7 @@ def run_stable_prediction(player_id: int) -> int:
         trace["candidate_version"] = CANDIDATE_VERSION
         trace["decision_time"] = decision_time.isoformat()
         trace["evidence_cutoff"] = decision_time.isoformat()
+        trace["intent"] = intent
         trace["previous_mix_key"] = current_mix.key if current_mix else None
         trace["last_change_at"] = (
             last_change_at.isoformat() if last_change_at is not None else None
@@ -463,7 +489,7 @@ def run_stable_prediction(player_id: int) -> int:
 
             # A queued task can outlive the awake state that scheduled it, and
             # anything could have changed the mix while we were scoring.
-            if player.sleeping:
+            if not awakening and player.sleeping:
                 return 0
             committed_mix = _mix_from_prediction(player.playing)
             if (committed_mix.key if committed_mix else None) != (
@@ -474,7 +500,26 @@ def run_stable_prediction(player_id: int) -> int:
                     "while it was being scored",
                     player_id,
                 )
-                return 0
+                return PREDICTION_RETRY if awakening else 0
+            if player.post_id != post_id:
+                logger.info(
+                    "Discarded a stable decision for player %s: the local post "
+                    "changed while it was being scored",
+                    player_id,
+                )
+                return PREDICTION_RETRY if awakening else 0
+            committed_library_ids = tuple(
+                player.post.collection.select_for_update()
+                .order_by("pk")
+                .values_list("pk", flat=True)
+            )
+            if committed_library_ids != library_ids:
+                logger.info(
+                    "Discarded a stable decision for player %s: the sound library "
+                    "changed while it was being scored",
+                    player_id,
+                )
+                return PREDICTION_RETRY if awakening else 0
 
             current_exposure = player.current_exposure
             if current_exposure is not None and current_exposure.ended_at is not None:
@@ -518,9 +563,13 @@ def run_stable_prediction(player_id: int) -> int:
                     )
                 player.playing = next_prediction
                 player.current_exposure = next_exposure
+                update_fields = ["playing", "current_exposure"]
+                if awakening and result.selected_mix is not None:
+                    player.activated_at = decision_time
+                    update_fields.append("activated_at")
                 # The mix really changed, so let post_save publish
                 # player.changed and pull every connected client forward.
-                player.save(update_fields=["playing", "current_exposure"])
+                player.save(update_fields=update_fields)
                 current_exposure = next_exposure
                 prediction_to_announce = next_prediction if next_prediction else None
             elif result.selected_mix is not None and current_exposure is None:
@@ -537,6 +586,13 @@ def run_stable_prediction(player_id: int) -> int:
             elif result.selected_mix is None and player.current_exposure_id:
                 _set_current_exposure_quietly(player, None)
 
+            if awakening and result.selected_mix is not None and not result.changed:
+                # A concurrent awaken may already have installed this mix. Mark
+                # that committed playback as awake without opening another
+                # exposure or announcing the same transition twice.
+                player.activated_at = decision_time
+                player.save(update_fields=["activated_at"])
+
             trace["active_exposure_id"] = (
                 str(current_exposure.exposure_id) if current_exposure else None
             )
@@ -548,7 +604,7 @@ def run_stable_prediction(player_id: int) -> int:
             "Stable predictor failed for player %s; existing playback was retained",
             player_id,
         )
-        _record_error(player_id, config, decision_time, error)
+        _record_error(player_id, config, decision_time, intent, error)
         return 0
 
     logger.info(

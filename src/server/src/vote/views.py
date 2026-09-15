@@ -8,7 +8,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from core.forms import CommentForm
 from core.models import Comment, Cosound, Listener, Player, Sound
-from core.predict import activate_player
+from core.predict import Algorithm
 from core.utils import show_modal
 from login.views import _authenticate_anonymously
 from vote.models import Vote
@@ -135,7 +135,7 @@ def submit_vote(request):
             response["HX-Trigger"] = "auth-required"
             return response
 
-    prediction_to_announce = None
+    should_awaken = False
 
     with transaction.atomic():
         player = (
@@ -174,32 +174,12 @@ def submit_vote(request):
         )
 
         if needs_activation or activation_requested:
-            if needs_activation:
-                prediction_to_announce = activate_player(player)
-                if prediction_to_announce is None:
-                    response = HttpResponse("")
-                    response["HX-Trigger"] = json.dumps(
-                        {
-                            "player-activation-unavailable": {
-                                "message": "This room has no sounds available yet."
-                            }
-                        }
-                    )
-                    return response
-                rendered_layers = serialize_player_for_carousel(
-                    player,
-                    request.user,
-                    choice,
-                )
-
-            response = HttpResponse("")
-            response["HX-Trigger"] = json.dumps(
-                {
-                    "player-activated": {
-                        "layers": rendered_layers
-                    }
-                }
-            )
+            # Let the configured algorithm own its locking, selection and
+            # persistence after this inspection transaction releases the row.
+            # Explicit activation is delegated even when playback looks valid:
+            # only the selected policy knows whether a settings change makes
+            # that mix stale or whether it should simply be retained.
+            should_awaken = True
         else:
             listener, _ = Listener.objects.get_or_create(user=request.user)
             seconds_left = get_throttle_seconds_left(listener)
@@ -231,6 +211,32 @@ def submit_vote(request):
                 {"vote-success": {"voters": serialize_recent_votes(player)}}
             )
 
-    if prediction_to_announce is not None:
-        player.announce(prediction_to_announce)
+    if should_awaken:
+        prediction = Algorithm.awaken(player)
+        if prediction is None:
+            has_available_sounds = player.post.collection.exists()
+            response = HttpResponse("")
+            response["HX-Trigger"] = json.dumps(
+                {
+                    "player-activation-unavailable": {
+                        "message": (
+                            "The algorithm could not select a playable mix. "
+                            "Please try again."
+                            if has_available_sounds
+                            else "This room has no sounds available yet."
+                        )
+                    }
+                }
+            )
+            return response
+        rendered_layers = serialize_player_for_carousel(
+            player,
+            request.user,
+            choice,
+        )
+        response = HttpResponse("")
+        response["HX-Trigger"] = json.dumps(
+            {"player-activated": {"layers": rendered_layers}}
+        )
+
     return response

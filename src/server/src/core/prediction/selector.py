@@ -126,16 +126,8 @@ def enumerate_candidates(
     ordered_ids = sorted({sound.sound_id for sound in sounds})
     candidates: list[Mix] = []
     for count in range(min_layers, min(max_layers, len(ordered_ids)) + 1):
-        gain = 1 / math.sqrt(count)
         for sound_ids in itertools.combinations(ordered_ids, count):
-            candidates.append(
-                Mix(
-                    tuple(
-                        MixLayer(sound_id=sound_id, gain=gain)
-                        for sound_id in sound_ids
-                    )
-                )
-            )
+            candidates.append(_equal_power_mix(sound_ids))
     return tuple(sorted(candidates, key=lambda mix: mix.key))
 
 
@@ -183,6 +175,67 @@ def _is_reachable(current_mix: Mix | None, candidate: Mix) -> bool:
         len(candidate_ids - current_ids),
         len(current_ids - candidate_ids),
     ) <= 1
+
+
+def _equal_power_mix(sound_ids) -> Mix:
+    ordered_ids = tuple(sorted(sound_ids))
+    gain = 1 / math.sqrt(len(ordered_ids))
+    return Mix(
+        tuple(MixLayer(sound_id=sound_id, gain=gain) for sound_id in ordered_ids)
+    )
+
+
+def _lowest_key_equal_power_mix(sound_ids: set[int], layer_count: int) -> Mix:
+    """Return the lexically first fixed-size mix without enumerating them all."""
+    remaining = sorted(sound_ids)
+    selected: list[int] = []
+    for position in range(layer_count):
+        slots_after = layer_count - position - 1
+        feasible = remaining[: len(remaining) - slots_after]
+        sound_id = min(feasible, key=lambda candidate: f"{candidate}@")
+        selected.append(sound_id)
+        remaining = [candidate for candidate in remaining if candidate > sound_id]
+    return _equal_power_mix(selected)
+
+
+def _enumerate_reachable_candidates(
+    sounds: tuple[SoundEvidence, ...],
+    current_mix: Mix,
+    *,
+    min_layers: int,
+    max_layers: int,
+) -> tuple[Mix, ...]:
+    """Build only candidates reachable through one layer edit.
+
+    Once a valid mix is playing, candidates more than one add/remove away can
+    never win. Generating the full universe first is especially costly at four
+    layers: a 100-sound library contains more than four million candidates,
+    while a four-layer current mix has fewer than four hundred neighbours.
+    """
+    available_ids = {sound.sound_id for sound in sounds}
+    current_ids = set(current_mix.sound_ids)
+    outside_ids = available_ids - current_ids
+    layer_count = len(current_ids)
+    candidates: dict[str, Mix] = {}
+
+    def add(sound_ids) -> None:
+        mix = _equal_power_mix(sound_ids)
+        candidates[mix.key] = mix
+
+    # The canonical equal-power form of the current sound set remains a legal
+    # candidate even if a historical prediction used different gains.
+    add(current_ids)
+    if layer_count - 1 >= min_layers:
+        for removed_id in current_ids:
+            add(current_ids - {removed_id})
+    for removed_id in current_ids:
+        for added_id in outside_ids:
+            add((current_ids - {removed_id}) | {added_id})
+    if layer_count + 1 <= min(max_layers, len(available_ids)):
+        for added_id in outside_ids:
+            add(current_ids | {added_id})
+
+    return tuple(sorted(candidates.values(), key=lambda mix: mix.key))
 
 
 def _tag_profile(listener: ListenerEvidence) -> dict[str, float]:
@@ -317,6 +370,7 @@ def select_mix(
     decision_time: datetime,
     config: SelectionConfig = SelectionConfig(),
     rng: random.Random | None = None,
+    awaken: bool = False,
 ) -> SelectionResult:
     sounds = tuple(sorted(sounds, key=lambda sound: sound.sound_id))
     sound_ids = [sound.sound_id for sound in sounds]
@@ -391,20 +445,60 @@ def select_mix(
                 current_mix,
                 candidate_count,
             )
-        return _fixed_result(
-            None,
-            "no_active_listener_fallback",
-            current_mix,
-            candidate_count,
-        )
+        if awaken and config.exploration_probability == 0:
+            # With no listener evidence every candidate has the same neutral
+            # score. The normal ranker would therefore choose the smallest
+            # feasible mix, so construct that winner directly instead of
+            # enumerating a potentially enormous candidate set just to prove
+            # the tie. Once exploration is enabled we use the normal path
+            # below so its probabilities and random choice remain exact.
+            selected_mix = _lowest_key_equal_power_mix(
+                available_ids,
+                effective_min_layers,
+            )
+            selected_score = _neutral_candidate_score(selected_mix)
+            return SelectionResult(
+                selected_mix=selected_mix,
+                reason="neutral_bootstrap",
+                changed=(current_mix.key if current_mix else None)
+                != selected_mix.key,
+                explored=False,
+                selected_action_probability=1.0,
+                candidate_count=candidate_count,
+                reachable_count=candidate_count,
+                action_probabilities=((selected_mix.key, 1.0),),
+                selected_score=selected_score,
+                ranked_scores=(selected_score,),
+            )
+        if awaken:
+            # Exploration needs the ranked set and its exact action
+            # probabilities, so continue through the regular scoring path.
+            pass
+        else:
+            return _fixed_result(
+                None,
+                "no_active_listener_fallback",
+                current_mix,
+                candidate_count,
+            )
 
-    candidates = list(
-        enumerate_candidates(
-            sounds,
-            min_layers=effective_min_layers,
-            max_layers=config.max_layers,
+    if current_is_valid:
+        candidates = list(
+            _enumerate_reachable_candidates(
+                sounds,
+                current_mix,
+                min_layers=effective_min_layers,
+                max_layers=config.max_layers,
+            )
         )
-    )
+    else:
+        candidates = list(
+            enumerate_candidates(
+                sounds,
+                min_layers=effective_min_layers,
+                max_layers=config.max_layers,
+            )
+        )
     if current_is_valid and current_mix.key not in {mix.key for mix in candidates}:
         candidates.append(current_mix)
 
@@ -480,6 +574,8 @@ def select_mix(
         reason = "maximum_stay"
     elif explored:
         reason = "exploration"
+    elif awaken and not listeners:
+        reason = "neutral_bootstrap"
     elif changed:
         reason = "selected"
     else:

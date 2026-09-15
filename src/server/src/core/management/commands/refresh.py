@@ -1,11 +1,12 @@
-import time
 import sys
-import logging
-from typing import cast, Any
+import time
+from typing import Any
+
+from django.core.exceptions import ImproperlyConfigured
 from django.core.management.base import BaseCommand, CommandError
-from django.utils.module_loading import import_string
-from core.models import Cosound, Player
-from django.conf import settings
+
+from core.models import Player
+from core.predict import Algorithm
 
 
 REFRESH_INTERVAL_SECONDS = 30
@@ -18,18 +19,10 @@ def _get_predictor() -> Any:
     like the algorithm simply behaving oddly, which is an expensive thing to
     debug from the sound in the room.
     """
-    predictor_path = getattr(settings, "COSOUND_CORE_PREDICTOR", None)
-    if predictor_path:
-        try:
-            return import_string(predictor_path)
-        except ImportError as error:
-            raise CommandError(
-                f"Could not import COSOUND_CORE_PREDICTOR={predictor_path!r}"
-            ) from error
-    # Fallback to core default
-    from core.predict import random_predictor
-
-    return random_predictor
+    try:
+        return Algorithm.configured_predictor()
+    except ImproperlyConfigured as error:
+        raise CommandError(str(error)) from error
 
 
 class Command(BaseCommand):

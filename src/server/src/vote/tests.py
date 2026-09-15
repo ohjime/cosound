@@ -1,8 +1,9 @@
 import json
+import math
 from datetime import timedelta
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -185,6 +186,11 @@ class SubmitVoteTests(TestCase):
         self.assertEqual(vote.attribution_quality, Vote.PLAYER_ACKNOWLEDGED)
 
 
+@override_settings(
+    COSOUND_MIN_LAYERS=2,
+    COSOUND_MAX_LAYERS=4,
+    COSOUND_EXPLORATION_PROBABILITY=0.0,
+)
 class SleepingActivationTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -225,29 +231,45 @@ class SleepingActivationTests(TestCase):
             },
         )
 
-    def test_sleeping_request_wakes_with_random_collection_sound_without_vote_data(self):
+    def test_sleeping_request_wakes_with_the_algorithms_neutral_mix_without_vote_data(self):
         self.player.post.collection.add(self.first_sound, self.second_sound)
 
-        with (
-            patch("core.predict.random.choice", return_value=self.second_sound.pk),
-            patch.object(Player, "announce") as announce,
-        ):
+        with patch.object(Player, "announce") as announce:
             response = self.submit(activation=False)
 
         self.assertEqual(response.status_code, 200)
         trigger = json.loads(response["HX-Trigger"])
+        expected_sound_ids = [self.first_sound.pk, self.second_sound.pk]
         self.assertEqual(
             [layer["sound_id"] for layer in trigger["player-activated"]["layers"]],
-            [self.second_sound.pk],
+            expected_sound_ids,
         )
         self.player.refresh_from_db()
         self.assertFalse(self.player.sleeping)
         self.assertIsNotNone(self.player.activated_at)
         self.assertEqual(
             [layer.sound_id for layer in self.player.playing.layers],
-            [self.second_sound.pk],
+            expected_sound_ids,
         )
-        self.assertEqual(self.player.playing.layers[0].sound_gain, 1.0)
+        for layer in self.player.playing.layers:
+            self.assertAlmostEqual(layer.sound_gain, 1 / math.sqrt(2))
+
+        decision = AlgorithmDecision.objects.get()
+        self.assertEqual(decision.outcome, "neutral_bootstrap")
+        self.assertEqual(decision.active_listener_ids, [])
+        self.assertEqual(decision.trace["intent"], "awaken")
+        self.assertEqual(decision.configuration["min_layers"], 2)
+        self.assertEqual(decision.configuration["max_layers"], 4)
+        self.assertEqual(
+            [layer["sound_id"] for layer in decision.selected_layers],
+            expected_sound_ids,
+        )
+        self.assertIsNotNone(self.player.current_exposure)
+        self.assertEqual(self.player.current_exposure.opening_decision, decision)
+        self.assertEqual(
+            [layer["sound_id"] for layer in self.player.current_exposure.layers],
+            expected_sound_ids,
+        )
         self.assertFalse(Listener.objects.filter(user=self.user).exists())
         self.assertFalse(Vote.objects.exists())
         self.assertFalse(Cosound.objects.exists())
@@ -289,23 +311,51 @@ class SleepingActivationTests(TestCase):
         self.assertEqual(list(Vote.objects.all()), [existing_vote])
         self.assertEqual(Listener.objects.count(), 1)
 
-    def test_stale_second_activation_is_idempotent_and_never_becomes_a_vote(self):
+    def test_repeated_activation_is_delegated_and_never_becomes_a_vote(self):
         self.player.post.collection.add(self.first_sound)
         with patch.object(Player, "announce"):
             first = self.submit()
         first_layers = json.loads(first["HX-Trigger"])["player-activated"]["layers"]
+        self.player.refresh_from_db()
+        exposure_id = self.player.current_exposure_id
 
-        with patch("vote.views.activate_player") as activate:
+        with patch.object(Player, "announce") as announce:
             second = self.submit()
 
         second_layers = json.loads(second["HX-Trigger"])["player-activated"][
             "layers"
         ]
         self.assertEqual(second_layers, first_layers)
-        activate.assert_not_called()
+        self.player.refresh_from_db()
+        self.assertEqual(self.player.current_exposure_id, exposure_id)
+        self.assertEqual(AlgorithmDecision.objects.count(), 2)
+        self.assertEqual(
+            AlgorithmDecision.objects.latest("decided_at").outcome,
+            "minimum_hold",
+        )
+        announce.assert_not_called()
         self.assertFalse(Vote.objects.exists())
         self.assertFalse(Listener.objects.exists())
         self.assertFalse(Cosound.objects.exists())
+
+    def test_activation_repairs_an_existing_mix_that_no_longer_meets_settings(self):
+        self.player.post.collection.add(self.first_sound, self.second_sound)
+        single_track = Prediction.new()
+        single_track.add_layer(self.first_sound.pk)
+        self.player.update(single_track)
+
+        with patch.object(Player, "announce"):
+            response = self.submit()
+
+        layers = json.loads(response["HX-Trigger"])["player-activated"]["layers"]
+        self.assertEqual(
+            [layer["sound_id"] for layer in layers],
+            [self.first_sound.pk, self.second_sound.pk],
+        )
+        self.player.refresh_from_db()
+        self.assertEqual(len(self.player.playing.layers), 2)
+        self.assertEqual(AlgorithmDecision.objects.get().outcome, "neutral_bootstrap")
+        self.assertFalse(Vote.objects.exists())
 
     def test_empty_collection_stays_sleeping_and_reports_unavailable(self):
         response = self.submit()
@@ -319,9 +369,25 @@ class SleepingActivationTests(TestCase):
         self.assertTrue(self.player.sleeping)
         self.assertIsNone(self.player.activated_at)
         self.assertEqual(self.player.playing.layers, [])
+        decision = AlgorithmDecision.objects.get()
+        self.assertEqual(decision.outcome, "no_feasible_mix")
+        self.assertEqual(decision.trace["intent"], "awaken")
+        self.assertFalse(PlaybackExposure.objects.exists())
         self.assertFalse(Listener.objects.exists())
         self.assertFalse(Vote.objects.exists())
         self.assertFalse(Cosound.objects.exists())
+
+    def test_populated_collection_reports_algorithm_failure_accurately(self):
+        self.player.post.collection.add(self.first_sound)
+
+        with patch("vote.views.Algorithm.awaken", return_value=None):
+            response = self.submit()
+
+        trigger = json.loads(response["HX-Trigger"])
+        self.assertEqual(
+            trigger["player-activation-unavailable"]["message"],
+            "The algorithm could not select a playable mix. Please try again.",
+        )
 
     def test_deleted_prediction_sound_is_replaced_during_activation(self):
         stale_sound = Sound.objects.create(
@@ -338,10 +404,7 @@ class SleepingActivationTests(TestCase):
         stale_sound.delete()
         self.player.post.collection.add(self.first_sound)
 
-        with (
-            patch("core.predict.random.choice", return_value=self.first_sound.pk),
-            patch.object(Player, "announce") as announce,
-        ):
+        with patch.object(Player, "announce") as announce:
             response = self.submit()
 
         trigger = json.loads(response["HX-Trigger"])
@@ -355,6 +418,8 @@ class SleepingActivationTests(TestCase):
             [layer.sound_id for layer in self.player.playing.layers],
             [self.first_sound.pk],
         )
+        self.assertEqual(AlgorithmDecision.objects.get().outcome, "neutral_bootstrap")
+        self.assertIsNotNone(self.player.current_exposure)
         self.assertFalse(Vote.objects.exists())
         self.assertFalse(Listener.objects.exists())
         self.assertFalse(Cosound.objects.exists())
@@ -376,22 +441,24 @@ class SleepingActivationTests(TestCase):
         stale_sound.delete()
         self.player.post.collection.add(self.first_sound, self.second_sound)
 
-        with (
-            patch("core.predict.random.choice", return_value=self.second_sound.pk),
-            patch.object(Player, "announce") as announce,
-        ):
+        with patch.object(Player, "announce") as announce:
             response = self.submit(activation=False)
 
         trigger = json.loads(response["HX-Trigger"])
+        expected_sound_ids = [self.first_sound.pk, self.second_sound.pk]
         self.assertEqual(
             [layer["sound_id"] for layer in trigger["player-activated"]["layers"]],
-            [self.second_sound.pk],
+            expected_sound_ids,
         )
         self.player.refresh_from_db()
         self.assertEqual(
             [layer.sound_id for layer in self.player.playing.layers],
-            [self.second_sound.pk],
+            expected_sound_ids,
         )
+        for layer in self.player.playing.layers:
+            self.assertAlmostEqual(layer.sound_gain, 1 / math.sqrt(2))
+        self.assertEqual(AlgorithmDecision.objects.get().outcome, "neutral_bootstrap")
+        self.assertIsNotNone(self.player.current_exposure)
         self.assertFalse(Vote.objects.exists())
         self.assertFalse(Listener.objects.exists())
         self.assertFalse(Cosound.objects.exists())

@@ -1,3 +1,4 @@
+import logging
 import secrets
 
 from import_export.admin import ImportExportModelAdmin
@@ -24,6 +25,9 @@ from taggit.models import Tag
 from core.models import Manager, User, Sound, Player, Listener, Cosound, Artist, Set, Comment, LocalPost, Post, Prediction
 from core.forms import LocalPostForm, SoundForm
 from core.post_admin import PostAdmin, PostLinkAdmin
+
+
+logger = logging.getLogger(__name__)
 
 
 class ListenerInline(StackedInline):
@@ -276,16 +280,32 @@ class PlayerAdmin(ModelAdmin):
         super().save_model(request, obj, form, change)
 
         if sleeping_changed and not form.cleaned_data["sleeping"]:
-            from core.predict import activate_player
+            from core.predict import Algorithm
 
-            prediction = activate_player(obj)
-            if prediction is None:
-                messages.warning(
-                    request,
-                    "This player stayed asleep because its collection is empty.",
-                )
-            else:
-                obj.announce(prediction)
+            def awaken_after_commit():
+                try:
+                    prediction = Algorithm.awaken(obj)
+                except Exception:
+                    logger.exception(
+                        "Player %s was saved, but its algorithm could not be resumed",
+                        obj.pk,
+                    )
+                    messages.error(
+                        request,
+                        "The player was saved, but its algorithm could not be resumed.",
+                    )
+                    return
+                if prediction is None:
+                    messages.warning(
+                        request,
+                        "This player stayed asleep because the algorithm could "
+                        "not select a playable mix.",
+                    )
+
+            # Admin change forms already run in an outer transaction. Waiting
+            # for it to commit lets the algorithm use its own short lock phases
+            # and prevents announcing playback before the edit is durable.
+            transaction.on_commit(awaken_after_commit)
 
     def get_urls(self):
         urls = super().get_urls()

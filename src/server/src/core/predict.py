@@ -1,42 +1,52 @@
 import random
 from collections import Counter, defaultdict
 from datetime import timedelta
+from typing import Any
 
+from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
 from django.tasks import task
 from django.utils import timezone
+from django.utils.module_loading import import_string
 
-from core.models import Player, Prediction, Sound
+from core.models import PlaybackExposure, Player, Prediction, Sound
 from vote.models import Vote
 
 
 ACTIVITY_WINDOW = timedelta(minutes=5)
+REFRESH_INTENT = "refresh"
+AWAKEN_INTENT = "awaken"
+PREDICTION_RETRY = -1
 
 
-def activate_player(player: Player) -> Prediction | None:
-    """Wake ``player`` with one random sound from its current collection."""
-    # Hold a row lock on the candidates until the activation is persisted. In
-    # submit_vote this nests inside the Player lock, so deleting the selected
-    # sound cannot leave the response pointing at an already-missing layer.
-    with transaction.atomic():
-        sound_ids = list(
-            player.post.collection.select_for_update()
-            .order_by("pk")
-            .values_list("pk", flat=True)
-        )
-        if not sound_ids:
-            player.update(Prediction.new())
-            return None
-
-        prediction = Prediction.new()
-        prediction.add_layer(sound_id=random.choice(sound_ids), gain=1.0)
-        player.playing = prediction
-        player.activated_at = timezone.now()
-        player.save(update_fields=["playing", "activated_at"])
-        return prediction
+def _end_current_exposure(player: Player, when) -> None:
+    """Close stable-mixer attribution before the legacy policy takes over."""
+    if player.current_exposure_id is None:
+        return
+    exposure = (
+        PlaybackExposure.objects.select_for_update()
+        .filter(pk=player.current_exposure_id)
+        .first()
+    )
+    if exposure is not None and exposure.ended_at is None:
+        exposure.ended_at = when
+        exposure.status = PlaybackExposure.ENDED
+        exposure.save(update_fields=["ended_at", "status", "updated_at"])
+    player.current_exposure = None
 
 
-def _predict_for_player(player_id: int) -> int:
+def _predict_for_player(player_id: int, *, intent: str = REFRESH_INTENT) -> int:
+    """Run the legacy tag-affinity policy.
+
+    Awakening belongs to the selected policy too. Keeping the legacy bootstrap
+    here means the rollback switch still changes the whole algorithm rather
+    than leaving request-time activation permanently coupled to the stable
+    mixer.
+    """
+    if intent not in {REFRESH_INTENT, AWAKEN_INTENT}:
+        raise ValueError(f"Unknown prediction intent: {intent!r}")
+
     prediction_to_announce = None
     with transaction.atomic():
         player = (
@@ -44,68 +54,111 @@ def _predict_for_player(player_id: int) -> int:
             .select_related("post")
             .get(pk=player_id)
         )
-        if player.sleeping:
-            return 0
 
-        recent_votes = Vote.recent(
-            player,
-            minutes=int(ACTIVITY_WINDOW.total_seconds() // 60),
-        )
-        if not recent_votes:
+        if intent == AWAKEN_INTENT:
+            sound_ids = list(
+                player.post.collection.select_for_update()
+                .order_by("pk")
+                .values_list("pk", flat=True)
+            )
+            available_ids = set(sound_ids)
+            current_layers = list(player.playing.layers)
+            current_ids = [layer.sound_id for layer in current_layers]
             if (
-                player.activated_at is not None
-                and player.activated_at >= timezone.now() - ACTIVITY_WINDOW
-                and player.playing
+                not player.sleeping
+                and current_ids
+                and all(layer.sound_gain > 0 for layer in current_layers)
+                and len(current_ids) == len(set(current_ids))
+                and set(current_ids) <= available_ids
             ):
+                player.activated_at = timezone.now()
+                player.save(update_fields=["activated_at"])
+                return 1
+            if not sound_ids:
+                _end_current_exposure(player, timezone.now())
+                player.playing = Prediction.new()
+                player.save(update_fields=["playing", "current_exposure"])
                 return 0
-            player.update(Prediction.new())
+
+            decision_time = timezone.now()
+            _end_current_exposure(player, decision_time)
+            prediction_to_announce = Prediction.new()
+            prediction_to_announce.add_layer(
+                sound_id=random.choice(sound_ids),
+                gain=1.0,
+            )
+            player.playing = prediction_to_announce
+            player.activated_at = decision_time
+            player.save(
+                update_fields=["playing", "current_exposure", "activated_at"]
+            )
+
+        elif player.sleeping:
             return 0
+        else:
+            recent_votes = Vote.recent(
+                player,
+                minutes=int(ACTIVITY_WINDOW.total_seconds() // 60),
+            )
+            if not recent_votes:
+                if (
+                    player.activated_at is not None
+                    and player.activated_at >= timezone.now() - ACTIVITY_WINDOW
+                    and player.playing
+                ):
+                    return 0
+                _end_current_exposure(player, timezone.now())
+                player.playing = Prediction.new()
+                player.save(update_fields=["playing", "current_exposure"])
+                return 0
 
-        active_listeners = sorted(
-            Vote.get_listeners(recent_votes),
-            key=lambda listener: listener.pk,
-        )
-        next_prediction = Prediction.new()
-        selected_sound_ids: set[int] = set()
+            active_listeners = sorted(
+                Vote.get_listeners(recent_votes),
+                key=lambda listener: listener.pk,
+            )
+            next_prediction = Prediction.new()
+            selected_sound_ids: set[int] = set()
 
-        library_by_tag: dict[int, list[Sound]] = defaultdict(list)
-        for sound in player.post.collection.prefetch_related("tags"):
-            for tag in sound.tags.all():
-                library_by_tag[tag.pk].append(sound)
+            library_by_tag: dict[int, list[Sound]] = defaultdict(list)
+            for sound in player.post.collection.prefetch_related("tags"):
+                for tag in sound.tags.all():
+                    library_by_tag[tag.pk].append(sound)
 
-        for listener in active_listeners:
-            tag_counts: Counter[int] = Counter()
-            for sound in listener.collection.prefetch_related("tags"):
-                tag_counts.update(tag.pk for tag in sound.tags.all())
+            for listener in active_listeners:
+                tag_counts: Counter[int] = Counter()
+                for sound in listener.collection.prefetch_related("tags"):
+                    tag_counts.update(tag.pk for tag in sound.tags.all())
 
-            if not tag_counts:
-                continue
+                if not tag_counts:
+                    continue
 
-            highest_count = max(tag_counts.values())
-            usable_top_tags = [
-                tag_id
-                for tag_id, count in tag_counts.items()
-                if count == highest_count and library_by_tag[tag_id]
-            ]
-            if not usable_top_tags:
-                continue
+                highest_count = max(tag_counts.values())
+                usable_top_tags = [
+                    tag_id
+                    for tag_id, count in tag_counts.items()
+                    if count == highest_count and library_by_tag[tag_id]
+                ]
+                if not usable_top_tags:
+                    continue
 
-            selected_tag = random.choice(usable_top_tags)
-            unused_sounds = [
-                sound
-                for sound in library_by_tag[selected_tag]
-                if sound.pk not in selected_sound_ids
-            ]
-            if not unused_sounds:
-                continue
+                selected_tag = random.choice(usable_top_tags)
+                unused_sounds = [
+                    sound
+                    for sound in library_by_tag[selected_tag]
+                    if sound.pk not in selected_sound_ids
+                ]
+                if not unused_sounds:
+                    continue
 
-            selected_sound = random.choice(unused_sounds)
-            next_prediction.add_layer(sound_id=selected_sound.pk, gain=1.0)
-            selected_sound_ids.add(selected_sound.pk)
+                selected_sound = random.choice(unused_sounds)
+                next_prediction.add_layer(sound_id=selected_sound.pk, gain=1.0)
+                selected_sound_ids.add(selected_sound.pk)
 
-        if next_prediction:
-            player.update(next_prediction)
-            prediction_to_announce = next_prediction
+            if next_prediction:
+                _end_current_exposure(player, timezone.now())
+                player.playing = next_prediction
+                player.save(update_fields=["playing", "current_exposure"])
+                prediction_to_announce = next_prediction
 
     if prediction_to_announce is not None:
         player.announce(prediction_to_announce)
@@ -125,7 +178,10 @@ def random_predictor(
     ``COSOUND_CORE_PREDICTOR=core.predict.random_predictor`` restores it
     without a deploy of new code.
     """
-    return _predict_for_player(player_id)
+    return _predict_for_player(
+        player_id,
+        intent=kwargs.pop("intent", REFRESH_INTENT),
+    )
 
 
 @task
@@ -139,4 +195,70 @@ def stable_preference_predictor(
     # which reference it for historical Prediction fields.
     from core.prediction.live import run_stable_prediction
 
-    return run_stable_prediction(player_id)
+    return run_stable_prediction(
+        player_id,
+        intent=kwargs.pop("intent", REFRESH_INTENT),
+    )
+
+
+class Algorithm:
+    """Facade for the policy selected in Django settings.
+
+    Both scheduled refreshes and synchronous wake-ups resolve the same task, so
+    the rollback switch cannot silently produce one policy in the scheduler and
+    another one in the request path.
+    """
+
+    @staticmethod
+    def configured_predictor() -> Any:
+        predictor_path = getattr(settings, "COSOUND_CORE_PREDICTOR", None)
+        if not predictor_path:
+            return random_predictor
+        try:
+            return import_string(predictor_path)
+        except ImportError as error:
+            raise ImproperlyConfigured(
+                f"Could not import COSOUND_CORE_PREDICTOR={predictor_path!r}"
+            ) from error
+
+    @classmethod
+    def awaken(cls, player: Player) -> Prediction | None:
+        """Synchronously resume the configured policy for ``player``."""
+        if player.pk is None:
+            raise ValueError("Cannot awaken an unsaved player")
+        predictor = cls.configured_predictor()
+        for attempt in range(2):
+            try:
+                completed = predictor.call(
+                    player_id=player.pk,
+                    intent=AWAKEN_INTENT,
+                )
+            except Player.DoesNotExist:
+                return None
+            try:
+                player.refresh_from_db()
+            except Player.DoesNotExist:
+                return None
+
+            layers = list(player.playing.layers)
+            playable_ids = [
+                layer.sound_id for layer in layers if layer.sound_gain > 0
+            ]
+            prediction_is_playable = bool(
+                not player.sleeping
+                and playable_ids
+                and len(playable_ids) == len(layers)
+                and len(playable_ids) == len(set(playable_ids))
+                and player.post.collection.filter(pk__in=playable_ids).count()
+                == len(playable_ids)
+            )
+            if completed == 1 and prediction_is_playable:
+                return player.playing
+            if completed == PREDICTION_RETRY and attempt == 0:
+                # The stable policy deliberately discards a decision if the
+                # mix or library changes between its snapshot and commit. A
+                # single retry turns that benign optimistic race into a normal
+                # activation without allowing a stale JSON prediction through.
+                continue
+            return None
+        return None

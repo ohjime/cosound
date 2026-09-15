@@ -459,11 +459,16 @@ COSOUND_CORE_PREDICTOR = os.environ.get(
 # grows as the sum of binomials. Once a mix is playing only its one-edit
 # neighbours are built, but the initial evidence-based search still grows
 # quickly, so raising MAX_LAYERS is not free.
-COSOUND_MIN_LAYERS = 2
+COSOUND_MIN_LAYERS = 1
 COSOUND_MAX_LAYERS = 4
 
 # A listener counts as present if they have voted in this many minutes.
 COSOUND_ACTIVE_LISTENER_MINUTES = 5
+
+# Keep a room awake for this long after its most recent activation or vote.
+# This is separate from listener presence so an old voter does not continue to
+# influence every mix merely because the room has not gone to sleep yet.
+COSOUND_SLEEP_AFTER_MINUTES = 180
 
 # Hold a chosen mix at least this long before reconsidering, so the room does
 # not churn. None for MAX_STAY means a well-liked mix may stay indefinitely;
@@ -479,7 +484,7 @@ COSOUND_DISAGREEMENT_PENALTY = 0.25
 # Occasionally pick something other than the top-scoring mix, to learn what
 # else the room likes. Probability 0 disables it; SIZE is how many of the
 # highest-ranked candidates exploration may choose among.
-COSOUND_EXPLORATION_PROBABILITY = 0.0
+COSOUND_EXPLORATION_PROBABILITY = 0.5
 COSOUND_EXPLORATION_SIZE = 5
 
 # Off by design. The selector's house fallback keeps a room playing when nobody

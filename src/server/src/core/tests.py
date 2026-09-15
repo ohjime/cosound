@@ -1221,8 +1221,7 @@ class StableSelectionTests(SimpleTestCase):
         self.assertEqual(result.reachable_count, 0)
 
 
-
-
+@override_settings(COSOUND_EXPLORATION_PROBABILITY=0.0)
 class StablePredictorIntegrationTests(TestCase):
     """The stable predictor as it behaves inside this project's lifecycle.
 
@@ -1430,18 +1429,32 @@ class StablePredictorIntegrationTests(TestCase):
         self.assertEqual(decision.outcome, "error")
         self.assertEqual(decision.trace["intent"], "awaken")
 
-    @override_settings(COSOUND_HOUSE_SOUND_ID=None)
+    @override_settings(
+        COSOUND_HOUSE_SOUND_ID=None,
+        COSOUND_SLEEP_AFTER_MINUTES=180,
+    )
     def test_inactive_room_falls_silent_rather_than_playing_a_house_sound(self):
         rain = self.make_sound("rain", "rain")
         self.player.post.collection.add(rain)
         with patch.object(Player, "announce"):
             self.assertIsNotNone(Algorithm.awaken(self.player))
         exposure = self.player.current_exposure
+        now = timezone.now()
         Player.objects.filter(pk=self.player.pk).update(
-            activated_at=timezone.now() - ACTIVITY_WINDOW - timedelta(minutes=1)
+            activated_at=now - timedelta(minutes=179)
         )
 
-        self.assertEqual(self.predict(), 0)
+        with patch("core.prediction.live.timezone.now", return_value=now):
+            self.assertEqual(self.predict(), 1)
+
+        self.player.refresh_from_db()
+        self.assertFalse(self.player.sleeping)
+        Player.objects.filter(pk=self.player.pk).update(
+            activated_at=now - timedelta(minutes=181)
+        )
+
+        with patch("core.prediction.live.timezone.now", return_value=now):
+            self.assertEqual(self.predict(), 0)
 
         self.player.refresh_from_db()
         exposure.refresh_from_db()
@@ -1450,6 +1463,30 @@ class StablePredictorIntegrationTests(TestCase):
         self.assertIsNone(self.player.current_exposure)
         self.assertEqual(exposure.status, PlaybackExposure.ENDED)
         self.assertIsNotNone(exposure.ended_at)
+
+    @override_settings(
+        COSOUND_ACTIVE_LISTENER_MINUTES=5,
+        COSOUND_SLEEP_AFTER_MINUTES=180,
+    )
+    def test_recent_activity_keeps_room_awake_without_stale_listener_influence(self):
+        rain = self.make_sound("rain", "rain")
+        self.player.post.collection.add(rain)
+        self.wake_playing(rain)
+        listener = self.make_listener(rain)
+        now = timezone.now()
+        self.vote(listener, created_at=now - timedelta(minutes=60))
+        Player.objects.filter(pk=self.player.pk).update(
+            activated_at=now - timedelta(minutes=181)
+        )
+
+        with patch("core.prediction.live.timezone.now", return_value=now):
+            self.assertEqual(self.predict(), 1)
+
+        self.player.refresh_from_db()
+        self.assertFalse(self.player.sleeping)
+        decision = AlgorithmDecision.objects.get()
+        self.assertEqual(decision.active_listener_ids, [])
+        self.assertEqual(decision.outcome, "retained_no_active_listeners")
 
     def test_activation_grace_period_keeps_a_freshly_woken_room_playing(self):
         rain = self.make_sound("rain", "rain")

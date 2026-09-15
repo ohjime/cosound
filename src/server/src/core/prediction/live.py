@@ -63,6 +63,10 @@ def _activity_window() -> timedelta:
     )
 
 
+def _sleep_window() -> timedelta:
+    return timedelta(minutes=int(settings.COSOUND_SLEEP_AFTER_MINUTES))
+
+
 def _mix_from_prediction(prediction: Prediction) -> Mix | None:
     layers = tuple(
         MixLayer(sound_id=layer.sound_id, gain=layer.sound_gain)
@@ -315,32 +319,37 @@ def _set_current_exposure_quietly(player, exposure) -> None:
 
 
 def _lifecycle_gate(player, decision_time):
-    """Apply the sleep/inactivity rules that predate the stable selector.
+    """Apply sleep/inactivity rules before the stable selector runs.
 
     Returns ``None`` to continue on to selection, or an int to return straight
-    out of the task. Mirrors the dummy predictor so that porting the algorithm
-    does not quietly change when a room falls silent.
+    out of the task. Listener relevance has a shorter window than room
+    lifetime, so stale listeners stop shaping mixes before the room sleeps.
     """
     from vote.models import Vote
 
     if player.sleeping:
         return 0
 
-    window = _activity_window()
+    activity_window = _activity_window()
     recent_votes = Vote.recent(
         player,
-        minutes=int(window.total_seconds() // 60),
+        minutes=int(activity_window.total_seconds() // 60),
     )
     if not recent_votes:
-        # A freshly awakened room keeps running the algorithm for one activity
-        # window before anyone has voted. This lets hold and maximum-stay rules
-        # govern the algorithm's bootstrap mix instead of freezing it until the
-        # room goes straight back to sleep.
-        if (
+        # Listener relevance and room lifetime are deliberately separate. A
+        # room can remain awake after its listeners age out of scoring without
+        # letting their stale preferences influence every new mix.
+        sleep_cutoff = decision_time - _sleep_window()
+        recently_activated = bool(
             player.activated_at is not None
-            and player.activated_at >= decision_time - window
-            and player.playing
-        ):
+            and player.activated_at >= sleep_cutoff
+        )
+        recently_voted = Vote.objects.filter(
+            player=player,
+            created_at__gte=sleep_cutoff,
+            created_at__lte=decision_time,
+        ).exists()
+        if player.playing and (recently_activated or recently_voted):
             return None
         current_exposure = player.current_exposure
         if current_exposure is not None and current_exposure.ended_at is None:

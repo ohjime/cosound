@@ -1,16 +1,16 @@
 <div class="z-20 flex w-full flex-row items-center justify-center gap-3 px-5.5">
-    <button type="button" disabled aria-disabled="true" aria-label="Volume control unavailable" class="btn btn-xs btn-circle shrink-0 border-none bg-neutral-content text-white disabled:cursor-not-allowed">
-        <svg class="size-[1.7em] fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3,9H7L12,4V20L7,15H3V9M16.59,12L14,9.41L15.41,8L18,10.59L20.59,8L22,9.41L19.41,12L22,14.59L20.59,16L18,13.41L15.41,16L14,14.59L16.59,12Z" /></svg>
-    </button>
-    <div class="w-full min-w-0 px-2 py-6 select-none" role="meter" aria-label="Current layer volume" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="gainPercent">
-        <div class="relative h-2 w-full rounded-full bg-amber-500 grayscale">
-            <div class="pointer-events-none absolute top-1/2 flex size-22 -translate-x-1/2 -translate-y-16 scale-x-125 scale-y-75 scale-80 items-center justify-center" :style="`left: ${gainPercent}%`">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" class="pointer-events-none rotate-90 text-neutral opacity-30 drop-shadow-md" fill="currentColor" aria-hidden="true">
+    <span role="img" aria-label="Volume" class="btn btn-xs btn-circle pointer-events-none shrink-0 border-none bg-neutral-content text-white">
+        <svg class="size-[1.7em] fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="M560-131v-82q90-26 145-100t55-168q0-94-55-168T560-749v-82q124 28 202 125t78 225q0 128-78 225T560-131ZM120-360v-240h160l200-200v640L280-360H120Zm440 40v-322q47 22 73.5 66t26.5 96q0 51-26.5 94.5T560-320ZM400-606l-86 86H200v80h114l86 86v-252Z" /></svg>
+    </span>
+    <div class="pointer-events-none w-full min-w-0 select-none px-2 py-6" role="meter" aria-label="Current layer volume" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="gainPercent">
+        <div class="relative h-2 w-full rounded-full bg-amber-500">
+            <div class="absolute top-1/2 flex size-22 -translate-x-1/2 -translate-y-16 scale-x-125 scale-y-75 items-center justify-center" :style="`left: ${gainPercent}%`">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" class="rotate-90 text-amber-600 stroke-white drop-shadow-md" fill="currentColor" aria-hidden="true">
                     <path d="M400-280v-400l200 200-200 200Z" stroke-width="40" stroke-linejoin="round" />
                     <ellipse cx="760" cy="-480" rx="120" ry="80" />
                 </svg>
             </div>
         </div>
     </div>
-    <output class="grid size-8 shrink-0 place-items-center rounded-full bg-neutral-content font-mono text-xs font-semibold tabular-nums text-white" aria-label="Current layer volume percentage" x-text="gainPercent"></output>
+    <output class="btn btn-xs btn-circle pointer-events-none shrink-0 border-none bg-neutral-content p-0 font-mono text-[10px] font-semibold tabular-nums text-white" aria-label="Current layer volume percentage" x-text="gainPercent"></output>
 </div>

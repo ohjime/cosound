@@ -35,6 +35,16 @@ test("volume readout stays within 0–100 and rounds to whole percentages", () =
     }), [0, 8, 75, 100]);
 });
 
+test("layer indicator shade reflects each layer's gain", () => {
+    const display = voteDisplay([
+        { sound_id: 1, sound_gain: 0 },
+        { sound_id: 2, sound_gain: 0.75 },
+        { sound_id: 3, sound_gain: 1 },
+    ]);
+    display.hasVoteAction = true;
+    assert.deepEqual(display.carouselSlides.map((slide) => display.layerIndicatorOpacity(slide)), [1, 0.5, 0.875, 1]);
+});
+
 test("swiping the artwork changes the selected layer", () => {
     const display = voteDisplay(layers);
     const carousel = {

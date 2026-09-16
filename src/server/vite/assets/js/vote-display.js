@@ -67,6 +67,11 @@ export function voteDisplay(initialLayers = [], initialSleeping = false) {
         get isFirst() { return this.currentIndex === 0; },
         get isLast() { return this.currentIndex >= this.carouselSlides.length - 1; },
         get gainPercent() { return Math.round(Math.max(0, Math.min(1, Number(this.currentLayer?.sound_gain) || 0)) * 100); },
+        layerIndicatorOpacity(slide) {
+            if (slide.kind !== "layer") return 1;
+            const gain = Math.max(0, Math.min(1, Number(slide.sound_gain) || 0));
+            return 0.5 + gain * 0.5;
+        },
 
         startTimer() {
             if (this.timer) clearInterval(this.timer);

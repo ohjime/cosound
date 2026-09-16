@@ -6,10 +6,13 @@ predicting for at all, and committing the result.
 
 Three things here differ from a naive wiring, and each is deliberate:
 
-* **The lifecycle gate runs first.** Sleeping and inactivity are this project's
-  concepts, not the selector's, and the selector would happily keep a dead room
-  playing forever. ``_lifecycle_gate`` reproduces the behaviour the dummy
-  predictor had, and only then is a mix chosen.
+* **The lifecycle gate runs first, and it alone ends a room.** Sleeping and
+  inactivity are this project's concepts, not the selector's, which is why
+  ``_lifecycle_gate`` owns the sleep window: a room stops when it has had no
+  activation and no votes for ``algorithm_sleep_after_minutes``, and for no
+  other reason. Listener absence is a much shorter window and only removes
+  evidence, so the selector holds the current mix rather than silencing a room
+  the gate has decided is still awake.
 * **Selection happens outside the player row lock.** ``vote.views.submit_vote``
   locks the same row, so time spent scoring is time a listener's vote spends
   waiting. We snapshot under a short lock, score unlocked, then re-validate and
@@ -179,10 +182,16 @@ def _explain_selection(result, listeners, config: SelectionConfig) -> str:
             "Selected the post's configured baseline because no active listeners "
             "were observed."
         )
+    if result.reason == "retained_no_active_listeners":
+        return (
+            "Kept the current mix because no active listeners were observed and "
+            "this player has no baseline. The room stays on air until its "
+            "configured sleep window expires."
+        )
     if result.reason == "silent_no_active_listeners":
         return (
-            "Returned silence because no active listeners or baseline were "
-            "available."
+            "Returned silence because nothing was playing and no active "
+            "listeners or baseline were available."
         )
     if result.reason == "no_feasible_mix":
         return "Returned no mix because this player has no available candidate sounds."

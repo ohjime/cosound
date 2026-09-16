@@ -406,6 +406,17 @@ def select_mix(
                 current_mix,
                 candidate_count,
             )
+        if current_is_valid:
+            # Listener absence is not room inactivity. Whether a quiet room
+            # should stop belongs to the sleep window, which only the caller's
+            # lifecycle gate can see, so keep playing what is already on air
+            # and let that gate decide when the room has been idle long enough.
+            return _fixed_result(
+                current_mix,
+                "retained_no_active_listeners",
+                current_mix,
+                candidate_count,
+            )
         return _fixed_result(
             None,
             "silent_no_active_listeners",

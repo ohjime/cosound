@@ -1268,7 +1268,8 @@ class StableSelectionTests(SimpleTestCase):
         self.assertLessEqual(max(len(new_ids - old_ids), len(old_ids - new_ids)), 1)
         self.assertEqual(len(result.selected_mix.layers), len(current.layers))
 
-    def test_no_active_listeners_fall_silent_after_hold(self):
+    def test_no_active_listeners_keep_the_current_mix_after_hold(self):
+        """Listener absence removes evidence; only the sleep window stops a room."""
         now = timezone.now()
         current = Mix((MixLayer(1, 1.0), MixLayer(2, 1.0)))
 
@@ -1284,11 +1285,11 @@ class StableSelectionTests(SimpleTestCase):
             ),
         )
 
-        self.assertEqual(result.reason, "silent_no_active_listeners")
-        self.assertIsNone(result.selected_mix)
-        self.assertTrue(result.changed)
+        self.assertEqual(result.reason, "retained_no_active_listeners")
+        self.assertEqual(result.selected_mix, current)
+        self.assertFalse(result.changed)
 
-    def test_no_active_listeners_do_not_retain_a_mix_indefinitely(self):
+    def test_no_active_listeners_retain_a_mix_however_long_it_has_played(self):
         now = timezone.now()
         current = Mix((MixLayer(1, 1.0),))
 
@@ -1304,8 +1305,26 @@ class StableSelectionTests(SimpleTestCase):
             ),
         )
 
+        self.assertEqual(result.reason, "retained_no_active_listeners")
+        self.assertEqual(result.selected_mix, current)
+
+    def test_no_active_listeners_fall_silent_when_the_mix_left_the_library(self):
+        """Nothing valid is on air to hold, so there is no playback to protect."""
+        now = timezone.now()
+        current = Mix((MixLayer(9, 1.0),))
+
+        result = select_mix(
+            sounds=(SoundEvidence(1), SoundEvidence(2)),
+            listeners=(),
+            current_mix=current,
+            last_change_at=now - timedelta(seconds=600),
+            decision_time=now,
+            config=SelectionConfig(min_layers=1, max_layers=2, hold_seconds=0),
+        )
+
         self.assertEqual(result.reason, "silent_no_active_listeners")
         self.assertIsNone(result.selected_mix)
+        self.assertTrue(result.changed)
 
     def test_maximum_stay_retains_when_no_layer_edit_exists(self):
         now = timezone.now()
@@ -1624,7 +1643,8 @@ class StablePredictorIntegrationTests(TestCase):
         self.assertEqual(decision.outcome, "error")
         self.assertEqual(decision.trace["intent"], "awaken")
 
-    def test_inactive_room_falls_silent_without_a_baseline(self):
+    def test_inactive_room_falls_silent_only_when_its_sleep_window_expires(self):
+        """The configured sleep window, not listener absence, ends a quiet room."""
         self.configure_algorithm(sleep_after_minutes=180)
         rain = self.make_sound("rain", "rain")
         self.player.program.collection.add(rain)
@@ -1636,12 +1656,26 @@ class StablePredictorIntegrationTests(TestCase):
         Player.objects.filter(pk=self.player.pk).update(
             activated_at=now - timedelta(minutes=179)
         )
+        # Age the exposure past the minimum hold, so the room is awake because
+        # of the sleep window rather than because the mix is too young to
+        # reconsider.
+        PlaybackExposure.objects.filter(pk=exposure.pk).update(
+            commanded_at=now - timedelta(minutes=179)
+        )
 
         with patch("core.prediction.live.timezone.now", return_value=now):
             self.assertEqual(self.predict(), 1)
 
         self.player.refresh_from_db()
         self.assertFalse(self.player.sleeping)
+        self.assertEqual(
+            AlgorithmDecision.objects.latest("decided_at").outcome,
+            "retained_no_active_listeners",
+        )
+        self.assertEqual(
+            [layer.sound_id for layer in self.player.playing.layers],
+            [rain.pk],
+        )
         Player.objects.filter(pk=self.player.pk).update(
             activated_at=now - timedelta(minutes=181)
         )
@@ -1657,7 +1691,8 @@ class StablePredictorIntegrationTests(TestCase):
         self.assertEqual(exposure.status, PlaybackExposure.ENDED)
         self.assertIsNotNone(exposure.ended_at)
 
-    def test_recent_but_inactive_listener_falls_silent_without_a_baseline(self):
+    def test_a_listener_too_stale_to_score_still_holds_the_room_open(self):
+        """A vote inside the sleep window keeps the room awake without shaping it."""
         self.configure_algorithm(
             active_listener_minutes=5,
             sleep_after_minutes=180,
@@ -1673,13 +1708,39 @@ class StablePredictorIntegrationTests(TestCase):
         )
 
         with patch("core.prediction.live.timezone.now", return_value=now):
+            self.assertEqual(self.predict(), 1)
+
+        self.player.refresh_from_db()
+        self.assertFalse(self.player.sleeping)
+        self.assertEqual(
+            [layer.sound_id for layer in self.player.playing.layers],
+            [rain.pk],
+        )
+        decision = AlgorithmDecision.objects.get()
+        self.assertEqual(decision.active_listener_ids, [])
+        self.assertEqual(decision.outcome, "retained_no_active_listeners")
+
+    def test_a_room_sleeps_once_every_vote_ages_past_the_sleep_window(self):
+        self.configure_algorithm(
+            active_listener_minutes=5,
+            sleep_after_minutes=180,
+        )
+        rain = self.make_sound("rain", "rain")
+        self.player.program.collection.add(rain)
+        self.wake_playing(rain)
+        listener = self.make_listener(rain)
+        now = timezone.now()
+        self.vote(listener, created_at=now - timedelta(minutes=181))
+        Player.objects.filter(pk=self.player.pk).update(
+            activated_at=now - timedelta(minutes=181)
+        )
+
+        with patch("core.prediction.live.timezone.now", return_value=now):
             self.assertEqual(self.predict(), 0)
 
         self.player.refresh_from_db()
         self.assertTrue(self.player.sleeping)
-        decision = AlgorithmDecision.objects.get()
-        self.assertEqual(decision.active_listener_ids, [])
-        self.assertEqual(decision.outcome, "silent_no_active_listeners")
+        self.assertEqual(list(self.player.playing.layers), [])
 
     def test_baseline_keeps_a_freshly_active_room_playing_without_listeners(self):
         rain = self.make_sound("rain", "rain")

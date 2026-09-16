@@ -210,7 +210,7 @@ def serialize_recent_votes(player, limit=10):
                 "voter_username": v.voter.user.username,
                 "voter_avatar_url": v.voter.user.avatar_url,
                 "player_name": v.player.name,
-                "value": v.value,
+                "pleasant": v.pleasant,
                 "section": v.section or "",
                 "seconds_ago": int((now - v.created_at).total_seconds()),
             }

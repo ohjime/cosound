@@ -20,7 +20,7 @@ class VoteInline(TabularInline):
 
 @admin.register(Vote)
 class VoteAdmin(ModelAdmin):
-    list_display = ["voter", "player", "value", "created_at"]
+    list_display = ["voter", "player", "pleasant", "created_at"]
 
 
 admin.site.unregister(Player)
@@ -100,8 +100,8 @@ class ListenerAdmin(CoreListenerAdmin):
         rows = []
         for v in votes:
             url = reverse("admin:vote_vote_change", args=[v.pk])
-            color = "text-green-600" if v.value > 0 else "text-red-600"
-            arrow = "▲" if v.value > 0 else "▼"
+            color = "text-green-600" if v.pleasant > 0 else "text-red-600"
+            arrow = "▲" if v.pleasant > 0 else "▼"
             ts = v.created_at.strftime("%Y-%m-%d %H:%M")
             rows.append(
                 f'<li class="py-2 border-b border-base-200 dark:border-base-800 last:border-0 flex items-center gap-3">'

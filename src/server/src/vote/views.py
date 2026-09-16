@@ -104,10 +104,11 @@ def submit_vote(request):
     context = build_vote_context(request)
     player = context["player"]
     choice = context["choice"]
+    pleasant = request.POST.get("pleasant", choice)
     activation_requested = request.POST.get("activation") == "1"
     anonymous_requested = request.POST.get("anonymous") == "1"
 
-    if player is None or choice not in ("0", "1"):
+    if player is None or choice not in ("0", "1") or pleasant not in ("0", "1"):
         response = HttpResponse("")
         response["HX-Trigger"] = json.dumps(
             {"vote-throttled": {"seconds_left": 60}}
@@ -211,13 +212,12 @@ def submit_vote(request):
                 (layer.sound_id, layer.sound_gain) for layer in player.playing.layers
             ]
             cosound = Cosound.get_or_create_from_layers(layers)
-            value = int(choice)
             exposure, attribution_quality = resolve_vote_attribution(player)
             Vote.objects.create(
                 voter=listener,
                 player=player,
                 cosound=cosound,
-                value=value,
+                pleasant=int(pleasant),
                 section=context.get("section") or "",
                 exposure=exposure,
                 attribution_quality=attribution_quality,

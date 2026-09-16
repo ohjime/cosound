@@ -4,7 +4,7 @@ export function voteDisplay(initialLayers = [], initialSleeping = false) {
         layers: initialLayers.map((layer) => ({ ...layer })),
         currentIndex: 0,
         title: "",
-        choice: "",
+        pleasant: 1,
         playerSleeping: Boolean(initialSleeping),
         activationMode: Boolean(initialSleeping),
         renderedActivationCard: Boolean(initialSleeping),
@@ -26,7 +26,7 @@ export function voteDisplay(initialLayers = [], initialSleeping = false) {
                 }
             }
             this.title = this.$el?.dataset.postTitle || "";
-            this.choice = this.$el?.dataset.voteChoice || "";
+            this.pleasant = this.$el?.dataset.voteChoice === "0" ? 0 : 1;
             this.playerSleeping = this.$el?.dataset.playerSleeping === "true";
             this.activationMode = this.playerSleeping;
             this.renderedActivationCard = this.activationMode;
@@ -52,9 +52,10 @@ export function voteDisplay(initialLayers = [], initialSleeping = false) {
         get currentSlide() { return this.carouselSlides[this.currentIndex] ?? null; },
         get currentLayer() { return this.currentSlide?.kind === "layer" ? this.currentSlide : null; },
         get isEmpty() { return this.layers.length === 0; },
-        get isUpvote() { return this.choice === "1"; },
-        get voteLabel() { return this.activationMode ? "ACTIVATE" : "VOTE"; },
+        get isUpvote() { return this.pleasant === 1; },
+        get voteLabel() { return this.activationMode ? "ACTIVATE" : this.isUpvote ? "UPVOTE" : "DOWNVOTE"; },
         get votePastLabel() { return this.isUpvote ? "Upvoted" : "Downvoted"; },
+        get pleasantPayload() { return JSON.stringify({ pleasant: this.pleasant }); },
         get isFirst() { return this.currentIndex === 0; },
         get isLast() { return this.currentIndex >= this.carouselSlides.length - 1; },
         get gainPercent() { return Math.round(Math.max(0, Math.min(1, Number(this.currentLayer?.sound_gain) || 0)) * 100); },

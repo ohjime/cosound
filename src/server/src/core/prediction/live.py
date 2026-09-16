@@ -267,9 +267,9 @@ def _listener_evidence(
     legacy_vote_count = 0
     rejected_vote_count = 0
     for vote in votes:
-        if vote.value == 1:
+        if vote.pleasant == 1:
             positive = True
-        elif vote.value in (0, -1):
+        elif vote.pleasant in (0, -1):
             positive = False
         else:
             rejected_vote_count += 1

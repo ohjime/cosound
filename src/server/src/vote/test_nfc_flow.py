@@ -203,7 +203,7 @@ class NFCVoteFlowTests(TestCase):
         self.assertTrue(response.wsgi_request.user.is_authenticated)
         self.assertTrue(response.wsgi_request.user.email.endswith("@anon.cosound.ca"))
         vote = Vote.objects.get()
-        self.assertEqual(vote.value, 0)
+        self.assertEqual(vote.pleasant, 0)
         self.assertEqual(vote.section, self.params("0")["section"])
         self.player.refresh_from_db()
         self.assertFalse(self.player.sleeping)

@@ -2,14 +2,10 @@
 <c-core-card showExit="false" bgColor="bg-[#1f3f23]" ringColor="ring-[#2d2d2d]">
     <div data-vote-card data-vote-prompt-card class="contents">
         <figure class="relative mx-6 mt-7 overflow-visible rounded-t-md bg-base-300 ring-7 ring-neutral-content/70">
-            <div class="static aspect-square w-full overflow-hidden rounded-t-md">
-                <c-vote-layer-indicator-dock>
-                    <div class="w-full flex">
-                        <div class="join w-fit ring-4">
-                            <span class="join-item btn btn-sm btn-neutral h-7 min-h-0 rounded-none border-none px-2.5 text-xs font-bold tracking-wider text-white">VOTE</span>
-                        </div>
-                    </div>
-                </c-vote-layer-indicator-dock>
+            <c-vote-layer-indicator-dock>
+                <span role="img" aria-label="Pleasant vote" class="grid h-7 min-w-8 place-items-center bg-neutral px-1 text-lg leading-none">😊</span>
+            </c-vote-layer-indicator-dock>
+            <div class="aspect-square w-full overflow-hidden rounded-t-md">
                 <div class="grid h-full w-full">
                     <div aria-hidden="true" class="col-start-1 row-start-1 aspect-square w-68 max-w-full"></div>
                     <div class="col-start-1 row-start-1 min-h-0 min-w-0"><c-vote-action-card /></div>
@@ -22,14 +18,18 @@
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-full w-full" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="M400-280v-400l200 200-200 200Z" stroke-width="40" stroke-linejoin="round" /></svg>
             </button>
         </figure>
-        <c-vote-player-logo placeholder="true" />
+        <div class="z-20 flex w-full items-center gap-3 px-5.5 py-6" role="group" aria-label="Pleasant vote">
+            <button type="button" class="btn btn-xs btn-circle shrink-0 border-none bg-amber-500 text-amber-900 disabled:opacity-50" aria-label="Downvote" :aria-pressed="pleasant === 0" :disabled="voted || secondsLeft > 0" @click="pleasant = 0">👎</button>
+            <input type="range" min="0" max="1" step="1" class="range range-warning range-sm min-w-0 flex-1 disabled:opacity-50" aria-label="Pleasant vote: 0 downvote, 1 upvote" :value="pleasant" :disabled="voted || secondsLeft > 0" @input="pleasant = Number($event.target.value)">
+            <button type="button" class="btn btn-xs btn-circle shrink-0 border-none bg-amber-500 text-amber-900 disabled:opacity-50" aria-label="Upvote" :aria-pressed="pleasant === 1" :disabled="voted || secondsLeft > 0" @click="pleasant = 1">👍</button>
+        </div>
         <div class="relative mx-4 mb-4 rounded-xs rounded-b-2xl bg-white/65 text-black ring-5 ring-amber-600/60">
             <div class="h-30 overflow-y-auto px-4 py-2">
                 <div class="w-full h-full">
                     <div class="font-serif text-[8pt] font-extralight font-stretch-95% italic">
                         <div x-cloak x-show="!voted && secondsLeft <= 0" x-transition.opacity.duration.300ms>
                             <p class="py-1 font-serif text-xs font-bold not-italic font-stretch-95%">[ <span x-text="voteLabel.toUpperCase()"></span> THE SOUNDSCAPE ]</p>
-                            <p>Tap the green card to vote for the sounds around you. Your feedback helps guide what this venue plays next. The current sound layers are waiting on the card underneath.</p>
+                            <p>Choose thumbs up or thumbs down, then tap the card to vote for the sounds around you. Your feedback helps guide what this venue plays next.</p>
                         </div>
                         <div x-cloak x-show="voted" x-transition:enter="transition duration-500 ease-out delay-150" x-transition:enter-start="translate-y-2 opacity-0" x-transition:enter-end="translate-y-0 opacity-100">
                             <p class="py-1 font-serif text-xs font-bold not-italic font-stretch-95%">[ <span x-text="votePastLabel.toUpperCase()"></span> ]</p>

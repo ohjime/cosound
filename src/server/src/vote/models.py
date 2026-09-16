@@ -9,7 +9,7 @@ from core.models import Cosound, Player, Listener
 class Vote(db_models.Model):  # Database Class
 
     UPVOTE = 1
-    DOWNVOTE = -1
+    DOWNVOTE = 0
 
     # How well we can trust that this vote is about the mix we think it is.
     # Only the first two are reachable today: the remaining two require the
@@ -37,7 +37,7 @@ class Vote(db_models.Model):  # Database Class
         Cosound,
         on_delete=db_models.CASCADE,
     )
-    value = db_models.IntegerField()
+    pleasant = db_models.IntegerField()
     section = db_models.CharField(max_length=255, blank=True, default="")
     exposure = db_models.ForeignKey(
         "core.PlaybackExposure",
@@ -55,7 +55,7 @@ class Vote(db_models.Model):  # Database Class
     updated_at = db_models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.voter} voted {self.value} for {self.player}"
+        return f"{self.voter} voted {self.pleasant} for {self.player}"
 
     @classmethod
     def recent(cls, player: Player, minutes: int = 30) -> List["Vote"]:

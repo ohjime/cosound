@@ -79,7 +79,7 @@ class SubmitVoteTests(TestCase):
         vote = Vote.objects.get()
         self.assertEqual(vote.voter, self.listener)
         self.assertEqual(vote.player, self.player)
-        self.assertEqual(vote.value, expected_value)
+        self.assertEqual(vote.pleasant, expected_value)
         self.assertEqual(vote.section, "test")
         self.assertSetEqual(
             set(self.listener.collection.values_list("pk", flat=True)),
@@ -97,6 +97,18 @@ class SubmitVoteTests(TestCase):
 
     def test_downvote_records_vote_without_changing_collection(self):
         self.assert_vote_preserves_collection(choice="0", expected_value=0)
+
+    def test_pleasant_post_overrides_url_choice(self):
+        response = self.client.post(
+            reverse("vote:submit_vote"),
+            {"pleasant": "0"},
+            headers={"HX-Request": "true"},
+            query_params={"player": self.player.token, "choice": "1"},
+        )
+        self.assertEqual(response.status_code, 200)
+        vote = Vote.objects.get()
+        self.assertEqual(vote.pleasant, 0)
+        self.assertEqual(json.loads(response["HX-Trigger"])["vote-success"]["voters"][0]["pleasant"], 0)
 
     def make_current_exposure(self):
         decision = AlgorithmDecision.objects.create(
@@ -298,7 +310,7 @@ class SleepingActivationTests(TestCase):
             voter=listener,
             player=other_player,
             cosound=cosound,
-            value=Vote.UPVOTE,
+            pleasant=Vote.UPVOTE,
         )
 
         page = self.client.get(

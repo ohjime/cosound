@@ -17,7 +17,7 @@ class VoteNotificationTests(TestCase):
         self.cosound = Cosound.get_or_create_from_layers([(sound.pk, 1.0)])
 
     def vote(self):
-        return Vote.objects.create(player=self.player, voter=self.listener, cosound=self.cosound, value=1)
+        return Vote.objects.create(player=self.player, voter=self.listener, cosound=self.cosound, pleasant=1)
 
     @patch("core.player_events.publish_player_vote")
     def test_new_vote_notifies_only_after_commit_and_edits_do_not_replay(self, publish):

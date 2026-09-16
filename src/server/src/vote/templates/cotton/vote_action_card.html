@@ -7,11 +7,13 @@
             x-transition:leave="transition duration-250 ease-in"
             x-transition:leave-start="opacity-100"
             x-transition:leave-end="opacity-0"
-            class="relative col-start-1 row-start-1 flex h-full w-full flex-col items-center justify-center overflow-hidden border-0 px-8 text-center outline-none transition duration-500 ease-out focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-white/80 {% if choice == '1' %}bg-success text-success-content{% else %}bg-error text-error-content{% endif %}"
+            class="relative col-start-1 row-start-1 flex h-full w-full flex-col items-center justify-center overflow-hidden border-0 px-8 text-center outline-none transition duration-500 ease-out focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-white/80"
+            :class="isUpvote ? 'bg-success text-success-content' : 'bg-error text-error-content'"
             :aria-label="voteLabel"
             :disabled="secondsLeft > 0"
             {% if throttle_seconds_left %}disabled{% endif %}
             hx-post="{% url 'vote:submit_vote' %}?{{ request.GET.urlencode }}"
+            :hx-vals="pleasantPayload"
             hx-swap="none"
             hx-disabled-elt="this">
         <span class="relative z-10 font-sans text-4xl font-semibold tracking-tight" x-text="voteLabel"></span>
@@ -23,7 +25,8 @@
          x-transition:leave="transition duration-250 ease-in"
          x-transition:leave-start="opacity-100"
          x-transition:leave-end="opacity-0"
-         class="relative col-start-1 row-start-1 flex h-full w-full flex-col items-center justify-center overflow-hidden px-8 text-center {% if choice == '1' %}bg-success text-success-content{% else %}bg-error text-error-content{% endif %}">
+         class="relative col-start-1 row-start-1 flex h-full w-full flex-col items-center justify-center overflow-hidden px-8 text-center"
+         :class="isUpvote ? 'bg-success text-success-content' : 'bg-error text-error-content'">
         <span class="relative z-10 font-sans text-4xl font-semibold tracking-tight" x-text="voteLabel"></span>
         <span class="relative z-10 mt-1 text-sm font-medium opacity-75">Choose how you’d like to vote</span>
         <div class="relative z-10 mt-5 flex w-full max-w-64 flex-col gap-1.5">
@@ -34,6 +37,7 @@
                     class="btn min-h-9 w-full border-0 bg-white text-xs text-neutral shadow-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-white/80"
                     aria-label="Sign in and vote"
                     hx-post="{% url 'vote:submit_vote' %}?{{ request.GET.urlencode }}"
+                    :hx-vals="pleasantPayload"
                     hx-swap="none"
                     hx-disabled-elt="this">SIGN IN &amp; VOTE</button>
             <div class="divider my-0 text-xs opacity-70">OR</div>
@@ -44,7 +48,7 @@
                     class="btn min-h-9 w-full border border-current/60 bg-transparent text-xs text-current shadow-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-white/80"
                     aria-label="Vote anonymously"
                     hx-post="{% url 'vote:submit_vote' %}?{{ request.GET.urlencode }}"
-                    hx-vals='{"anonymous":"1"}'
+                    :hx-vals="JSON.stringify({ anonymous: '1', pleasant })"
                     hx-swap="none"
                     hx-disabled-elt="this">VOTE ANONYMOUSLY</button>
         </div>
@@ -59,7 +63,8 @@
             x-transition:enter-start="translate-y-3 scale-95 opacity-0"
             x-transition:enter-end="translate-y-0 scale-100 opacity-100"
             @click="$el.closest('[data-core-card]').dispatchEvent(new CustomEvent('card:remove', { bubbles: true }))"
-            class="relative col-start-1 row-start-1 flex h-full w-full flex-col items-center justify-center overflow-hidden border-0 px-8 text-center outline-none transition duration-500 ease-out focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-white/80 {% if choice == '1' %}bg-success text-success-content{% else %}bg-error text-error-content{% endif %}"
+            class="relative col-start-1 row-start-1 flex h-full w-full flex-col items-center justify-center overflow-hidden border-0 px-8 text-center outline-none transition duration-500 ease-out focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-white/80"
+            :class="isUpvote ? 'bg-success text-success-content' : 'bg-error text-error-content'"
             aria-label="Show the sounds playing">
         <span class="relative z-10 grid size-28 place-items-center rounded-full border-2 border-current/25 bg-white/20 shadow-2xl shadow-black/20 backdrop-blur-sm">
             <svg x-show="voted" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" class="size-16 drop-shadow-lg" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m5 12 4 4L19 6" /></svg>

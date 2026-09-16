@@ -225,7 +225,7 @@ class ListenerTestPointAdminTests(TestCase):
             voter=cls.listener,
             player=cls.player,
             cosound=cls.cosound,
-            value=Vote.UPVOTE,
+            pleasant=Vote.UPVOTE,
             section="before-action",
         )
 
@@ -271,7 +271,7 @@ class ListenerTestPointAdminTests(TestCase):
             {self.ambient_sound, self.second_ambient_sound},
         )
         self.vote.refresh_from_db()
-        self.assertEqual(self.vote.value, Vote.UPVOTE)
+        self.assertEqual(self.vote.pleasant, Vote.UPVOTE)
         self.assertEqual(self.vote.section, "before-action")
 
         messages = [str(message) for message in get_messages(response.wsgi_request)]
@@ -455,12 +455,12 @@ class PredictorTests(TestCase):
         listener.collection.add(*sounds)
         return listener
 
-    def vote(self, listener, *, player=None, created_at=None, value=Vote.UPVOTE):
+    def vote(self, listener, *, player=None, created_at=None, pleasant=Vote.UPVOTE):
         vote = Vote.objects.create(
             voter=listener,
             player=player or self.player,
             cosound=self.cosound,
-            value=value,
+            pleasant=pleasant,
         )
         if created_at is not None:
             Vote.objects.filter(pk=vote.pk).update(created_at=created_at)
@@ -499,7 +499,7 @@ class PredictorTests(TestCase):
         self.player.program.collection.add(sound)
         listener = self.make_listener(sound)
         self.vote(listener)
-        self.vote(listener, value=Vote.DOWNVOTE)
+        self.vote(listener, pleasant=Vote.DOWNVOTE)
         self.vote(listener)
 
         self.assertEqual(self.predict(), 1)
@@ -1410,12 +1410,12 @@ class StablePredictorIntegrationTests(TestCase):
         self.player.refresh_from_db()
         return playing
 
-    def vote(self, listener, *, value=Vote.UPVOTE, created_at=None):
+    def vote(self, listener, *, pleasant=Vote.UPVOTE, created_at=None):
         vote = Vote.objects.create(
             voter=listener,
             player=self.player,
             cosound=self.cosound,
-            value=value,
+            pleasant=pleasant,
         )
         if created_at is not None:
             Vote.objects.filter(pk=vote.pk).update(created_at=created_at)

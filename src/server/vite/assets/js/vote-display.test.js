@@ -91,6 +91,19 @@ test("initialization reads only the card's metadata payload", () => {
     assert.equal(display.currentLayer.sound_title, "Rain");
 });
 
+test("choice URLs preset Pleasant while the slider can reverse the vote", () => {
+    for (const [choice, expected] of [["0", 0], ["1", 1]]) {
+        const display = voteDisplay();
+        display.$el = { dataset: { voteChoice: choice }, querySelector: () => null };
+        display.init();
+        assert.equal(display.pleasant, expected);
+        assert.deepEqual(JSON.parse(display.pleasantPayload), { pleasant: expected });
+        display.pleasant = 1 - expected;
+        assert.deepEqual(JSON.parse(display.pleasantPayload), { pleasant: 1 - expected });
+        assert.equal(display.voteLabel, expected === 1 ? "DOWNVOTE" : "UPVOTE");
+    }
+});
+
 test("empty and malformed predictions remain safe to render", () => {
     const display = voteDisplay();
     display.$el = { dataset: {}, querySelector: () => ({ textContent: "invalid" }) };
@@ -104,7 +117,7 @@ test("empty and malformed predictions remain safe to render", () => {
     assert.equal(display.gainPercent, 0);
     assert.equal(display.isEmpty, true);
     assert.equal(display.activationMode, false);
-    assert.equal(display.voteLabel, "VOTE");
+    assert.equal(display.voteLabel, "UPVOTE");
     assert.equal(display.isFirst, true);
     assert.equal(display.isLast, true);
     assert.deepEqual(JSON.parse(JSON.parse(display.savePayload()).layers), []);
@@ -112,7 +125,7 @@ test("empty and malformed predictions remain safe to render", () => {
 
 test("the playing card carousel contains only sound layers when voting is available", () => {
     const display = voteDisplay(layers);
-    display.choice = "1";
+    display.pleasant = 1;
 
     assert.deepEqual(
         display.carouselSlides.map((slide) => slide.kind),
@@ -217,8 +230,8 @@ test("anonymous vote authentication errors stay on the vote presentation", () =>
 
 test("vote success and throttling drive the card labels", () => {
     const display = voteDisplay(layers);
-    display.choice = "1";
-    assert.equal(display.voteLabel, "VOTE");
+    display.pleasant = 1;
+    assert.equal(display.voteLabel, "UPVOTE");
     assert.equal(display.votePastLabel, "Upvoted");
     const kindsBeforeVote = display.carouselSlides.map((slide) => slide.kind);
     display.handleVoteSuccess();
@@ -228,8 +241,8 @@ test("vote success and throttling drive the card labels", () => {
     assert.deepEqual(display.carouselSlides.map((slide) => slide.kind), kindsBeforeVote);
 
     const downvote = voteDisplay(layers);
-    downvote.choice = "0";
-    assert.equal(downvote.voteLabel, "VOTE");
+    downvote.pleasant = 0;
+    assert.equal(downvote.voteLabel, "DOWNVOTE");
     assert.equal(downvote.votePastLabel, "Downvoted");
     downvote.handleThrottle(12);
     assert.equal(downvote.secondsLeft, 12);

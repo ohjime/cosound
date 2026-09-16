@@ -3,9 +3,9 @@
         <svg class="size-[1.7em] fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3,9H7L12,4V20L7,15H3V9M16.59,12L14,9.41L15.41,8L18,10.59L20.59,8L22,9.41L19.41,12L22,14.59L20.59,16L18,13.41L15.41,16L14,14.59L16.59,12Z" /></svg>
     </button>
     <div class="w-full min-w-0 px-2 py-6 select-none" role="meter" aria-label="Current layer volume" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="gainPercent">
-        <div class="relative h-2 w-full rounded-full bg-amber-500 grayscale opacity-40">
-            <div class="pointer-events-none absolute top-1/2 flex size-22 -translate-x-1/2 -translate-y-16 scale-x-125 scale-y-75 items-center justify-center" :style="`left: ${gainPercent}%`">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" class="pointer-events-none rotate-90 text-neutral-600 stroke-neutral-500 drop-shadow-md" fill="currentColor" aria-hidden="true">
+        <div class="relative h-2 w-full rounded-full bg-amber-500 grayscale">
+            <div class="pointer-events-none absolute top-1/2 flex size-22 -translate-x-1/2 -translate-y-16 scale-x-125 scale-y-75 scale-80 items-center justify-center" :style="`left: ${gainPercent}%`">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" class="pointer-events-none rotate-90 text-neutral opacity-30 drop-shadow-md" fill="currentColor" aria-hidden="true">
                     <path d="M400-280v-400l200 200-200 200Z" stroke-width="40" stroke-linejoin="round" />
                     <ellipse cx="760" cy="-480" rx="120" ry="80" />
                 </svg>

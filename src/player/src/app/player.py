@@ -11,17 +11,28 @@ from app.reverb import FDNReverb
 from app.conditioning import _resample as resample_audio
 from app.chime import (
     VOTE_CHIME_DEFAULT_VOLUME,
-    VOTE_CHIME_PEAK,
+    VOTE_CHIME_MAX_RATIO,
+    VOTE_CHIME_OUTPUT_CEILING,
     VOTE_CHIME_RMS_FLOOR,
     VOTE_CHIME_RMS_SECONDS,
+    chime_loudness,
     vote_chime_scale,
 )
 
 
-def _peak_of(buffers):
-    """Loudest sample across every prepared degree of a chime."""
-    peaks = [float(np.max(np.abs(buffer))) for buffer in buffers if len(buffer)]
-    return max(peaks) if peaks else 0.0
+def _levels_of(buffers, sample_rate):
+    """Measure a prepared scale: (peak sample, loudest short-window RMS).
+
+    Both come from the loudest degree rather than from each degree separately,
+    so re-levelling moves the whole scale together and leaves the balance
+    between its degrees as the chime was designed.
+    """
+    sounding = [buffer for buffer in buffers if len(buffer)]
+    if not sounding:
+        return 0.0, 0.0
+    peak = max(float(np.max(np.abs(buffer))) for buffer in sounding)
+    loudness = max(chime_loudness(buffer, sample_rate) for buffer in sounding)
+    return peak, loudness
 
 
 class CommunalPlayer(ABC):
@@ -101,10 +112,12 @@ class SoundDevicePlayer(CommunalPlayer):
         self._vote_chime_degree = -1
         # A one-shot is levelled against the soundscape it interrupts rather
         # than against full scale, so an acknowledgement keeps the same
-        # prominence in a sparse mix and a dense one.  That needs the peak the
-        # prepared buffers actually reach -- an upload is only ever turned down
-        # to the ceiling, never up to it -- and a slow average of the mix.
-        self._vote_chime_peak = _peak_of(self._default_vote_chime)
+        # prominence in a sparse mix and a dense one.  That needs how loud the
+        # prepared buffers actually are, measured once here, and a slow average
+        # of the mix, maintained by the callback.
+        self._vote_chime_peak, self._vote_chime_loudness = _levels_of(
+            self._default_vote_chime, self.fs
+        )
         self._vote_chime_volume = VOTE_CHIME_DEFAULT_VOLUME
         self._mix_rms = 0.0
 
@@ -155,10 +168,11 @@ class SoundDevicePlayer(CommunalPlayer):
             # Repitch the whole scale here, off the audio thread.  This also
             # copies, so a caller cannot mutate data the callback is reading.
             prepared = vote_chime_scale(self.fs, base)
-        peak = _peak_of(prepared)
+        peak, loudness = _levels_of(prepared, self.fs)
         with self.lock:
             self._vote_chime = prepared
             self._vote_chime_peak = peak
+            self._vote_chime_loudness = loudness
             # A playback cursor into the old buffers may be beyond the end of a
             # shorter replacement.  Dropping an in-flight acknowledgement makes
             # the swap safe; the next vote starts the new sound immediately.
@@ -268,6 +282,7 @@ class SoundDevicePlayer(CommunalPlayer):
             self._vote_chime_positions = remaining
             chime_volume = self._vote_chime_volume
             chime_peak = self._vote_chime_peak
+            chime_loudness_level = self._vote_chime_loudness
             for path in list(self.active_tracks.keys()):
                 track = self.active_tracks[path]
                 data = track["data"]
@@ -330,15 +345,20 @@ class SoundDevicePlayer(CommunalPlayer):
         # The floor keeps a vote audible in a silent or sleeping room, where
         # scaling by the mix alone would acknowledge nothing at all.
         reference = max(self._mix_rms, VOTE_CHIME_RMS_FLOOR)
-        if chime_peak > 0.0:
-            # Land the one-shot's per-channel peak on `volume` times that
-            # reference, but never above the headroom the fixed ceiling used to
-            # guarantee -- eight of these can overlap before the clipper.
+        if chime_loudness_level > 0.0 and chime_peak > 0.0:
+            # Match loudness to loudness: the one-shot's per-channel short-term
+            # RMS lands on `volume` of the way up to VOTE_CHIME_MAX_RATIO times
+            # the mix's own level, so volume 0.25 sits level with the soundscape
+            # and 1.0 is unmistakable over it.
+            spread = np.sqrt(self.channels)
+            target = chime_volume * VOTE_CHIME_MAX_RATIO * reference
             chime_gain = min(
-                chime_volume * reference * np.sqrt(self.channels) / chime_peak,
-                VOTE_CHIME_PEAK / chime_peak,
+                target * spread / chime_loudness_level,
+                # One acknowledgement must not reach the clipper on its own,
+                # however loud the mix it is being levelled against.
+                VOTE_CHIME_OUTPUT_CEILING * spread / chime_peak,
             )
-            mix += chime[:, np.newaxis] * (chime_gain / np.sqrt(self.channels))
+            mix += chime[:, np.newaxis] * (chime_gain / spread)
         mix *= output_gain
         np.clip(mix, -1.0, 1.0, out=mix)
         outdata[:] = mix

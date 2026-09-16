@@ -172,16 +172,30 @@ cannot resample; each is held to the same peak ceiling as the root.
 
 How loud the chime is comes from the Player Program's `chime_volume`, from 0 to
 1, and rides in the same descriptor. It is a level relative to the mix rather
-than an absolute one: the player aims the one-shot's peak at that fraction of
-the running RMS of the soundscape it is already producing, averaged over
-`VOTE_CHIME_RMS_SECONDS` so a transient does not swing the next
-acknowledgement. One setting therefore sounds the same over a sparse mix and a
-dense one. Two bounds hold either end — `VOTE_CHIME_RMS_FLOOR` keeps a vote
-audible in a silent or sleeping room, and `VOTE_CHIME_PEAK` still caps what the
-relative level may ask for, so eight overlapping voices keep their headroom
-before the clipper. The setting applies to the built-in bell as well as an
-upload, and changing it alone does not change the chime version, so the player
-re-levels without re-downloading anything.
+than an absolute one, and loudness is compared with loudness: the player
+matches the one-shot's short-term RMS — its loudest
+`VOTE_CHIME_RMS_WINDOW_SECONDS`, which ignores a decay tail or the silence at
+the end of an upload — to `chime_volume × VOTE_CHIME_MAX_RATIO` times the mix's
+own running RMS, averaged over `VOTE_CHIME_RMS_SECONDS` so a transient does not
+swing the next acknowledgement. One setting therefore sounds the same over a
+sparse mix and a dense one. With `VOTE_CHIME_MAX_RATIO` at 4, **0.25 is level
+with the soundscape and 1.0 is four times its level**; the range above parity is
+the point, since a chime that merely matches the mix is easy to miss.
+
+Comparing the chime's *peak* against the mix's RMS is the trap here, and was a
+bug once: the tone's crest factor is about 2.5, so aiming its peak at the mix's
+level leaves it audibly under the soundscape. Two bounds hold either end.
+`VOTE_CHIME_RMS_FLOOR` keeps a vote audible in a silent or sleeping room, and
+`VOTE_CHIME_OUTPUT_CEILING` keeps one acknowledgement off the clipper whatever
+the mix is doing — on a dense mix that ceiling, not the setting, is what limits
+the top of the range. A burst may still reach the clipper, since eight voices
+can overlap. `VOTE_CHIME_PEAK` is now only the level the buffers are stored at,
+not a limit on how loud a chime may sound; the player re-levels whatever it is
+given by measuring it.
+
+The setting applies to the built-in bell as well as an upload, and changing it
+alone does not change the chime version, so the player re-levels without
+re-downloading anything.
 
 The chime uses the existing audio output and follows master volume and mute. It
 does not wait for the prediction cycle. Listener details are never sent.

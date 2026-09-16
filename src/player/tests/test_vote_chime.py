@@ -12,17 +12,20 @@ import soundfile as sf
 
 from app import client
 from app.chime import (
+    VOTE_CHIME_MAX_RATIO,
+    VOTE_CHIME_OUTPUT_CEILING,
     VOTE_CHIME_PEAK,
     VOTE_CHIME_RMS_FLOOR,
     VOTE_CHIME_RMS_SECONDS,
     VOTE_CHIME_ROOT_HZ,
     VOTE_CHIME_SCALE,
+    chime_loudness,
     load_vote_chime,
     vote_chime,
     vote_chime_scale,
 )
 from app.live import _receive_changes
-from app.player import SoundDevicePlayer
+from app.player import SoundDevicePlayer, _levels_of
 
 
 class VoteEventsTests(unittest.IsolatedAsyncioTestCase):
@@ -57,8 +60,8 @@ class ChimeAudioTests(unittest.TestCase):
         player._vote_chime = player._default_vote_chime
         player._vote_chime_positions = []
         player._vote_chime_degree = -1
-        player._vote_chime_peak = max(
-            float(np.max(np.abs(voice))) for voice in player._vote_chime
+        player._vote_chime_peak, player._vote_chime_loudness = _levels_of(
+            player._vote_chime, player.fs
         )
         player._vote_chime_volume = 0.5
         player._mix_rms = 0.0
@@ -134,8 +137,8 @@ class ChimeLevelTests(unittest.TestCase):
         player._mix_rms = mix_level
         return player
 
-    def chime_peak(self, player, frames=24000):
-        """Peak of the acknowledgement alone, as one channel receives it.
+    def chime_only(self, player, frames=24000):
+        """The acknowledgement alone, as one channel receives it.
 
         Rendering the same block with and without a vote isolates the chime:
         nothing else in this callback carries state between the two.
@@ -145,61 +148,106 @@ class ChimeLevelTests(unittest.TestCase):
         player.play_vote_chime()
         loud = np.empty((frames, 2), np.float32)
         player._audio_callback(loud, frames, None, None)
-        return float(np.max(np.abs(loud - quiet)))
+        return (loud - quiet)[:, 0]
+
+    def chime_loudness(self, player, frames=24000):
+        """How loud the acknowledgement sounds, as short-term RMS."""
+        return chime_loudness(self.chime_only(player, frames), player.fs)
+
+    def degree_share(self, player):
+        """How the sounding degree compares with the one the scale is set by.
+
+        The whole scale is levelled by its loudest degree so the balance between
+        degrees survives, which means the degree actually sounding may sit a
+        little under the target.  That is the design, so the expected level is
+        scaled by the same ratio rather than the tolerance being widened.
+        """
+        sounding = chime_loudness(player._vote_chime[0], player.fs)
+        return sounding / player._vote_chime_loudness
 
     def assertLevel(self, measured, target):
-        """Assert a measured peak lands on its target, within a per cent.
-
-        The degrees of the scale do not all peak alike, and the whole scale is
-        levelled by its loudest so their relative balance survives.  A degree
-        that peaks a shade under that one therefore sounds a shade under the
-        target, which is the intended behaviour rather than an error to chase.
-        """
         self.assertAlmostEqual(measured, target, delta=0.01 * target)
 
-    def test_peak_follows_the_volume_setting_against_the_mix_it_interrupts(self):
+    def test_volume_a_quarter_puts_the_chime_level_with_the_soundscape(self):
+        # The setting is a loudness ratio, so the two are directly comparable:
+        # a quarter of the range is parity, and the rest is headroom above it.
         for mix_level in (0.1, 0.2):
-            for volume in (0.2, 0.5):
+            with self.subTest(mix_level=mix_level):
+                player = self.player(mix_level)
+                player._vote_chime_volume = 1.0 / VOTE_CHIME_MAX_RATIO
+                self.assertLevel(
+                    self.chime_loudness(player),
+                    mix_level * self.degree_share(player),
+                )
+
+    def test_loudness_follows_the_volume_setting_up_to_the_full_ratio(self):
+        # Mixes loud enough to clear the silent-room floor and quiet enough
+        # that the full ratio still fits under the output ceiling; both of those
+        # bounds have tests of their own below.
+        for mix_level in (0.06, 0.07):
+            for volume in (0.1, 0.5, 1.0):
                 with self.subTest(mix_level=mix_level, volume=volume):
                     player = self.player(mix_level)
                     player._vote_chime_volume = volume
-                    self.assertLevel(self.chime_peak(player), volume * mix_level)
+                    self.assertLevel(
+                        self.chime_loudness(player),
+                        volume
+                        * VOTE_CHIME_MAX_RATIO
+                        * mix_level
+                        * self.degree_share(player),
+                    )
+
+    def test_full_volume_carries_well_over_a_busy_mix(self):
+        # The regression this replaces: a fixed ceiling held the chime under the
+        # soundscape even at maximum, so 1.0 was never actually loud.  On a mix
+        # this dense the output ceiling is what limits it, and it still lands
+        # comfortably above the soundscape rather than beneath it.
+        player = self.player(0.1)
+        player._vote_chime_volume = 1.0
+        self.assertGreater(self.chime_loudness(player), 2.5 * 0.1)
 
     def test_a_quiet_room_still_gets_an_audible_acknowledgement(self):
         # Scaling by the mix alone would acknowledge a vote with silence in a
         # sleeping or between-transitions room, so a floor holds the reference.
         player = self.player(0.0)
-        player._vote_chime_volume = 1.0
-        self.assertLevel(self.chime_peak(player), VOTE_CHIME_RMS_FLOOR)
+        player._vote_chime_volume = 1.0 / VOTE_CHIME_MAX_RATIO
+        self.assertLevel(
+            self.chime_loudness(player),
+            VOTE_CHIME_RMS_FLOOR * self.degree_share(player),
+        )
 
-    def test_a_loud_mix_cannot_push_the_chime_past_its_headroom(self):
-        # Eight of these can overlap before the clipper; the ceiling that used
-        # to be fixed still bounds what the relative level may ask for.
-        ceiling = VOTE_CHIME_PEAK / np.sqrt(2)
+    def test_one_acknowledgement_never_reaches_the_clipper_on_its_own(self):
         player = self.player(0.9)
         player._vote_chime_volume = 1.0
-        measured = self.chime_peak(player)
-        self.assertLessEqual(measured, ceiling)
-        self.assertLevel(measured, ceiling)
+        peak = float(np.max(np.abs(self.chime_only(player))))
+        self.assertLessEqual(peak, VOTE_CHIME_OUTPUT_CEILING)
+        self.assertLevel(peak, VOTE_CHIME_OUTPUT_CEILING)
 
     def test_zero_volume_silences_the_chime_but_still_consumes_it(self):
         player = self.player(0.2)
         player._vote_chime_volume = 0.0
-        self.assertEqual(self.chime_peak(player), 0.0)
+        self.assertEqual(float(np.max(np.abs(self.chime_only(player)))), 0.0)
         self.assertEqual(player._vote_chime_positions, [])
 
-    def test_a_quieter_upload_is_levelled_by_its_own_peak_not_the_ceiling(self):
-        # An upload is only ever turned down to the ceiling, never up to it, so
-        # assuming the ceiling would make a quiet one-shot quieter than asked.
-        player = self.player(0.2)
+    def test_a_quieter_upload_is_raised_to_the_same_level_as_any_other(self):
+        # An upload arrives at whatever level it was stored at.  Levelling by
+        # how loud it actually is, rather than assuming a fixed level, is what
+        # lets a quiet one-shot still meet the setting.
+        player = self.player(0.1)
         player._vote_chime_volume = 0.5
         # Windowed rather than square-edged: a hard-edged one-shot rings when
-        # the scale's other degrees are resampled, which is the levelling
-        # behaviour above rather than the ceiling this test is about.
-        t = np.arange(2048) / 2048
-        quiet_upload = (0.01 * np.sin(np.pi * t) * np.sin(2 * np.pi * 40 * t))
+        # the scale's other degrees are resampled, which is the degree
+        # levelling above rather than the behaviour this test is about.
+        # Half a second, comfortably longer than the measurement window, so
+        # the level it is installed at and the level measured off the output
+        # are describing the same thing.
+        t = np.arange(round(player.fs * 0.5)) / round(player.fs * 0.5)
+        quiet_upload = 0.001 * np.sin(np.pi * t) * np.sin(2 * np.pi * 440 * t)
         player.set_vote_chime(quiet_upload.astype(np.float32))
-        self.assertLevel(self.chime_peak(player, 4096), 0.1)
+        self.assertLevel(
+            self.chime_loudness(player, player.fs),
+            0.5 * VOTE_CHIME_MAX_RATIO * 0.1 * self.degree_share(player),
+        )
 
     def test_the_reference_averages_the_mix_instead_of_chasing_a_transient(self):
         player = self.player(0.0)

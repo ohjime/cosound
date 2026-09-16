@@ -748,11 +748,11 @@ class PlayerProgram(DjangoDB.Model):
         validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],
         verbose_name="chime volume",
         help_text=(
-            "How loud the chime is relative to the mix it interrupts, from 0 "
-            "to 1. The player scales the chime by this fraction of the running "
-            "loudness of whatever it is already playing, so the acknowledgement "
-            "keeps its prominence in a quiet room and a dense one alike. "
-            "0 silences it."
+            "How loud the chime is against the mix it interrupts, from 0 to 1. "
+            "The player matches it to the running loudness of whatever it is "
+            "already playing, so one setting sounds the same in a sparse mix "
+            "and a dense one. 0.25 is level with the soundscape, 1.0 is four "
+            "times its level and carries over everything, and 0 silences it."
         ),
     )
 

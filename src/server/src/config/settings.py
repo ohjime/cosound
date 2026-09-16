@@ -505,7 +505,9 @@ COSOUND_EXPLORATION_PROBABILITY = 0.5
 COSOUND_EXPLORATION_SIZE = 5
 
 # How loud a vote acknowledgement is, relative to the soundscape it interrupts.
-# The player multiplies this by the smoothed RMS of the mix it is already
-# producing, so the chime keeps the same prominence whether the room is playing
-# something quiet or something dense. 0 silences it.
+# The player matches the chime's loudness to this fraction of the mix's own
+# smoothed RMS, so it keeps the same prominence whether the room is playing
+# something quiet or something dense. 0.25 is level with the mix and 1.0 is four
+# times its level; the default sits deliberately above parity, because an
+# acknowledgement that merely matches the soundscape is easy to miss.
 COSOUND_CHIME_VOLUME = 0.5

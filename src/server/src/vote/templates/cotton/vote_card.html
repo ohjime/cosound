@@ -46,7 +46,7 @@
             <div class="h-30 overflow-y-auto py-2 px-4">
                 <c-vote-card-body>
                     <template x-if="isVoteSlide">
-                        <div class="relative min-h-24 italic font-serif font-extralight text-[8pt] font-stretch-95%">
+                        <div class="font-serif text-[8pt] font-extralight font-stretch-95% italic">
                             <div x-cloak x-show="!voted && secondsLeft <= 0" x-transition.opacity.duration.300ms>
                                 <p class="py-1 not-italic font-bold font-serif text-xs font-stretch-95%">[ <span
                                         x-text="voteLabel.toUpperCase()"></span> THE SOUNDSCAPE ]</p>

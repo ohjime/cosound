@@ -1,8 +1,8 @@
 <div class="join w-fit ring-4" rounded-none>
     <template x-for="(slide, index) in carouselSlides" :key="slide.key">
         <button type="button"
-                class="font-mono join-item btn btn-sm h-7 min-h-0 rounded-none border-none bg-neutral px-2.5"
-                :class="currentIndex === index ? '!text-white font-extrabold' : 'text-gray-300 font-light'"
+                class="font-mono join-item btn-sm btn btn-neutral h-7 rounded-none border-none"
+                :class="[slide.kind === 'vote' ? 'px-2.5' : 'w-7.5', currentIndex === index ? (slide.kind === 'vote' ? '!text-white text-xs font-bold tracking-wider' : '!text-white text-xl font-extrabold') : 'text-gray-300 text-xs font-light']"
                 :aria-label="slide.ariaLabel"
                 :aria-pressed="currentIndex === index"
                 @click="select(index)"

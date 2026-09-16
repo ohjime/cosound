@@ -1,4 +1,5 @@
-<div class="relative min-h-24 italic font-serif font-extralight text-[8pt] font-stretch-95%">
-    <p class="py-1 not-italic font-bold font-serif text-xs font-stretch-95%" x-show="currentLayer?.tags" x-text="'[ ' + (currentLayer?.tags || '') + ' ]'"></p>
-    <p x-text="currentLayer?.flavor || 'This sound is part of the soundscape playing around you.'"></p>
+<div class="font-serif text-[8pt] font-extralight font-stretch-95% italic">
+    <p class="py-1 font-serif text-xs font-bold not-italic font-stretch-95%" x-text="'[ ' + (currentLayer?.tags || 'untagged') + ' ]'"></p>
+    <span x-text="currentLayer?.flavor"></span>
+    <span x-show="!currentLayer?.flavor" class="opacity-40">No flavor text yet.</span>
 </div>

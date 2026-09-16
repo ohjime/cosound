@@ -81,6 +81,9 @@ def get_player(request) -> dict:
         "chime": {
             "url": request.build_absolute_uri(chime.url) if chime else "",
             "version": player.program.chime_version,
+            # Sent for the built-in tone as well as an upload: the player
+            # applies it to whichever one-shot it ends up sounding.
+            "volume": player.program.chime_volume,
         },
         "sleeping": player.sleeping,
         "activated_at": player.activated_at.isoformat() if player.activated_at else None,

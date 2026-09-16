@@ -768,6 +768,12 @@ class CosoundPlayerApp(App):
         if not isinstance(descriptor, dict):
             raise ValueError("Invalid vote chime descriptor")
 
+        # Level first, and outside everything below.  Volume is independent of
+        # which file is installed -- it applies to the built-in tone too -- and
+        # an admin who only moved this slider must not wait on, or be blocked
+        # by, a download that the unchanged version would skip anyway.
+        self._sync_vote_chime_volume(descriptor)
+
         remote_path = descriptor.get("url", "")
         version = descriptor.get("version", "")
         if remote_path == "" and version == "":
@@ -799,6 +805,15 @@ class CosoundPlayerApp(App):
         self.player.set_vote_chime(prepared)
         self._vote_chime_version = version
         prune_vote_chimes(version)
+
+    def _sync_vote_chime_volume(self, descriptor: dict) -> None:
+        """Apply the program's chime level, ignoring a snapshot that omits it."""
+        if "volume" not in descriptor:
+            return
+        volume = descriptor.get("volume")
+        if isinstance(volume, bool) or not isinstance(volume, (int, float)):
+            raise ValueError("Invalid vote chime volume")
+        self.player.set_vote_chime_volume(volume)
 
     def _show_refresh_error_if_latest(
         self, generation: int, error: Exception

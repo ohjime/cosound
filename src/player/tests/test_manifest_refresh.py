@@ -16,6 +16,7 @@ class FakePlayer:
         self.queue_threads = []
         self.dequeue_threads = []
         self.vote_chimes = []
+        self.vote_chime_volumes = []
 
     def queue_sound(self, path, gain):
         self.queued.append((path, gain))
@@ -27,6 +28,9 @@ class FakePlayer:
 
     def set_vote_chime(self, samples=None):
         self.vote_chimes.append(samples)
+
+    def set_vote_chime_volume(self, volume):
+        self.vote_chime_volumes.append(volume)
 
 
 class ManifestRefreshTests(unittest.TestCase):
@@ -473,6 +477,46 @@ class ManifestRefreshTests(unittest.TestCase):
         download.assert_not_called()
         decode.assert_not_called()
         prune.assert_called_once_with()
+
+    def test_volume_applies_without_refetching_an_unchanged_chime(self):
+        player = FakePlayer()
+        app = tui.CosoundPlayerApp("key", {}, player)
+        app._vote_chime_version = "same-version"
+        descriptor = {
+            "url": "https://media.example/chime",
+            "version": "same-version",
+            "volume": 0.25,
+        }
+
+        with (
+            patch.object(tui, "get_vote_chime") as download,
+            patch.object(tui, "load_vote_chime") as decode,
+        ):
+            app._sync_vote_chime({"chime": descriptor})
+            # The built-in tone takes the same setting, with no file involved.
+            app._vote_chime_version = None
+            app._sync_vote_chime({"chime": {"url": "", "version": "", "volume": 1.0}})
+
+        self.assertEqual(player.vote_chime_volumes, [0.25, 1.0])
+        download.assert_not_called()
+        decode.assert_not_called()
+
+    def test_omitted_volume_leaves_the_current_level_alone(self):
+        # An older server, and the /cosound fallback, say nothing about volume.
+        player = FakePlayer()
+        app = tui.CosoundPlayerApp("key", {}, player)
+        app._vote_chime_version = "same-version"
+
+        app._sync_vote_chime({"layers": []})
+        app._sync_vote_chime(
+            {"chime": {"url": "https://media/x", "version": "same-version"}}
+        )
+        self.assertEqual(player.vote_chime_volumes, [])
+
+        for volume in ("loud", None, True):
+            with self.subTest(volume=volume), self.assertRaises(ValueError):
+                app._sync_vote_chime({"chime": {"volume": volume}})
+        self.assertEqual(player.vote_chime_volumes, [])
 
     def test_legacy_or_mismatched_descriptor_preserves_last_good_chime(self):
         player = FakePlayer()

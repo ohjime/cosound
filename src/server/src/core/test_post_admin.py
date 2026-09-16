@@ -64,6 +64,7 @@ class PlayerProgramAdminTests(TestCase):
             "algorithm_disagreement_penalty": 0.25,
             "algorithm_exploration_probability": 0.5,
             "algorithm_exploration_size": 5,
+            "chime_volume": 0.5,
             "baseline": "",
             **overrides,
         }

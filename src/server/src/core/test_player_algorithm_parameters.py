@@ -61,6 +61,7 @@ class PlayerProgramAlgorithmParameterTests(TestCase):
         fields = {
             "post": self.program.post_id,
             "collection": [self.baseline_sound.pk],
+            "chime_volume": 0.5,
             "algorithm_refresh_interval_seconds": 45,
             "algorithm_active_listener_minutes": 10,
             "algorithm_sleep_after_minutes": 60,

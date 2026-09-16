@@ -503,3 +503,9 @@ COSOUND_DISAGREEMENT_PENALTY = 0.25
 # highest-ranked candidates exploration may choose among.
 COSOUND_EXPLORATION_PROBABILITY = 0.5
 COSOUND_EXPLORATION_SIZE = 5
+
+# How loud a vote acknowledgement is, relative to the soundscape it interrupts.
+# The player multiplies this by the smoothed RMS of the mix it is already
+# producing, so the chime keeps the same prominence whether the room is playing
+# something quiet or something dense. 0 silences it.
+COSOUND_CHIME_VOLUME = 0.5

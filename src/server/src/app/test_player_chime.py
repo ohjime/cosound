@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+from django.conf import settings
 from django.test import RequestFactory, TestCase, override_settings
 
 from app.api import get_manifest, get_player
@@ -39,8 +40,30 @@ class PlayerVoteChimeAPITests(TestCase):
     def test_unconfigured_player_returns_an_empty_vote_chime(self):
         self.assertEqual(
             self.snapshot()["chime"],
-            {"url": "", "version": ""},
+            {
+                "url": "",
+                "version": "",
+                # The level still travels: it governs the built-in tone the
+                # player falls back to when no file is configured.
+                "volume": settings.COSOUND_CHIME_VOLUME,
+            },
         )
+
+    def test_chime_volume_follows_the_program_without_touching_the_file(self):
+        self.player.program.chime = "chimes/levelled.wav"
+        self.player.program.chime_volume = 0.2
+        self.player.program.save(update_fields=["chime", "chime_volume"])
+        version = self.player.program.chime_version
+
+        self.assertEqual(self.snapshot()["chime"]["volume"], 0.2)
+
+        self.player.program.chime_volume = 0.85
+        self.player.program.save(update_fields=["chime_volume"])
+        chime = self.snapshot()["chime"]
+
+        self.assertEqual(chime["volume"], 0.85)
+        # A level change is not a new file: the player must not re-download.
+        self.assertEqual(chime["version"], version)
 
     def test_player_returns_its_fallback_state_poll_interval(self):
         self.player.state_refresh_interval_seconds = 17

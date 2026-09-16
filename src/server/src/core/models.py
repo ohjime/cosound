@@ -743,6 +743,18 @@ class PlayerProgram(DjangoDB.Model):
             "MP3, and AIFF."
         ),
     )
+    chime_volume = DjangoDB.FloatField(
+        default=settings.COSOUND_CHIME_VOLUME,
+        validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],
+        verbose_name="chime volume",
+        help_text=(
+            "How loud the chime is relative to the mix it interrupts, from 0 "
+            "to 1. The player scales the chime by this fraction of the running "
+            "loudness of whatever it is already playing, so the acknowledgement "
+            "keeps its prominence in a quiet room and a dense one alike. "
+            "0 silences it."
+        ),
+    )
 
     class Meta:
         ordering = ["-post__publication_date", "-post__created_at"]
@@ -805,6 +817,13 @@ class PlayerProgram(DjangoDB.Model):
                 condition=DjangoDB.Q(algorithm_exploration_size__gte=1),
                 name="playerprogram_algorithm_exploration_size",
             ),
+            DjangoDB.CheckConstraint(
+                condition=(
+                    DjangoDB.Q(chime_volume__gte=0)
+                    & DjangoDB.Q(chime_volume__lte=1)
+                ),
+                name="playerprogram_chime_volume_range",
+            ),
         ]
 
     def __str__(self):
@@ -849,6 +868,8 @@ class PlayerProgram(DjangoDB.Model):
             and not math.isfinite(self.algorithm_exploration_probability)
         ):
             errors["algorithm_exploration_probability"] = "Enter a finite number."
+        if self.chime_volume is not None and not math.isfinite(self.chime_volume):
+            errors["chime_volume"] = "Enter a finite number."
         if self.baseline_id is not None:
             submitted_ids = getattr(self, "_submitted_collection_sound_ids", None)
             if submitted_ids is not None:

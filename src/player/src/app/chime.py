@@ -12,6 +12,20 @@ VOTE_CHIME_SECONDS_LIMIT = 5.0
 # conservative ceiling leaves useful headroom before the final hard clip.
 VOTE_CHIME_PEAK = 0.145
 
+# The chime is levelled against the soundscape rather than against full scale:
+# the player aims its peak at the program's volume setting times the mix's own
+# running RMS, so one setting sounds the same over a sparse mix and a dense one.
+# Average over a couple of seconds -- long enough that a passing transient does
+# not swing the next acknowledgement, short enough to follow a mix transition.
+VOTE_CHIME_RMS_SECONDS = 2.0
+# Below this the mix stops being a useful reference: a sleeping or silent room
+# would scale every acknowledgement to nothing.  Votes still arrive then, and
+# they still have to be heard, so the reference never falls below this.
+VOTE_CHIME_RMS_FLOOR = 0.05
+# What to use until the first `/player` snapshot lands, which then replaces it
+# with the Player Program's own setting.  Matches COSOUND_CHIME_VOLUME.
+VOTE_CHIME_DEFAULT_VOLUME = 0.5
+
 # Successive acknowledgements step through a scale rather than repeating one
 # pitch, so a room that is voting hears a phrase instead of a rattle.
 #

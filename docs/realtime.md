@@ -129,7 +129,7 @@ remains serialized by the existing refresh worker.
 
 The REST response includes the player metadata, `sleeping` state, a `runtime`
 object with the fallback state-poll interval, and a `chime` descriptor with
-a download URL and stable version. Metadata
+a download URL, stable version, and volume. Metadata
 changes refresh the interface without reloading unchanged audio. Changes to
 the desired audio still require downloading, preparing, and crossfading sounds.
 `PLAYER_API_RATE` defaults to `120/m` across the player API endpoints to allow
@@ -169,6 +169,19 @@ this safe under overlap — it has no minor second and no tritone, so any
 combination of voices sounding at once stays consonant. Every degree is
 rendered up front, when the chime is installed, because the audio callback
 cannot resample; each is held to the same peak ceiling as the root.
+
+How loud the chime is comes from the Player Program's `chime_volume`, from 0 to
+1, and rides in the same descriptor. It is a level relative to the mix rather
+than an absolute one: the player aims the one-shot's peak at that fraction of
+the running RMS of the soundscape it is already producing, averaged over
+`VOTE_CHIME_RMS_SECONDS` so a transient does not swing the next
+acknowledgement. One setting therefore sounds the same over a sparse mix and a
+dense one. Two bounds hold either end — `VOTE_CHIME_RMS_FLOOR` keeps a vote
+audible in a silent or sleeping room, and `VOTE_CHIME_PEAK` still caps what the
+relative level may ask for, so eight overlapping voices keep their headroom
+before the clipper. The setting applies to the built-in bell as well as an
+upload, and changing it alone does not change the chime version, so the player
+re-levels without re-downloading anything.
 
 The chime uses the existing audio output and follows master volume and mute. It
 does not wait for the prediction cycle. Listener details are never sent.

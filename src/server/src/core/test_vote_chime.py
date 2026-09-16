@@ -13,7 +13,13 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import close_old_connections, connection, connections, transaction
+from django.db import (
+    IntegrityError,
+    close_old_connections,
+    connection,
+    connections,
+    transaction,
+)
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 
@@ -88,6 +94,7 @@ class VoteChimeModelAndAdminTests(TestCase):
         return {
             "post": post.post_id,
             "collection": [self.sound.pk],
+            "chime_volume": post.chime_volume,
             "algorithm_refresh_interval_seconds": post.algorithm_refresh_interval_seconds,
             "algorithm_active_listener_minutes": post.algorithm_active_listener_minutes,
             "algorithm_sleep_after_minutes": post.algorithm_sleep_after_minutes,
@@ -187,6 +194,38 @@ class VoteChimeModelAndAdminTests(TestCase):
         self.assertFalse(storage.exists(second_name))
         self.assertFalse(self.player.program.chime)
         self.assertEqual(self.player.program.chime_version, "")
+
+    def test_chime_volume_defaults_and_is_bounded_to_the_zero_to_one_range(self):
+        program = self.player.program
+        self.assertEqual(program.chime_volume, settings.COSOUND_CHIME_VOLUME)
+
+        for value in (-0.01, 1.01):
+            with self.subTest(value=value):
+                program.chime_volume = value
+                with self.assertRaises(ValidationError) as raised:
+                    program.full_clean()
+                self.assertIn("chime_volume", raised.exception.message_dict)
+
+        for value in (float("nan"), float("inf")):
+            with self.subTest(value=value):
+                program.chime_volume = value
+                with self.assertRaises(ValidationError) as raised:
+                    program.full_clean()
+                self.assertIn("chime_volume", raised.exception.message_dict)
+
+        program.chime_volume = 0.0
+        program.full_clean()
+        program.save(update_fields=["chime_volume"])
+        program.refresh_from_db()
+        self.assertEqual(program.chime_volume, 0.0)
+
+    def test_database_constraint_rejects_a_volume_outside_the_range(self):
+        for value in (-0.5, 2.0):
+            with self.subTest(value=value), self.assertRaises(IntegrityError):
+                with transaction.atomic():
+                    PlayerProgram.objects.filter(pk=self.player.program_id).update(
+                        chime_volume=value
+                    )
 
     def test_invalid_oversized_overlong_and_silent_chimes_are_rejected(self):
         invalid_uploads = {
@@ -374,6 +413,7 @@ class VoteChimeUploadRouteTests(TestCase):
                 "algorithm_disagreement_penalty": program.algorithm_disagreement_penalty,
                 "algorithm_exploration_probability": program.algorithm_exploration_probability,
                 "algorithm_exploration_size": program.algorithm_exploration_size,
+                "chime_volume": program.chime_volume,
                 "baseline": "",
                 "form_id": form_id,
                 # What the uploader leaves behind in place of the bytes.

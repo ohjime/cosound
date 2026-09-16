@@ -228,6 +228,7 @@ class PlayerProgramAdmin(FileFormAdminMixin, PostLinkAdmin):
                     "edit_post",
                     "collection",
                     "chime",
+                    "chime_volume",
                 ],
             },
         ),

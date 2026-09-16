@@ -115,6 +115,7 @@ class PlayerProgramForm(FileFormMixin, forms.ModelForm):
             "post",
             "collection",
             "chime",
+            "chime_volume",
             "algorithm_refresh_interval_seconds",
             "algorithm_active_listener_minutes",
             "algorithm_sleep_after_minutes",

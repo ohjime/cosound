@@ -13,6 +13,8 @@ import soundfile as sf
 from app import client
 from app.chime import (
     VOTE_CHIME_PEAK,
+    VOTE_CHIME_RMS_FLOOR,
+    VOTE_CHIME_RMS_SECONDS,
     VOTE_CHIME_ROOT_HZ,
     VOTE_CHIME_SCALE,
     load_vote_chime,
@@ -55,6 +57,11 @@ class ChimeAudioTests(unittest.TestCase):
         player._vote_chime = player._default_vote_chime
         player._vote_chime_positions = []
         player._vote_chime_degree = -1
+        player._vote_chime_peak = max(
+            float(np.max(np.abs(voice))) for voice in player._vote_chime
+        )
+        player._vote_chime_volume = 0.5
+        player._mix_rms = 0.0
         player.renderer = Mock()
         player.renderer.render.side_effect = lambda sources, frames: (np.zeros((frames, 2), np.float32), np.zeros((frames, 2), np.float32))
         player.reverb = Mock()
@@ -110,6 +117,117 @@ class ChimeAudioTests(unittest.TestCase):
         player.set_vote_chime()
         self.assertIs(player._vote_chime, fallback)
         self.assertEqual(player._vote_chime_positions, [])
+
+
+class ChimeLevelTests(unittest.TestCase):
+    """The one-shot is levelled against the mix it interrupts, not full scale."""
+
+    def player(self, mix_level=0.0):
+        player = ChimeAudioTests.player(self)
+        # A steady dry signal stands in for the soundscape, so the measured RMS
+        # is exactly `mix_level` and the chime has a known thing to sit against.
+        player.renderer.render.side_effect = lambda sources, frames: (
+            np.full((frames, 2), mix_level, np.float32),
+            np.zeros((frames, 2), np.float32),
+        )
+        player.master_gain = 1.0
+        player._mix_rms = mix_level
+        return player
+
+    def chime_peak(self, player, frames=24000):
+        """Peak of the acknowledgement alone, as one channel receives it.
+
+        Rendering the same block with and without a vote isolates the chime:
+        nothing else in this callback carries state between the two.
+        """
+        quiet = np.empty((frames, 2), np.float32)
+        player._audio_callback(quiet, frames, None, None)
+        player.play_vote_chime()
+        loud = np.empty((frames, 2), np.float32)
+        player._audio_callback(loud, frames, None, None)
+        return float(np.max(np.abs(loud - quiet)))
+
+    def assertLevel(self, measured, target):
+        """Assert a measured peak lands on its target, within a per cent.
+
+        The degrees of the scale do not all peak alike, and the whole scale is
+        levelled by its loudest so their relative balance survives.  A degree
+        that peaks a shade under that one therefore sounds a shade under the
+        target, which is the intended behaviour rather than an error to chase.
+        """
+        self.assertAlmostEqual(measured, target, delta=0.01 * target)
+
+    def test_peak_follows_the_volume_setting_against_the_mix_it_interrupts(self):
+        for mix_level in (0.1, 0.2):
+            for volume in (0.2, 0.5):
+                with self.subTest(mix_level=mix_level, volume=volume):
+                    player = self.player(mix_level)
+                    player._vote_chime_volume = volume
+                    self.assertLevel(self.chime_peak(player), volume * mix_level)
+
+    def test_a_quiet_room_still_gets_an_audible_acknowledgement(self):
+        # Scaling by the mix alone would acknowledge a vote with silence in a
+        # sleeping or between-transitions room, so a floor holds the reference.
+        player = self.player(0.0)
+        player._vote_chime_volume = 1.0
+        self.assertLevel(self.chime_peak(player), VOTE_CHIME_RMS_FLOOR)
+
+    def test_a_loud_mix_cannot_push_the_chime_past_its_headroom(self):
+        # Eight of these can overlap before the clipper; the ceiling that used
+        # to be fixed still bounds what the relative level may ask for.
+        ceiling = VOTE_CHIME_PEAK / np.sqrt(2)
+        player = self.player(0.9)
+        player._vote_chime_volume = 1.0
+        measured = self.chime_peak(player)
+        self.assertLessEqual(measured, ceiling)
+        self.assertLevel(measured, ceiling)
+
+    def test_zero_volume_silences_the_chime_but_still_consumes_it(self):
+        player = self.player(0.2)
+        player._vote_chime_volume = 0.0
+        self.assertEqual(self.chime_peak(player), 0.0)
+        self.assertEqual(player._vote_chime_positions, [])
+
+    def test_a_quieter_upload_is_levelled_by_its_own_peak_not_the_ceiling(self):
+        # An upload is only ever turned down to the ceiling, never up to it, so
+        # assuming the ceiling would make a quiet one-shot quieter than asked.
+        player = self.player(0.2)
+        player._vote_chime_volume = 0.5
+        # Windowed rather than square-edged: a hard-edged one-shot rings when
+        # the scale's other degrees are resampled, which is the levelling
+        # behaviour above rather than the ceiling this test is about.
+        t = np.arange(2048) / 2048
+        quiet_upload = (0.01 * np.sin(np.pi * t) * np.sin(2 * np.pi * 40 * t))
+        player.set_vote_chime(quiet_upload.astype(np.float32))
+        self.assertLevel(self.chime_peak(player, 4096), 0.1)
+
+    def test_the_reference_averages_the_mix_instead_of_chasing_a_transient(self):
+        player = self.player(0.0)
+        player._vote_chime_volume = 1.0
+        frames = round(player.fs * VOTE_CHIME_RMS_SECONDS)
+        loud = np.empty((frames, 2), np.float32)
+
+        # One loud block moves the reference part of the way, not all of it...
+        player.renderer.render.side_effect = lambda sources, frames: (
+            np.full((frames, 2), 0.4, np.float32),
+            np.zeros((frames, 2), np.float32),
+        )
+        player._audio_callback(loud, frames, None, None)
+        self.assertLess(player._mix_rms, 0.4)
+        self.assertGreater(player._mix_rms, VOTE_CHIME_RMS_FLOOR)
+
+        # ...and a mix that stays loud is eventually followed in full.
+        for _ in range(8):
+            player._audio_callback(loud, frames, None, None)
+        self.assertAlmostEqual(player._mix_rms, 0.4, places=3)
+
+    def test_volume_is_clamped_to_the_documented_range_and_rejects_nonsense(self):
+        player = self.player()
+        for requested, expected in ((-1.0, 0.0), (0.25, 0.25), (4.0, 1.0)):
+            player.set_vote_chime_volume(requested)
+            self.assertEqual(player._vote_chime_volume, expected)
+        with self.assertRaises(ValueError):
+            player.set_vote_chime_volume(float("nan"))
 
 
 class ChimeScaleTests(unittest.TestCase):

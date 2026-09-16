@@ -66,7 +66,7 @@ export function voteDisplay(initialLayers = [], initialSleeping = false) {
         get votePastLabel() { return this.isUpvote ? "Upvoted" : "Downvoted"; },
         get isFirst() { return this.currentIndex === 0; },
         get isLast() { return this.currentIndex >= this.carouselSlides.length - 1; },
-        get gainPercent() { return Math.round((this.currentLayer?.sound_gain ?? 0) * 100); },
+        get gainPercent() { return Math.round(Math.max(0, Math.min(1, Number(this.currentLayer?.sound_gain) || 0)) * 100); },
 
         startTimer() {
             if (this.timer) clearInterval(this.timer);

@@ -10,7 +10,7 @@
 
                 <template x-if="slide.kind === 'layer'">
                     <div class="relative h-full w-full">
-                        <template x-if="slide.artwork_url"><c-core-image bind_src="slide.artwork_url" bind_alt="slide.sound_title" class="w-full" /></template>
+                        <template x-if="slide.artwork_url"><c-core-image bind_src="slide.artwork_url" bind_alt="slide.sound_title" class="h-full w-full" /></template>
                         <div x-show="!slide.artwork_url" class="h-full w-full bg-gradient-to-br from-emerald-950 via-emerald-800 to-lime-950" aria-hidden="true"></div>
                         <div class="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-black/80 to-transparent z-10"></div>
                         <div class="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/60 to-transparent z-10"></div>

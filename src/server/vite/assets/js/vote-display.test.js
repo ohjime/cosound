@@ -22,6 +22,19 @@ test("a sound-only carousel starts at layer one and preserves the venue's gains"
     assert.deepEqual(display.layers.map((layer) => layer.sound_gain), original);
 });
 
+test("volume readout stays within 0–100 and rounds to whole percentages", () => {
+    const display = voteDisplay([
+        { sound_id: 1, sound_gain: 0 },
+        { sound_id: 2, sound_gain: 0.075 },
+        { sound_id: 3, sound_gain: 0.75 },
+        { sound_id: 4, sound_gain: 1 },
+    ]);
+    assert.deepEqual(display.carouselSlides.map((_, index) => {
+        display.select(index);
+        return display.gainPercent;
+    }), [0, 8, 75, 100]);
+});
+
 test("swiping the artwork changes the selected layer", () => {
     const display = voteDisplay(layers);
     const carousel = {

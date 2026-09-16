@@ -1,8 +1,11 @@
 <div class="flex items-center gap-3 px-5.5 py-4">
-    <button type="button" disabled aria-disabled="true" aria-label="Mute this layer" class="btn btn-xs btn-circle border-none bg-neutral-content text-white disabled:cursor-not-allowed">
-        <svg class="fill-current size-[1.7em]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M3,9H7L12,4V20L7,15H3V9M16.59,12L14,9.41L15.41,8L18,10.59L20.59,8L22,9.41L19.41,12L22,14.59L20.59,16L18,13.41L15.41,16L14,14.59L16.59,12Z" /></svg>
-    </button>
-    <input type="range" min="0" max="100" :value="gainPercent" disabled aria-disabled="true" tabindex="-1" aria-label="Current layer volume" class="range range-xs range-warning pointer-events-none opacity-40" />
+    <output class="grid size-8 shrink-0 place-items-center rounded-full bg-neutral-content font-mono text-xs font-semibold tabular-nums text-white" aria-label="Current layer volume percentage" x-text="gainPercent"></output>
+    <div class="min-w-0 flex-1 px-3 pb-5 pt-3" role="meter" aria-label="Current layer volume" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="gainPercent">
+        <div class="relative h-2 w-full rounded-full bg-neutral-content/50">
+            <div class="h-full rounded-full bg-amber-500/60" :style="`width: ${gainPercent}%`"></div>
+            <svg class="pointer-events-none absolute top-3 size-4 -translate-x-1/2 fill-neutral-500" :style="`left: ${gainPercent}%`" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 22 20H2Z" /></svg>
+        </div>
+    </div>
     <button type="button" disabled aria-disabled="true" aria-label="Isolate this layer" class="btn btn-xs btn-circle shrink-0 border-none bg-neutral-content text-white disabled:cursor-not-allowed">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" class="size-[1.5em] fill-current"><path d="M160-200v-280q0-66 25-124.5t68.5-102Q297-750 355.5-775T480-800q66 0 124.5 25t102 68.5Q750-663 775-604.5T800-480v280H640v-240h80v-40q0-100-70-170t-170-70q-100 0-170 70t-70 170v40h80v240H160Z" /></svg>
     </button>

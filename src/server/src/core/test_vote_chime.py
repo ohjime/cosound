@@ -1,16 +1,23 @@
 import io
+import json
 import struct
+import tempfile
 import threading
 import wave
+from base64 import b64encode
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import close_old_connections, connection, connections, transaction
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
+
+from django_file_form.models import TemporaryUploadedFile
 
 from core.models import PlayerProgram, Manager, Player, Post, Sound
 
@@ -270,6 +277,127 @@ class VoteChimeModelAndAdminTests(TestCase):
 
         stale.refresh_from_db()
         self.assertEqual(stale.chime.name, "chimes/concurrent.wav")
+
+
+@override_settings(STORAGES=TEST_STORAGES, MEDIA_URL="/media/")
+class VoteChimeUploadRouteTests(TestCase):
+    """Cover the route the browser actually takes to deliver a chime.
+
+    The admin form posts a placeholder, not the bytes: django-file-form uploads
+    the file first and swaps the real file in while the form binds. Every other
+    chime test hands Django a SimpleUploadedFile directly, which skips that
+    whole exchange -- so it kept passing while production could not upload a
+    chime at all.
+    """
+
+    def setUp(self):
+        # Stage uploads outside the checkout. settings.py creates this directory
+        # for the configured MEDIA_ROOT; redirecting MEDIA_ROOT moves it.
+        staging = tempfile.TemporaryDirectory()
+        self.addCleanup(staging.cleanup)
+        Path(staging.name, settings.FILE_FORM_UPLOAD_DIR).mkdir(parents=True)
+        media_root = override_settings(MEDIA_ROOT=staging.name)
+        media_root.enable()
+        self.addCleanup(media_root.disable)
+
+        self.admin = get_user_model().objects.create_superuser(
+            username="chime-upload-admin",
+            email="chime-upload-admin@example.com",
+            password="pw",
+        )
+        manager = Manager.objects.create(user=self.admin, name="Upload manager")
+        self.player = Player.objects.create(manager=manager, name="Upload player")
+        self.client.force_login(self.admin)
+
+    def tus_upload(self, contents, *, filename="tap.wav", form_id, field="chime"):
+        """Drive the real TUS exchange: start, then send the bytes."""
+        metadata = ",".join(
+            f"{key} {b64encode(value.encode()).decode()}"
+            for key, value in (
+                ("filename", filename),
+                ("fieldName", field),
+                ("formId", form_id),
+            )
+        )
+        started = self.client.post(
+            reverse("tus_upload"),
+            headers={
+                "tus-resumable": "1.0.0",
+                "upload-length": str(len(contents)),
+                "upload-metadata": metadata,
+            },
+        )
+        self.assertEqual(started.status_code, 201)
+        resource_id = started.headers["ResourceId"]
+
+        sent = self.client.patch(
+            reverse("tus_upload_chunks", args=[resource_id]),
+            data=contents,
+            content_type="application/offset+octet-stream",
+            headers={"tus-resumable": "1.0.0", "upload-offset": "0"},
+        )
+        self.assertEqual(sent.status_code, 204)
+        return resource_id
+
+    def test_the_chime_field_uploads_to_this_origin_not_straight_to_s3(self):
+        # A direct-to-S3 upload needs the bucket to grant CORS to the admin's
+        # origin. It did not, so the browser's PUT was blocked and the upload
+        # died after signing the first part -- the form itself never saw a file.
+        response = self.client.get(
+            reverse("admin:core_playerprogram_change", args=[self.player.program_id])
+        )
+
+        self.assertContains(response, f'value="{reverse("tus_upload")}"')
+        self.assertNotContains(response, 'name="s3_upload_dir"')
+        self.assertNotContains(response, reverse("s3_upload"))
+
+    def test_a_chime_uploaded_the_way_the_browser_sends_it_is_stored(self):
+        program = self.player.program
+        contents = VoteChimeModelAndAdminTests.wav_bytes()
+        form_id = "6cbda592-fa89-4cf7-93e2-c70cc4ed1252"
+        resource_id = self.tus_upload(contents, form_id=form_id)
+
+        response = self.client.post(
+            reverse("admin:core_playerprogram_change", args=[program.pk]),
+            {
+                "post": program.post_id,
+                "collection": [],
+                "algorithm_refresh_interval_seconds": program.algorithm_refresh_interval_seconds,
+                "algorithm_active_listener_minutes": program.algorithm_active_listener_minutes,
+                "algorithm_sleep_after_minutes": program.algorithm_sleep_after_minutes,
+                "algorithm_min_layers": program.algorithm_min_layers,
+                "algorithm_max_layers": program.algorithm_max_layers,
+                "algorithm_minimum_hold_seconds": program.algorithm_minimum_hold_seconds,
+                "algorithm_maximum_stay_seconds": (
+                    program.algorithm_maximum_stay_seconds or ""
+                ),
+                "algorithm_disagreement_penalty": program.algorithm_disagreement_penalty,
+                "algorithm_exploration_probability": program.algorithm_exploration_probability,
+                "algorithm_exploration_size": program.algorithm_exploration_size,
+                "baseline": "",
+                "form_id": form_id,
+                # What the uploader leaves behind in place of the bytes.
+                "chime-uploads": json.dumps(
+                    [
+                        {
+                            "id": resource_id,
+                            "name": "tap.wav",
+                            "size": len(contents),
+                            "type": "placeholder",
+                        }
+                    ]
+                ),
+                "chime-metadata": "{}",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        program.refresh_from_db()
+        self.assertRegex(program.chime.name, r"^chimes/[0-9a-f]{32}\.wav$")
+        with program.chime.open("rb") as saved:
+            self.assertEqual(saved.read(), contents)
+        # The staged copy is handed off, not left behind.
+        self.assertFalse(TemporaryUploadedFile.objects.filter(form_id=form_id).exists())
 
 
 @override_settings(STORAGES=TEST_STORAGES, MEDIA_URL="/media/")

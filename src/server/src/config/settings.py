@@ -292,6 +292,15 @@ if not DEBUG:
 # S3 direct uploads are enabled by passing s3_upload_dir to the form constructor
 # The AWS_* settings are already configured above for django-storages
 FILE_FORM_UPLOAD_DIR = "file-form-uploads"
+# Where FILE_FORM_UPLOAD_DIR is staged for same-origin (TUS) uploads, which the
+# vote chime uses. django-file-form resolves that directory against MEDIA_ROOT;
+# Django's default of "" would place it relative to each process's working
+# directory, which differs between gunicorn (--chdir src) and the management
+# commands that prune it. Pin it so every process agrees on one path.
+MEDIA_ROOT = BASE_DIR / "media"
+# TUS writes its first chunk straight to this directory and 500s if it is
+# missing -- unlike FileSystemStorage elsewhere, it does not create the parents.
+(MEDIA_ROOT / FILE_FORM_UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
 # Protect authenticated TUS uploads. S3 multipart routes are separately wrapped
 # with staff-only access in config.file_upload_urls.
 FILE_FORM_MUST_LOGIN = True

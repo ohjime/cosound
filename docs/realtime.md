@@ -158,6 +158,18 @@ file is configured, the player uses its original locally synthesized 450 ms
 bell. A failed download or invalid file preserves the last working sound and is
 retried on a later refresh.
 
+Consecutive chimes never sound the same pitch. The player steps through a major
+pentatonic scale — `VOTE_CHIME_SCALE` in `app/chime.py`, one octave as
+semitones above A5 — advancing one degree per vote and wrapping at the octave,
+so a busy room hears a phrase rather than a repeated note. The scale is baked
+into the player, not configured per post: the built-in bell is synthesized
+directly at each degree, and an uploaded one-shot is repitched onto the same
+degrees by resampling, which shortens it as it rises. Pentatonic is what makes
+this safe under overlap — it has no minor second and no tritone, so any
+combination of voices sounding at once stays consonant. Every degree is
+rendered up front, when the chime is installed, because the audio callback
+cannot resample; each is held to the same peak ceiling as the root.
+
 The chime uses the existing audio output and follows master volume and mute. It
 does not wait for the prediction cycle. Listener details are never sent.
 Rejected votes, rolled-back transactions, edits to existing votes, and wake-up

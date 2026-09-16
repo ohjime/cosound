@@ -159,25 +159,30 @@ class PlayerProgramAdminTests(TestCase):
         self.assertTrue(PlayerProgram.objects.filter(pk=original_id).exists())
 
     def test_upload_forms_render_and_post_to_this_host_on_the_admin_subdomain(self):
-        # django-file-form reverses s3_upload while building the form, against
-        # the per-request urlconf. When admin.cosound.ca served a urlconf
-        # without the upload routes, every page with a file field raised
+        # django-file-form reverses its upload route while building the form,
+        # against the per-request urlconf. When admin.cosound.ca served a
+        # urlconf without those routes, every page with a file field raised
         # NoReverseMatch, and the upload had nowhere to post even if it had not.
+        # Sounds go straight to S3; the chime posts back here instead.
         with self.settings(ROOT_URLCONF="config.urls_admin"):
-            pages = [
-                reverse("admin:core_playerprogram_change", args=[self.player.program_id]),
-                reverse("admin:core_playerprogram_add"),
-                reverse("admin:core_sound_change", args=[self.sound.pk]),
-                reverse("admin:core_sound_add"),
-            ]
-            for page in pages:
+            pages = {
+                reverse("admin:core_playerprogram_change", args=[self.player.program_id]): "tus_upload",
+                reverse("admin:core_playerprogram_add"): "tus_upload",
+                reverse("admin:core_sound_change", args=[self.sound.pk]): "s3_upload",
+                reverse("admin:core_sound_add"): "s3_upload",
+            }
+            for page, route in pages.items():
                 with self.subTest(page=page):
                     response = self.client.get(page)
                     self.assertEqual(response.status_code, 200)
-                    self.assertContains(response, reverse("s3_upload"))
+                    self.assertContains(response, f'value="{reverse(route)}"')
 
             self.assertEqual(resolve(reverse("s3_upload")).func.__name__, "create_upload")
             self.assertEqual(resolve(reverse("tus_upload")).func.__name__, "start_upload")
+            self.assertEqual(
+                resolve(reverse("tus_upload_chunks", args=["resource"])).func.__name__,
+                "handle_upload",
+            )
 
 
 class SharedDiscussionContextTests(TestCase):

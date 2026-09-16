@@ -12,16 +12,82 @@ VOTE_CHIME_SECONDS_LIMIT = 5.0
 # conservative ceiling leaves useful headroom before the final hard clip.
 VOTE_CHIME_PEAK = 0.145
 
+# Successive acknowledgements step through a scale rather than repeating one
+# pitch, so a room that is voting hears a phrase instead of a rattle.
+#
+# Major pentatonic, as semitones above the root.  The set matters because vote
+# chimes overlap: the callback mixes up to eight one-shots at once, and this
+# scale contains no minor second and no tritone, so *any* combination of its
+# degrees sounding together is consonant.  A scale with adjacent semitones --
+# major, minor, chromatic -- would beat and clash exactly when the room is
+# busiest.  It spans a full octave so the cycle resolves where it started.
+VOTE_CHIME_SCALE = (0, 2, 4, 7, 9, 12)
+# A5: the pitch the built-in tone was already tuned to, kept as the root so the
+# familiar chime is still degree zero.
+VOTE_CHIME_ROOT_HZ = 880.0
+# The built-in tone's second partial, a perfect fifth up.  Held as a ratio so
+# transposing moves the whole timbre instead of detuning it.
+VOTE_CHIME_PARTIAL = 1.5
 
-def vote_chime(sample_rate):
+
+def _pitch_ratio(semitones):
+    """Frequency multiplier for an equal-tempered interval."""
+    return 2.0 ** (semitones / 12.0)
+
+
+def vote_chime(sample_rate, semitones=0):
+    """Synthesise the built-in tone at one degree of the scale."""
+    root = VOTE_CHIME_ROOT_HZ * _pitch_ratio(semitones)
     t = np.arange(round(sample_rate * 0.45), dtype=np.float64) / sample_rate
     attack = np.minimum(t / 0.006, 1.0)
     release = np.minimum((0.45 - t) / 0.04, 1.0)
     tone = (
-        np.sin(2 * np.pi * 880 * t) * np.exp(-9 * t)
-        + 0.35 * np.sin(2 * np.pi * 1320 * t) * np.exp(-13 * t)
+        np.sin(2 * np.pi * root * t) * np.exp(-9 * t)
+        + 0.35 * np.sin(2 * np.pi * root * VOTE_CHIME_PARTIAL * t) * np.exp(-13 * t)
     )
     return (0.12 * tone * attack * release).astype(np.float32)
+
+
+def transpose_chime(samples, semitones, sample_rate):
+    """Repitch a prepared one-shot up the scale, the way a sampler would.
+
+    An upload is a fixed recording, so its degrees have to come from replaying
+    it faster.  Resampling to ``sample_rate / ratio`` and then handing the
+    result to a stream running at ``sample_rate`` is exactly that, and it lets
+    the resampler band-limit the result instead of aliasing.  Every degree of
+    the scale is at or above the root, so this only ever shortens a chime --
+    the upload's five-second ceiling still holds.
+    """
+    mono = np.asarray(samples, dtype=np.float32)
+    if semitones == 0:
+        # Copy rather than alias: the caller keeps its array, and the audio
+        # thread reads this one without a lock on the source.
+        return np.array(mono, dtype=np.float32, order="C", copy=True)
+    target = round(sample_rate / _pitch_ratio(semitones))
+    shifted = _resample(mono[:, np.newaxis], sample_rate, target)[:, 0]
+    # Band-limiting a transient rings above the source peak -- measured at up to
+    # a quarter over on a square-edged one-shot.  Re-apply the ceiling so every
+    # degree keeps the headroom the root was given, eight-deep at the clipper.
+    peak = float(np.max(np.abs(shifted))) if shifted.size else 0.0
+    if peak > VOTE_CHIME_PEAK:
+        shifted = shifted * (VOTE_CHIME_PEAK / peak)
+    return np.ascontiguousarray(shifted, dtype=np.float32)
+
+
+def vote_chime_scale(sample_rate, samples=None):
+    """Render every degree of the scale, or the built-in tone's degrees.
+
+    The whole scale is built up front because the audio callback cannot afford
+    to synthesise or resample: it picks an already-finished buffer and mixes it.
+    """
+    if samples is None:
+        return tuple(
+            vote_chime(sample_rate, semitones) for semitones in VOTE_CHIME_SCALE
+        )
+    return tuple(
+        transpose_chime(samples, semitones, sample_rate)
+        for semitones in VOTE_CHIME_SCALE
+    )
 
 
 def load_vote_chime(path: str, sample_rate: int) -> np.ndarray:

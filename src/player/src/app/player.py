@@ -9,7 +9,7 @@ from app.layout import infer_layout, default_source_azimuths
 from app.spatial import make_renderer
 from app.reverb import FDNReverb
 from app.conditioning import _resample as resample_audio
-from app.chime import vote_chime
+from app.chime import vote_chime_scale
 
 
 class CommunalPlayer(ABC):
@@ -81,9 +81,12 @@ class SoundDevicePlayer(CommunalPlayer):
         self.muted = False
         self.levels = {}
         self.last_status = None
-        self._default_vote_chime = vote_chime(self.fs)
+        # One finished buffer per degree of the scale in app.chime, plus a
+        # cursor into whichever degree each in-flight acknowledgement is using.
+        self._default_vote_chime = vote_chime_scale(self.fs)
         self._vote_chime = self._default_vote_chime
         self._vote_chime_positions = []
+        self._vote_chime_degree = -1
 
         # Source positions for layered tracks (AAS used an even 45° spread).
         self._positions = default_source_azimuths(8)
@@ -109,23 +112,32 @@ class SoundDevicePlayer(CommunalPlayer):
     def play_vote_chime(self):
         """Start a one-shot on the existing output, independently of mix changes."""
         with self.lock:
+            # Step to the next degree so no acknowledgement repeats the pitch of
+            # the one before it; the scale itself keeps the sequence musical.
+            self._vote_chime_degree = (self._vote_chime_degree + 1) % len(
+                self._vote_chime
+            )
             # Bound burst cost while allowing new taps to sound immediately.
-            self._vote_chime_positions = self._vote_chime_positions[-7:] + [0]
+            self._vote_chime_positions = self._vote_chime_positions[-7:] + [
+                (self._vote_chime_degree, 0)
+            ]
 
     def set_vote_chime(self, samples=None):
         """Atomically install a prepared one-shot, or reset to the built-in tone."""
-        prepared = self._default_vote_chime if samples is None else np.asarray(samples)
-        if prepared.ndim != 1 or prepared.size == 0:
-            raise ValueError("Vote chime must be a non-empty mono buffer")
-        if not np.isfinite(prepared).all():
-            raise ValueError("Vote chime contains non-finite samples")
-        if samples is not None:
-            # Own the installed buffer so a caller cannot mutate data while the
-            # real-time callback is reading it.
-            prepared = np.array(prepared, dtype=np.float32, order="C", copy=True)
+        if samples is None:
+            prepared = self._default_vote_chime
+        else:
+            base = np.asarray(samples)
+            if base.ndim != 1 or base.size == 0:
+                raise ValueError("Vote chime must be a non-empty mono buffer")
+            if not np.isfinite(base).all():
+                raise ValueError("Vote chime contains non-finite samples")
+            # Repitch the whole scale here, off the audio thread.  This also
+            # copies, so a caller cannot mutate data the callback is reading.
+            prepared = vote_chime_scale(self.fs, base)
         with self.lock:
             self._vote_chime = prepared
-            # A playback cursor into the old buffer may be beyond the end of a
+            # A playback cursor into the old buffers may be beyond the end of a
             # shorter replacement.  Dropping an in-flight acknowledgement makes
             # the swap safe; the next vote starts the new sound immediately.
             self._vote_chime_positions = []
@@ -217,11 +229,12 @@ class SoundDevicePlayer(CommunalPlayer):
         with self.lock:
             chime = np.zeros(frames, dtype=np.float32)
             remaining = []
-            for position in self._vote_chime_positions:
-                count = min(frames, len(self._vote_chime) - position)
-                chime[:count] += self._vote_chime[position:position + count]
-                if position + count < len(self._vote_chime):
-                    remaining.append(position + count)
+            for degree, position in self._vote_chime_positions:
+                voice = self._vote_chime[degree]
+                count = min(frames, len(voice) - position)
+                chime[:count] += voice[position:position + count]
+                if position + count < len(voice):
+                    remaining.append((degree, position + count))
             self._vote_chime_positions = remaining
             for path in list(self.active_tracks.keys()):
                 track = self.active_tracks[path]

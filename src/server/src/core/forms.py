@@ -129,7 +129,15 @@ class PlayerProgramForm(FileFormMixin, forms.ModelForm):
         ]
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, s3_upload_dir="chimes", **kwargs)
+        # Deliberately no s3_upload_dir: the chime uploads through the
+        # same-origin TUS endpoint rather than straight to S3 from the browser.
+        # A direct upload needs the bucket to grant CORS to this admin's origin,
+        # and it buys nothing here — the chime is capped at 5 MB and has to
+        # reach Python anyway for validate_chime, so the direct route only
+        # downloaded the object straight back out of S3 to inspect it. Django
+        # now validates the staged file and writes the accepted bytes to their
+        # permanent chimes/ key through the default storage.
+        super().__init__(*args, **kwargs)
 
     def clean(self):
         cleaned_data = super().clean()

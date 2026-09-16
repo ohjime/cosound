@@ -61,5 +61,7 @@ src/server/vite/static/
 **/.env*.bak
 .claude/settings.json
 src/player/conditioned/
+# Staging area for same-origin (TUS) uploads; created by settings.py
+src/server/media/
 .old.zip
 src.alt/

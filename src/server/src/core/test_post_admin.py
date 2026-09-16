@@ -3,7 +3,7 @@ from urllib.parse import parse_qs, urlsplit
 from django.contrib.auth import get_user_model
 from django.templatetags.static import static
 from django.test import TestCase
-from django.urls import reverse
+from django.urls import resolve, reverse
 
 from core.discussion import build_discussion_context
 from core.models import Comment, PlayerProgram, Manager, Player, Sound, Post
@@ -157,6 +157,27 @@ class PlayerProgramAdminTests(TestCase):
         self.player.refresh_from_db()
         self.assertEqual(self.player.program, replacement)
         self.assertTrue(PlayerProgram.objects.filter(pk=original_id).exists())
+
+    def test_upload_forms_render_and_post_to_this_host_on_the_admin_subdomain(self):
+        # django-file-form reverses s3_upload while building the form, against
+        # the per-request urlconf. When admin.cosound.ca served a urlconf
+        # without the upload routes, every page with a file field raised
+        # NoReverseMatch, and the upload had nowhere to post even if it had not.
+        with self.settings(ROOT_URLCONF="config.urls_admin"):
+            pages = [
+                reverse("admin:core_playerprogram_change", args=[self.player.program_id]),
+                reverse("admin:core_playerprogram_add"),
+                reverse("admin:core_sound_change", args=[self.sound.pk]),
+                reverse("admin:core_sound_add"),
+            ]
+            for page in pages:
+                with self.subTest(page=page):
+                    response = self.client.get(page)
+                    self.assertEqual(response.status_code, 200)
+                    self.assertContains(response, reverse("s3_upload"))
+
+            self.assertEqual(resolve(reverse("s3_upload")).func.__name__, "create_upload")
+            self.assertEqual(resolve(reverse("tus_upload")).func.__name__, "start_upload")
 
 
 class SharedDiscussionContextTests(TestCase):

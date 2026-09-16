@@ -5,7 +5,6 @@ export function voteDisplay(initialLayers = [], initialSleeping = false) {
         currentIndex: 0,
         title: "",
         choice: "",
-        hasVoteAction: false,
         playerSleeping: Boolean(initialSleeping),
         activationMode: Boolean(initialSleeping),
         renderedActivationCard: Boolean(initialSleeping),
@@ -28,7 +27,6 @@ export function voteDisplay(initialLayers = [], initialSleeping = false) {
             }
             this.title = this.$el?.dataset.postTitle || "";
             this.choice = this.$el?.dataset.voteChoice || "";
-            this.hasVoteAction = this.$el?.dataset.hasVoteAction === "true";
             this.playerSleeping = this.$el?.dataset.playerSleeping === "true";
             this.activationMode = this.playerSleeping;
             this.renderedActivationCard = this.activationMode;
@@ -49,17 +47,10 @@ export function voteDisplay(initialLayers = [], initialSleeping = false) {
                 indicatorLabel: String(index + 1),
                 ariaLabel: `Show sound layer ${index + 1}`,
             }));
-            if (!this.hasVoteAction) return soundSlides;
-            return [{
-                kind: "vote",
-                key: "vote",
-                indicatorLabel: "VOTE",
-                ariaLabel: "Show voting",
-            }, ...soundSlides];
+            return soundSlides;
         },
         get currentSlide() { return this.carouselSlides[this.currentIndex] ?? null; },
         get currentLayer() { return this.currentSlide?.kind === "layer" ? this.currentSlide : null; },
-        get isVoteSlide() { return this.currentSlide?.kind === "vote"; },
         get isEmpty() { return this.layers.length === 0; },
         get isUpvote() { return this.choice === "1"; },
         get voteLabel() { return this.activationMode ? "ACTIVATE" : "VOTE"; },
@@ -68,7 +59,6 @@ export function voteDisplay(initialLayers = [], initialSleeping = false) {
         get isLast() { return this.currentIndex >= this.carouselSlides.length - 1; },
         get gainPercent() { return Math.round(Math.max(0, Math.min(1, Number(this.currentLayer?.sound_gain) || 0)) * 100); },
         layerIndicatorOpacity(slide) {
-            if (slide.kind !== "layer") return 1;
             const gain = Math.max(0, Math.min(1, Number(slide.sound_gain) || 0));
             return 0.5 + gain * 0.5;
         },

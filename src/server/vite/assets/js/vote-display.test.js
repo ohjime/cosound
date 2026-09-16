@@ -41,8 +41,7 @@ test("layer indicator shade reflects each layer's gain", () => {
         { sound_id: 2, sound_gain: 0.75 },
         { sound_id: 3, sound_gain: 1 },
     ]);
-    display.hasVoteAction = true;
-    assert.deepEqual(display.carouselSlides.map((slide) => display.layerIndicatorOpacity(slide)), [1, 0.5, 0.875, 1]);
+    assert.deepEqual(display.carouselSlides.map((slide) => display.layerIndicatorOpacity(slide)), [0.5, 0.875, 1]);
 });
 
 test("swiping the artwork changes the selected layer", () => {
@@ -111,35 +110,32 @@ test("empty and malformed predictions remain safe to render", () => {
     assert.deepEqual(JSON.parse(JSON.parse(display.savePayload()).layers), []);
 });
 
-test("the vote prompt is the first panel of the same carousel", () => {
+test("the playing card carousel contains only sound layers when voting is available", () => {
     const display = voteDisplay(layers);
-    display.hasVoteAction = true;
     display.choice = "1";
 
     assert.deepEqual(
         display.carouselSlides.map((slide) => slide.kind),
-        ["vote", "layer", "layer"],
+        ["layer", "layer"],
     );
     assert.deepEqual(
         display.carouselSlides.map((slide) => slide.indicatorLabel),
-        ["VOTE", "1", "2"],
+        ["1", "2"],
     );
-    assert.equal(display.isVoteSlide, true);
-    assert.equal(display.currentLayer, null);
+    assert.equal(display.currentLayer.sound_id, 11);
 
     display.move(1);
-    assert.equal(display.currentLayer.sound_id, 11);
-    assert.equal(display.gainPercent, 35);
+    assert.equal(display.currentLayer.sound_id, 22);
+    assert.equal(display.gainPercent, 0);
 });
 
-test("an awake empty venue keeps the vote presentation instead of showing activation", () => {
+test("an awake empty venue has no sound layers in its playing card", () => {
     const display = voteDisplay();
-    display.hasVoteAction = true;
 
-    assert.deepEqual(display.carouselSlides.map((slide) => slide.kind), ["vote"]);
-    assert.equal(display.currentSlide.kind, "vote");
+    assert.deepEqual(display.carouselSlides, []);
+    assert.equal(display.currentSlide, null);
     display.move(1);
-    assert.equal(display.currentSlide.kind, "vote");
+    assert.equal(display.currentSlide, null);
     assert.equal(display.currentLayer, null);
     assert.equal(display.isLast, true);
 });
@@ -173,7 +169,6 @@ test("activation success keeps the confirmation view and accepts fresh layers", 
 
 test("a room that sleeps after rendering an active card keeps its normal carousel when woken", () => {
     const display = voteDisplay(layers);
-    display.hasVoteAction = true;
     const replacement = [{ ...layers[1], sound_id: 33, sound_title: "Wind" }];
 
     display.handlePlayerActivated({ layers: replacement });
@@ -183,7 +178,7 @@ test("a room that sleeps after rendering an active card keeps its normal carouse
     assert.equal(display.activationComplete, false);
     assert.deepEqual(
         display.carouselSlides.map((slide) => slide.kind),
-        ["vote", "layer"],
+        ["layer"],
     );
     assert.equal(display.layers[0].sound_id, 33);
 });
@@ -223,7 +218,6 @@ test("anonymous vote authentication errors stay on the vote presentation", () =>
 test("vote success and throttling drive the card labels", () => {
     const display = voteDisplay(layers);
     display.choice = "1";
-    display.hasVoteAction = true;
     assert.equal(display.voteLabel, "VOTE");
     assert.equal(display.votePastLabel, "Upvoted");
     const kindsBeforeVote = display.carouselSlides.map((slide) => slide.kind);

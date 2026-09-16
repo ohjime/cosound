@@ -1,0 +1,51 @@
+<c-vars choice="" throttle_seconds_left="0" />
+<c-core-card showExit="false" bgColor="bg-[#1f3f23]" ringColor="ring-[#2d2d2d]">
+    <div data-vote-card data-vote-prompt-card class="contents">
+        <figure class="relative mx-6 mt-7 overflow-visible rounded-t-md bg-base-300 ring-7 ring-neutral-content/70">
+            <div class="static aspect-square w-full overflow-hidden rounded-t-md">
+                <c-vote-layer-indicator-dock>
+                    <div class="w-full flex">
+                        <div class="join w-fit ring-4">
+                            <span class="join-item btn btn-sm btn-neutral h-7 min-h-0 rounded-none border-none px-2.5 text-xs font-bold tracking-wider text-white">VOTE</span>
+                        </div>
+                    </div>
+                </c-vote-layer-indicator-dock>
+                <div class="grid h-full w-full">
+                    <div aria-hidden="true" class="col-start-1 row-start-1 aspect-square w-68 max-w-full"></div>
+                    <div class="col-start-1 row-start-1 min-h-0 min-w-0"><c-vote-action-card /></div>
+                </div>
+            </div>
+            <button type="button" disabled aria-label="Previous carousel panel" class="absolute z-10 -left-11.5 top-1/2 flex w-20 -translate-y-1/2 scale-x-75 scale-y-150 items-center justify-center text-neutral-600 stroke-neutral-500">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-full w-full" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="M560-280 360-480l200-200v400Z" stroke-width="40" stroke-linejoin="round" /></svg>
+            </button>
+            <button type="button" disabled aria-label="Next carousel panel" class="absolute z-10 -right-11.5 top-1/2 flex w-20 -translate-y-1/2 scale-x-75 scale-y-150 items-center justify-center text-neutral-600 stroke-neutral-500">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-full w-full" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="M400-280v-400l200 200-200 200Z" stroke-width="40" stroke-linejoin="round" /></svg>
+            </button>
+        </figure>
+        <c-vote-player-logo placeholder="true" />
+        <div class="relative mx-4 mb-4 rounded-xs rounded-b-2xl bg-white/65 text-black ring-5 ring-amber-600/60">
+            <div class="h-30 overflow-y-auto px-4 py-2">
+                <div class="w-full h-full">
+                    <div class="font-serif text-[8pt] font-extralight font-stretch-95% italic">
+                        <div x-cloak x-show="!voted && secondsLeft <= 0" x-transition.opacity.duration.300ms>
+                            <p class="py-1 font-serif text-xs font-bold not-italic font-stretch-95%">[ <span x-text="voteLabel.toUpperCase()"></span> THE SOUNDSCAPE ]</p>
+                            <p>Tap the green card to vote for the sounds around you. Your feedback helps guide what this venue plays next. The current sound layers are waiting on the card underneath.</p>
+                        </div>
+                        <div x-cloak x-show="voted" x-transition:enter="transition duration-500 ease-out delay-150" x-transition:enter-start="translate-y-2 opacity-0" x-transition:enter-end="translate-y-0 opacity-100">
+                            <p class="py-1 font-serif text-xs font-bold not-italic font-stretch-95%">[ <span x-text="votePastLabel.toUpperCase()"></span> ]</p>
+                            <p>Thank you—your feedback is now part of this venue’s listening history and will help shape future soundscapes. Open the card underneath to see what is playing.</p>
+                        </div>
+                        <div x-cloak x-show="!voted && secondsLeft > 0" x-transition.opacity.duration.300ms>
+                            <p class="py-1 font-serif text-xs font-bold not-italic font-stretch-95%">[ VOTE RECEIVED ]</p>
+                            <p>Your recent vote is already helping shape this space. Open the card underneath to see what is playing.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="pointer-events-none absolute inset-x-0 bottom-0 h-6 rounded-b-2xl bg-gradient-to-t from-neutral-content/80 to-transparent"></div>
+        </div>
+        <div class="absolute z-10 bottom-0 left-1/2 flex w-52 -translate-x-1/2 justify-center rounded-t-2xl bg-base-100 ring-6 ring-[#2d2d2d]/60 drop-shadow-2xl">
+            <button type="button" data-show-playing class="btn btn-sm btn-soft h-10 w-full rounded-t-xl" @click="$el.closest('[data-core-card]').dispatchEvent(new CustomEvent('card:remove', { bubbles: true }))">WHAT IS CURRENTLY PLAYING</button>
+        </div>
+    </div>
+</c-core-card>

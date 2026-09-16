@@ -2,7 +2,7 @@
     <template x-for="(slide, index) in carouselSlides" :key="slide.key">
         <button type="button"
                 class="font-mono join-item btn-sm btn btn-neutral h-7 rounded-none border-none"
-                :class="[slide.kind === 'vote' ? 'px-2.5' : 'w-7.5', currentIndex === index ? (slide.kind === 'vote' ? '!text-white text-xs font-bold tracking-wider' : '!text-white text-xl font-extrabold') : 'text-gray-300 text-xs font-light']"
+                :class="['w-7.5', currentIndex === index ? '!text-white text-xl font-extrabold' : 'text-gray-300 text-xs font-light']"
                 :aria-label="slide.ariaLabel"
                 :aria-pressed="currentIndex === index"
                 :style="`opacity: ${layerIndicatorOpacity(slide)}`"

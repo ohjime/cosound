@@ -3,7 +3,6 @@
      x-data="voteDisplay"
      data-vote-display
      data-vote-choice="{{ choice }}"
-     data-has-vote-action="{% if choice == '1' or choice == '0' %}true{% else %}false{% endif %}"
      data-player-sleeping="{% if sleeping %}true{% else %}false{% endif %}"
      data-throttle-seconds-left="{{ throttle_seconds_left|default:0 }}"
      data-post-title="{% if program %}{{ program.post.title }}{% endif %}"
@@ -16,5 +15,6 @@
     <div data-vote-layers hidden>{{ layers|json_script:"vote-display-layers" }}</div>
     <c-core-deck id="deck">
         <c-vote-card :layers="layers" :sleeping="sleeping" />
+        {% if not sleeping and choice == '1' or not sleeping and choice == '0' %}<c-vote-prompt-card :choice="choice" :throttle_seconds_left="throttle_seconds_left" />{% endif %}
     </c-core-deck>
 </div>

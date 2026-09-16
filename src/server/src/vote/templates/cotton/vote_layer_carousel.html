@@ -2,12 +2,6 @@
     <div x-ref="carousel" @scroll.debounce.5ms="updateActive()" class="carousel w-full h-full">
         <template x-for="slide in carouselSlides" :key="slide.key">
             <div data-vote-layer class="carousel-item relative h-full w-full snap-center">
-                {% if choice == '1' or choice == '0' %}
-                    <template x-if="slide.kind === 'vote'">
-                        <div class="h-full w-full"><c-vote-action-card /></div>
-                    </template>
-                {% endif %}
-
                 <template x-if="slide.kind === 'layer'">
                     <div class="relative h-full w-full">
                         <template x-if="slide.artwork_url"><c-core-image bind_src="slide.artwork_url" bind_alt="slide.sound_title" class="h-full w-full" /></template>

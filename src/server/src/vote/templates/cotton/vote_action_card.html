@@ -58,7 +58,7 @@
             x-transition:enter="transition duration-500 ease-out delay-150"
             x-transition:enter-start="translate-y-3 scale-95 opacity-0"
             x-transition:enter-end="translate-y-0 scale-100 opacity-100"
-            @click="move(1)"
+            @click="$el.closest('[data-core-card]').dispatchEvent(new CustomEvent('card:remove', { bubbles: true }))"
             class="relative col-start-1 row-start-1 flex h-full w-full flex-col items-center justify-center overflow-hidden border-0 px-8 text-center outline-none transition duration-500 ease-out focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-white/80 {% if choice == '1' %}bg-success text-success-content{% else %}bg-error text-error-content{% endif %}"
             aria-label="Show the sounds playing">
         <span class="relative z-10 grid size-28 place-items-center rounded-full border-2 border-current/25 bg-white/20 shadow-2xl shadow-black/20 backdrop-blur-sm">

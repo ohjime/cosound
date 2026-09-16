@@ -10,10 +10,16 @@ class NFCActionParser(HTMLParser):
     def __init__(self, html):
         super().__init__()
         self.actions = []
+        self.cards = 0
+        self.prompt_cards = 0
         self.feed(html)
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
+        if "data-core-card" in attrs:
+            self.cards += 1
+        if "data-vote-prompt-card" in attrs:
+            self.prompt_cards += 1
         if tag == "button" and "data-nfc-vote" in attrs:
             self.actions.append(attrs)
 
@@ -109,6 +115,13 @@ class SleepingPlayerCardTests(TestCase):
         self.assertNotContains(response, "data-player-activation-card")
         self.assertNotContains(response, "AWAKEN")
         self.assertContains(response, "data-vote-action-layer")
+        self.assertContains(response, "data-vote-prompt-card")
+        self.assertContains(response, "data-show-playing")
+        self.assertContains(response, "WHAT IS CURRENTLY PLAYING")
+        self.assertEqual(NFCActionParser(html).cards, 2)
+        self.assertEqual(NFCActionParser(html).prompt_cards, 1)
+        self.assertContains(response, 'aria-label="Vote card volume"')
+        self.assertContains(response, 'aria-label="Current layer volume"')
         self.assertContains(response, "Morning birds")
         self.assertContains(response, 'id="vote-card-header"')
         self.assertContains(response, 'aria-label="Save current sounds"')

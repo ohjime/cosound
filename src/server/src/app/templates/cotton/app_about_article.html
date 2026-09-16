@@ -217,14 +217,14 @@ before this page goes in front of anyone.
                     first save, and <code>playing</code>, a pydantic
                     <code>Prediction</code> stored as JSON that holds the layers
                     currently assigned to that venue. The player points to a
-                    <code>LocalPost</code>; its available sounds live in
-                    <code>player.post.collection</code>, which supplies the
+                    <code>PlayerProgram</code>; its available sounds live in
+                    <code>player.program.collection</code>, which supplies the
                     prediction loop and the player's sound library.
                 </p>
                 <p>
                     Core's <code>Post</code> holds the shared writing: title,
                     Markdown article, typography, author credits, composer and
-                    publication date. A <code>LocalPost</code> adds a sound
+                    publication date. A <code>PlayerProgram</code> adds a sound
                     collection, while Explore's <code>PublicPost</code> adds a
                     fixed <code>Cosound</code>. Both link to that shared post,
                     and <code>Comment</code> attaches to it directly, with one
@@ -247,7 +247,7 @@ before this page goes in front of anyone.
                         metadata: artwork, title, artist, tags, gain and
                         collection state. This card describes the room's audio;
                         it does not load audio files or start browser playback.
-                        The published local post supplies the heading, article
+                        The published player program supplies the heading, article
                         and discussion around it.
                     </li>
                     <li>
@@ -301,13 +301,16 @@ before this page goes in front of anyone.
                 </p>
                 <h3>The scheduler and the prediction</h3>
                 <p>
-                    A management command loops forever: every 30 seconds it walks
-                    every <code>Player</code> and enqueues the configured predictor
-                    as a background task, resolved by dotted path from settings so
-                    the strategy is swappable without touching the loop. The
-                    predictor writes its result into <code>player.playing</code>.
-                    That is the entire decision surface of the system — one
-                    function, one player id, one <code>Prediction</code> out.
+                    A management command loops forever, checking once a second for
+                    awake players whose individual refresh interval has elapsed.
+                    It enqueues the configured predictor as a background task,
+                    resolved by dotted path from settings so the strategy is
+                    swappable without touching the loop. The cadence, baseline,
+                    and other policy values live on the player's assigned Local
+                    Post and are editable in the admin. The predictor writes its
+                    result into <code>player.playing</code>. That is the entire
+                    decision surface of the system — one function, one player id,
+                    one <code>Prediction</code> out.
                 </p>
                 <h3>The player process</h3>
                 <p>
@@ -336,10 +339,12 @@ before this page goes in front of anyone.
                         same loudness.
                     </li>
                     <li>
-                        Every 30 seconds it polls <code>/player</code> and compares
-                        a signature of the returned layers and gains against the
-                        last one. Unchanged, it does nothing. Changed, it queues
-                        each layer and triggers a transition.
+                        At its per-player fallback interval (30 seconds by default)
+                        it polls <code>/player</code> and compares a signature of
+                        the returned layers and gains against the last one. A live
+                        notification triggers the same refresh immediately.
+                        Unchanged, it does nothing. Changed, it queues each layer
+                        and triggers a transition.
                     </li>
                     <li>
                         The transition is a gain ramp on the audio thread — new
@@ -366,9 +371,11 @@ before this page goes in front of anyone.
                 <p>
                     The API is three read-only endpoints behind the token:
                     <code>/manifest</code>, <code>/player</code> (venue details plus
-                    titles, artists and gains), and <code>/cosound</code> (the bare
+                    titles, artists, gains, runtime settings and the Player Program
+                    chime),
+                    and <code>/cosound</code> (the bare
                     <code>{sound_id: gain}</code> map, kept for compatibility), all
-                    throttled to ten requests a minute.
+                    throttled to 120 requests a minute.
                 </p>
                 <h2>What the recommender actually does right now</h2>
                 <p>

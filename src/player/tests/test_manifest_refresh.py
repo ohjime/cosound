@@ -1,6 +1,8 @@
 import unittest
 from threading import Event, Thread, current_thread
-from unittest.mock import call, patch
+from unittest.mock import Mock, call, patch
+
+import numpy as np
 
 from app import tui
 
@@ -8,10 +10,12 @@ from app import tui
 class FakePlayer:
     def __init__(self, fs=48_000):
         self.fs = fs
+        self.master_gain = 0.7
         self.queued = []
         self.dequeue_count = 0
         self.queue_threads = []
         self.dequeue_threads = []
+        self.vote_chimes = []
 
     def queue_sound(self, path, gain):
         self.queued.append((path, gain))
@@ -20,6 +24,9 @@ class FakePlayer:
     def dequeue_cosound(self):
         self.dequeue_count += 1
         self.dequeue_threads.append(current_thread().name)
+
+    def set_vote_chime(self, samples=None):
+        self.vote_chimes.append(samples)
 
 
 class ManifestRefreshTests(unittest.TestCase):
@@ -174,6 +181,124 @@ class ManifestRefreshTests(unittest.TestCase):
         self.assertEqual(app._refresh_generation, 3)
         self.assertTrue(app._refresh_worker_running)
 
+    def test_state_refresh_interval_defaults_to_thirty_seconds(self):
+        app = tui.CosoundPlayerApp("player-key", {}, FakePlayer())
+        meter_timer = Mock()
+        state_refresh_timer = Mock()
+
+        self.assertEqual(app._state_refresh_interval_seconds, 30)
+        self.assertIsNone(app._state_refresh_timer)
+
+        with (
+            patch.object(app, "_show_volume"),
+            patch.object(
+                app,
+                "set_interval",
+                side_effect=[meter_timer, state_refresh_timer],
+            ) as set_interval,
+            patch.object(app, "refresh_cosound") as refresh,
+            patch.object(app, "_watch_live_updates"),
+        ):
+            app.on_mount()
+
+        self.assertEqual(set_interval.call_args_list[0].args[0], tui.METER_INTERVAL)
+        self.assertEqual(
+            set_interval.call_args_list[1],
+            call(tui.REFRESH_INTERVAL, refresh),
+        )
+        self.assertIs(app._state_refresh_timer, state_refresh_timer)
+
+    def test_missing_or_malformed_state_refresh_interval_preserves_current_timer(self):
+        app = tui.CosoundPlayerApp("player-key", {}, FakePlayer())
+        current_timer = Mock()
+        app._state_refresh_interval_seconds = 45
+        app._state_refresh_timer = current_timer
+        malformed_snapshots = (
+            {},
+            {"runtime": None},
+            {"runtime": []},
+            {"runtime": {}},
+            {"runtime": {"state_refresh_interval_seconds": True}},
+            {"runtime": {"state_refresh_interval_seconds": 4}},
+            {"runtime": {"state_refresh_interval_seconds": 30.0}},
+            {"runtime": {"state_refresh_interval_seconds": "30"}},
+        )
+
+        with patch.object(app, "set_interval") as set_interval:
+            for info in malformed_snapshots:
+                with self.subTest(info=info):
+                    app._sync_state_refresh_interval(info)
+
+        self.assertEqual(app._state_refresh_interval_seconds, 45)
+        self.assertIs(app._state_refresh_timer, current_timer)
+        current_timer.stop.assert_not_called()
+        set_interval.assert_not_called()
+
+    def test_unchanged_state_refresh_interval_keeps_existing_timer(self):
+        app = tui.CosoundPlayerApp("player-key", {}, FakePlayer())
+        current_timer = Mock()
+        app._state_refresh_timer = current_timer
+
+        with patch.object(app, "set_interval") as set_interval:
+            app._sync_state_refresh_interval(
+                {"runtime": {"state_refresh_interval_seconds": 30}}
+            )
+
+        self.assertIs(app._state_refresh_timer, current_timer)
+        current_timer.stop.assert_not_called()
+        set_interval.assert_not_called()
+
+    def test_valid_runtime_interval_replaces_the_existing_timer(self):
+        app = tui.CosoundPlayerApp("player-key", {}, FakePlayer())
+        old_timer = Mock()
+        new_timer = Mock()
+        app._state_refresh_timer = old_timer
+        info = {
+            "name": "Hall",
+            "manager": "Manager",
+            "layers": [],
+            "runtime": {"state_refresh_interval_seconds": 15},
+        }
+
+        with patch.object(
+            app, "set_interval", return_value=new_timer
+        ) as set_interval:
+            app._sync_state_refresh_interval(info)
+
+        self.assertEqual(app._state_refresh_interval_seconds, 15)
+        old_timer.stop.assert_called_once_with()
+        set_interval.assert_called_once_with(15, app.refresh_cosound)
+        self.assertIs(app._state_refresh_timer, new_timer)
+
+    def test_runtime_interval_updates_even_when_layer_preparation_fails(self):
+        app = tui.CosoundPlayerApp("player-key", {}, FakePlayer())
+        old_timer = Mock()
+        new_timer = Mock()
+        app._state_refresh_timer = old_timer
+        info = {
+            "layers": [{"sound_id": 2, "gain": 1.0}],
+            "runtime": {"state_refresh_interval_seconds": 15},
+        }
+
+        with (
+            patch.object(tui, "get_player_info", return_value=info),
+            patch.object(
+                tui, "get_latest_manifest", side_effect=OSError("offline")
+            ),
+            patch.object(app, "set_interval", return_value=new_timer),
+            patch.object(
+                app,
+                "call_from_thread",
+                side_effect=lambda callback, *args: callback(*args),
+            ),
+        ):
+            with self.assertRaisesRegex(OSError, "offline"):
+                app._run_refresh()
+
+        self.assertEqual(app._state_refresh_interval_seconds, 15)
+        old_timer.stop.assert_called_once_with()
+        self.assertIs(app._state_refresh_timer, new_timer)
+
     def test_slow_refresh_finishes_before_latest_coalesced_state(self):
         manifest = {"1": "/conditioned/1.wav"}
         player = FakePlayer()
@@ -291,6 +416,142 @@ class ManifestRefreshTests(unittest.TestCase):
         show_refreshing.assert_called_once_with()
         self.assertEqual(app._refresh_generation, 3)
         self.assertFalse(app._refresh_worker_running)
+
+    def test_chime_updates_when_layers_do_not_and_unchanged_version_is_cached(self):
+        player = FakePlayer()
+        info = {
+            "layers": [{"sound_id": 1, "gain": 0.5}],
+            "chime": {
+                "url": "https://media.example/chime?signature=one",
+                "version": "chimes/player-1/upload.wav",
+            },
+        }
+        app = tui.CosoundPlayerApp("key", {"1": "/conditioned/1.wav"}, player)
+        app._cosound_signature = app._signature_of(info)
+        prepared = np.full(20, 0.05, dtype=np.float32)
+
+        with (
+            patch.object(tui, "get_player_info", return_value=info),
+            patch.object(
+                tui, "get_vote_chime", return_value="/vote-chimes/version"
+            ) as download,
+            patch.object(tui, "load_vote_chime", return_value=prepared) as decode,
+            patch.object(tui, "prune_vote_chimes") as prune,
+            patch.object(app, "call_from_thread") as call_from_thread,
+        ):
+            app._run_refresh()
+            # A refreshed signed URL with the same stable version is not fetched.
+            info["chime"]["url"] = "https://media.example/chime?signature=two"
+            app._run_refresh()
+
+        download.assert_called_once_with(
+            "chimes/player-1/upload.wav",
+            "https://media.example/chime?signature=one",
+        )
+        decode.assert_called_once_with("/vote-chimes/version", player.fs)
+        self.assertEqual(len(player.vote_chimes), 1)
+        np.testing.assert_array_equal(player.vote_chimes[0], prepared)
+        self.assertEqual(player.queued, [])
+        self.assertEqual(player.dequeue_count, 0)
+        self.assertEqual(call_from_thread.call_count, 4)
+        prune.assert_called_once_with("chimes/player-1/upload.wav")
+
+    def test_empty_descriptor_resets_custom_chime_to_generated_fallback(self):
+        player = FakePlayer()
+        app = tui.CosoundPlayerApp("key", {}, player)
+        app._vote_chime_version = "old-version"
+
+        with (
+            patch.object(tui, "get_vote_chime") as download,
+            patch.object(tui, "load_vote_chime") as decode,
+            patch.object(tui, "prune_vote_chimes") as prune,
+        ):
+            app._sync_vote_chime({"chime": {"url": "", "version": ""}})
+
+        self.assertEqual(player.vote_chimes, [None])
+        self.assertIsNone(app._vote_chime_version)
+        download.assert_not_called()
+        decode.assert_not_called()
+        prune.assert_called_once_with()
+
+    def test_legacy_or_mismatched_descriptor_preserves_last_good_chime(self):
+        player = FakePlayer()
+        app = tui.CosoundPlayerApp("key", {}, player)
+        app._vote_chime_version = "last-good-version"
+
+        # An old server omits the field entirely; that is a compatibility no-op.
+        app._sync_vote_chime({"layers": []})
+        for descriptor in (
+            {"url": "", "version": "unexpected"},
+            {"url": "https://media/new", "version": ""},
+            {"url": None, "version": None},
+            [],
+        ):
+            with self.subTest(descriptor=descriptor), self.assertRaises(ValueError):
+                app._sync_vote_chime({"chime": descriptor})
+
+        self.assertEqual(player.vote_chimes, [])
+        self.assertEqual(app._vote_chime_version, "last-good-version")
+
+    def test_decode_failure_discards_cache_and_retries_without_losing_last_good(self):
+        player = FakePlayer()
+        app = tui.CosoundPlayerApp("key", {}, player)
+        app._vote_chime_version = "last-good-version"
+        info = {
+            "chime": {
+                "url": "https://media/new",
+                "version": "new-version",
+            }
+        }
+
+        with (
+            patch.object(
+                tui, "get_vote_chime", return_value="/vote-chimes/new-version"
+            ) as download,
+            patch.object(
+                tui, "load_vote_chime", side_effect=ValueError("corrupt audio")
+            ) as decode,
+            patch.object(tui, "discard_vote_chime") as discard,
+        ):
+            for _ in range(2):
+                with self.assertRaisesRegex(ValueError, "corrupt audio"):
+                    app._sync_vote_chime(info)
+
+        self.assertEqual(download.call_count, 2)
+        self.assertEqual(decode.call_count, 2)
+        self.assertEqual(
+            discard.call_args_list,
+            [call("new-version"), call("new-version")],
+        )
+        self.assertEqual(player.vote_chimes, [])
+        self.assertEqual(app._vote_chime_version, "last-good-version")
+
+    def test_bad_custom_chime_preserves_last_good_and_does_not_block_state(self):
+        player = FakePlayer()
+        info = {
+            "name": "Hall",
+            "layers": [],
+            "chime": {"url": "https://media/new", "version": "new-version"},
+        }
+        app = tui.CosoundPlayerApp("key", {}, player)
+        app._vote_chime_version = "last-good-version"
+
+        with (
+            patch.object(tui, "get_player_info", return_value=info),
+            patch.object(tui, "get_vote_chime", side_effect=OSError("offline")),
+            patch.object(app, "call_from_thread") as call_from_thread,
+        ):
+            app._run_refresh()
+
+        self.assertEqual(player.vote_chimes, [])
+        self.assertEqual(app._vote_chime_version, "last-good-version")
+        self.assertEqual(
+            call_from_thread.call_args_list,
+            [
+                call(app._sync_state_refresh_interval, info),
+                call(app._apply_state, info, True),
+            ],
+        )
 
 
 if __name__ == "__main__":

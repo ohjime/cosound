@@ -55,7 +55,7 @@ class NFCVoteFlowTests(TestCase):
         cls.favorite.tags.add("rain")
         cls.venue_sound.tags.add("rain")
         cls.listener.collection.add(cls.favorite)
-        cls.player.post.collection.add(cls.venue_sound)
+        cls.player.program.collection.add(cls.venue_sound)
 
     def params(self, choice="1"):
         return {
@@ -168,7 +168,7 @@ class NFCVoteFlowTests(TestCase):
                     [self.venue_sound.pk],
                 )
                 self.assertEqual(list(self.listener.collection.all()), [self.favorite])
-                self.assertEqual(list(self.player.post.collection.all()), [self.venue_sound])
+                self.assertEqual(list(self.player.program.collection.all()), [self.venue_sound])
 
     def test_anonymous_activation_authenticates_and_starts_playback(self):
         with patch.object(Player, "announce"):
@@ -287,7 +287,7 @@ class NFCVoteFlowTests(TestCase):
         self.player.refresh_from_db()
         self.assertFalse(self.player.sleeping)
 
-    def test_listener_vote_starts_prediction_from_the_local_posts_collection(self):
+    def test_listener_vote_starts_prediction_from_the_player_programs_collection(self):
         self.client.force_login(self.user)
         playing = Prediction.new()
         playing.add_layer(self.venue_sound.pk, gain=0.5)

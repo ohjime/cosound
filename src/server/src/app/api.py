@@ -13,7 +13,7 @@ class PlayerTokenAuth(APIKeyHeader):
 
     def authenticate(self, request, key):
         try:
-            return Player.objects.select_related("post", "manager").get(token=key)
+            return Player.objects.select_related("program", "manager").get(token=key)
         except Player.DoesNotExist:
             return None
 
@@ -35,7 +35,7 @@ def get_manifest(request) -> dict[str, str]:
     player: Player = request.auth
     return {
         str(sound.pk): request.build_absolute_uri(sound.file.url)
-        for sound in player.post.collection.all()
+        for sound in player.program.collection.all()
         if sound.file
     }
 
@@ -62,6 +62,7 @@ def get_cosound(request) -> dict[str, float]:
 def get_player(request) -> dict:
     """Return player details and the currently playing cosound layers."""
     player: Player = request.auth
+    chime = player.program.chime
     sounds = Sound.objects.in_bulk(
         [layer.sound_id for layer in player.playing.layers]
     )
@@ -73,7 +74,14 @@ def get_player(request) -> dict:
         "location": player.location,
         "bio": player.bio,
         "photo": request.build_absolute_uri(player.photo.url) if player.photo else "",
-        "post_id": player.post_id,
+        "program_id": player.program_id,
+        "runtime": {
+            "state_refresh_interval_seconds": player.state_refresh_interval_seconds,
+        },
+        "chime": {
+            "url": request.build_absolute_uri(chime.url) if chime else "",
+            "version": player.program.chime_version,
+        },
         "sleeping": player.sleeping,
         "activated_at": player.activated_at.isoformat() if player.activated_at else None,
         "layers": [

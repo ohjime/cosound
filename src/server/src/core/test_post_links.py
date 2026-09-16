@@ -3,7 +3,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import Comment, Cosound, LocalPost, Manager, Player, Post, Sound, User
+from core.models import Comment, Cosound, PlayerProgram, Manager, Player, Post, Sound, User
 from explore.models import PublicPost
 
 
@@ -13,7 +13,7 @@ class SelectablePostTests(TestCase):
         cls.user = User.objects.create_superuser(username='post-selector', email='selector@example.com', password='pw')
         cls.manager = Manager.objects.create(user=cls.user, name='Manager')
         cls.player = Player.objects.create(name='Room', manager=cls.manager)
-        cls.local = cls.player.post
+        cls.local = cls.player.program
         cls.original = cls.local.post
         cls.replacement = Post.objects.create(title='Replacement writing', article='Replacement **article**', composer=cls.user, publication_date=timezone.now())
         cls.sound = Sound.objects.create(title='Room sound', file='sounds/room.wav', embeddings=[0] * 5)
@@ -29,11 +29,28 @@ class SelectablePostTests(TestCase):
     def test_local_admin_swaps_shared_post_and_keeps_player_collection_and_discussions(self):
         local_id = self.local.pk
         for shared in (self.replacement, self.original):
-            response = self.client.post(reverse('admin:core_localpost_change', args=[local_id]), {'post': shared.pk, 'collection': [self.sound.pk]})
+            response = self.client.post(
+                reverse('admin:core_playerprogram_change', args=[local_id]),
+                {
+                    'post': shared.pk,
+                    'collection': [self.sound.pk],
+                    'algorithm_refresh_interval_seconds': 30,
+                    'algorithm_active_listener_minutes': 5,
+                    'algorithm_sleep_after_minutes': 180,
+                    'algorithm_min_layers': 2,
+                    'algorithm_max_layers': 5,
+                    'algorithm_minimum_hold_seconds': 120,
+                    'algorithm_maximum_stay_seconds': 180,
+                    'algorithm_disagreement_penalty': 0.25,
+                    'algorithm_exploration_probability': 0.5,
+                    'algorithm_exploration_size': 5,
+                    'baseline': '',
+                },
+            )
             self.assertEqual(response.status_code, 302)
             self.player.refresh_from_db()
-            self.assertEqual(self.player.post_id, local_id)
-            self.assertEqual(self.player.post.post, shared)
+            self.assertEqual(self.player.program_id, local_id)
+            self.assertEqual(self.player.program.post, shared)
             self.assertEqual(self.player.library(), [self.sound])
             page = self.client.get(reverse('vote:vote'), {'player': self.player.token})
             self.assertContains(page, shared.title)
@@ -55,7 +72,7 @@ class SelectablePostTests(TestCase):
         self.assertEqual(Comment.objects.count(), 2)
 
     def test_post_selectors_include_attached_and_unattached_posts(self):
-        for app_label, model_name in [('core', 'localpost'), ('explore', 'publicpost')]:
+        for app_label, model_name in [('core', 'playerprogram'), ('explore', 'publicpost')]:
             response = self.client.get(reverse('admin:autocomplete'), {'app_label': app_label, 'model_name': model_name, 'field_name': 'post'})
             self.assertEqual(response.status_code, 200)
             self.assertEqual({int(row['id']) for row in response.json()['results']}, {self.original.pk, self.replacement.pk})

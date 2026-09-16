@@ -14,18 +14,31 @@ from dataclasses import dataclass, field
 import sounddevice as sd
 
 
+# The ALSA/PulseAudio *plugin* devices ("default", "pipewire", "pulse",
+# "Default Sink") advertise a routing **maximum**, not a speaker count: they
+# accept any layout and remap it, so PortAudio reports 128 (ALSA) or 32 (Pulse).
+# Taking those literally sends `layout.infer_layout` down the unusual-count path
+# — a decorrelated upmix at sqrt(2/N) gain — while the sink still only plays
+# channels 0 and 1, so most of the signal is attenuated and then discarded.
+# Above this many channels we treat the count as unknown rather than real.
+MAX_PLAUSIBLE_CHANNELS = 8
+ASSUMED_CHANNELS = 2
+
+
 @dataclass
 class OutputDevice:
     """What we can reliably learn about a selected output device."""
 
     index: int | None  # None == system default output
     name: str
-    channels: int  # max_output_channels
+    channels: int  # max_output_channels, sentinel counts resolved
     samplerate: int  # device default sample rate
     hostapi: str
     # Best-effort: indices we believe are sub/LFE channels (may be empty).
     lfe_channels: list[int] = field(default_factory=list)
     raw: dict = field(default_factory=dict)
+    # True when `channels` is our stereo assumption, not the device's own count.
+    channels_assumed: bool = False
 
 
 def list_output_devices() -> list[tuple[int, dict]]:
@@ -86,6 +99,20 @@ def _guess_lfe_channels(name: str, channels: int) -> list[int]:
     return []
 
 
+def _plausible_channels(channels: int) -> tuple[int, bool]:
+    """Resolve a plugin sentinel count to a usable one; ``(channels, assumed)``.
+
+    PortAudio cannot tell us how many speakers are really behind a plugin
+    device, so an implausible count means "unknown", and the honest default is
+    stereo — what the overwhelming majority of default outputs actually are.
+    A real surround rig can still be selected explicitly (``--channels 6``, or
+    by naming the hardware device directly).
+    """
+    if channels <= MAX_PLAUSIBLE_CHANNELS:
+        return channels, False
+    return ASSUMED_CHANNELS, True
+
+
 def detect_output(device=None) -> OutputDevice:
     """Resolve and probe an output device into an :class:`OutputDevice`.
 
@@ -93,7 +120,8 @@ def detect_output(device=None) -> OutputDevice:
     default. Never raises for missing labels — only for an unmatched device.
     """
     index, info = _resolve_index(device)
-    channels = int(info.get("max_output_channels", 0)) or 1
+    reported = int(info.get("max_output_channels", 0)) or 1
+    channels, assumed = _plausible_channels(reported)
     samplerate = int(info.get("default_samplerate", 0)) or 48000
     name = str(info.get("name", "Unknown"))
     return OutputDevice(
@@ -104,4 +132,5 @@ def detect_output(device=None) -> OutputDevice:
         hostapi=_hostapi_name(info),
         lfe_channels=_guess_lfe_channels(name, channels),
         raw=dict(info),
+        channels_assumed=assumed,
     )

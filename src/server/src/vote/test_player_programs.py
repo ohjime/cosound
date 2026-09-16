@@ -6,7 +6,7 @@ from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import Comment, Listener, LocalPost, Manager, Player, Post, Prediction, Sound, User
+from core.models import Comment, Listener, PlayerProgram, Manager, Player, Post, Prediction, Sound, User
 from vote.models import Vote
 from vote.utils import serialize_player_for_carousel
 
@@ -25,10 +25,10 @@ class LocalVotePageTests(TestCase):
         playing = Prediction.new()
         playing.add_layer(cls.sound.pk, gain=0.65)
         cls.player = Player.objects.create(manager=cls.manager, name="Reading room", playing=playing)
-        cls.player.post.collection.add(cls.sound, cls.other_sound)
-        cls.player.post.post.title = "Listening together"
-        cls.player.post.post.article = "An **article** for this room. <script>alert(1)</script>"
-        cls.player.post.post.save()
+        cls.player.program.collection.add(cls.sound, cls.other_sound)
+        cls.player.program.post.title = "Listening together"
+        cls.player.program.post.article = "An **article** for this room. <script>alert(1)</script>"
+        cls.player.program.post.save()
         cls.params = {"player": cls.player.token, "choice": "1", "section": "west wall"}
 
     def page(self, *, htmx=False):
@@ -38,8 +38,11 @@ class LocalVotePageTests(TestCase):
             HTTP_HX_REQUEST="true" if htmx else "false",
         )
 
-    def comment_url(self, name="create_comment", post=None, params=None):
-        return reverse(f"vote:{name}", kwargs={"slug": (post or self.player.post).post.slug}) + "?" + urlencode(params or self.params)
+    def comment_url(self, name="create_comment", program=None, params=None):
+        return reverse(
+            f"vote:{name}",
+            kwargs={"slug": (program or self.player.program).post.slug},
+        ) + "?" + urlencode(params or self.params)
 
     def test_nfc_page_has_two_tabs_and_post_without_audio(self):
         response = self.page()
@@ -96,8 +99,8 @@ class LocalVotePageTests(TestCase):
         self.assertNotContains(response, "vote-display-layers")
 
     def test_draft_writing_and_comments_are_hidden_but_prediction_still_renders(self):
-        self.player.post.post.publication_date = None
-        self.player.post.post.save(update_fields=["publication_date"])
+        self.player.program.post.publication_date = None
+        self.player.program.post.save(update_fields=["publication_date"])
         response = self.page(htmx=True)
         self.assertContains(response, "Rain on the roof")
         self.assertNotContains(response, "Listening together")
@@ -112,7 +115,7 @@ class LocalVotePageTests(TestCase):
         self.assertContains(response, "My first response")
         comment = Comment.objects.get()
         self.assertEqual(type(comment.post), Post)
-        self.assertEqual(comment.post_id, self.player.post.post_id)
+        self.assertEqual(comment.post_id, self.player.program.post_id)
         response = self.client.post(self.comment_url(), {"body": "A replacement"}, HTTP_HX_REQUEST="true")
         self.assertContains(response, "already commented")
         self.assertEqual(Comment.objects.count(), 1)
@@ -129,18 +132,24 @@ class LocalVotePageTests(TestCase):
         response = self.client.post(self.comment_url(), {"body": "Without HTMX"})
         self.assertEqual(response.status_code, 302)
         self.assertEqual(parse_qs(urlsplit(response.url).query)["player"], [self.player.token])
-        self.assertEqual(urlsplit(response.url).fragment, f"local-discussion-{self.player.post_id}")
+        self.assertEqual(urlsplit(response.url).fragment, f"local-discussion-{self.player.program_id}")
 
     def test_post_switch_rejects_old_forms_and_keeps_old_discussion(self):
-        old_post = self.player.post
+        old_post = self.player.program
         Comment.objects.create(post=old_post.post, user=self.user, body="Old discussion")
-        replacement = LocalPost.objects.create(post=Post.objects.create(title="New program", composer=self.user, publication_date=timezone.now()))
-        self.player.post = replacement
-        self.player.save(update_fields=["post"])
+        replacement = PlayerProgram.objects.create(post=Post.objects.create(title="New program", composer=self.user, publication_date=timezone.now()))
+        self.player.program = replacement
+        self.player.save(update_fields=["program"])
         self.client.force_login(self.user)
-        response = self.client.post(self.comment_url(post=old_post), {"body": "Stale form"})
+        response = self.client.post(
+            self.comment_url(program=old_post), {"body": "Stale form"}
+        )
         self.assertEqual(response.status_code, 404)
-        response = self.client.post(self.comment_url(post=replacement), {"body": "New discussion"}, HTTP_HX_REQUEST="true")
+        response = self.client.post(
+            self.comment_url(program=replacement),
+            {"body": "New discussion"},
+            HTTP_HX_REQUEST="true",
+        )
         self.assertContains(response, "New discussion")
         self.assertNotContains(response, "Old discussion")
         self.assertTrue(old_post.post.comments.filter(body="Old discussion").exists())
@@ -148,7 +157,7 @@ class LocalVotePageTests(TestCase):
     def test_comments_escape_text_and_paginate_with_nfc_context(self):
         for index in range(11):
             user = User.objects.create_user(username=f"room-{index}", email=f"room-{index}@example.com")
-            Comment.objects.create(post=self.player.post.post, user=user, body=f"<script>comment {index}</script>")
+            Comment.objects.create(post=self.player.program.post, user=user, body=f"<script>comment {index}</script>")
         response = self.client.get(self.comment_url("discussion"))
         self.assertNotContains(response, "<script>comment")
         self.assertContains(response, "&lt;script&gt;")

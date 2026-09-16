@@ -152,7 +152,7 @@ class PlayerStateTests(TestCase):
         state = get_player(request)
         self.assertFalse(state["sleeping"])
         self.assertEqual(state["bio"], "Room sounds")
-        self.assertEqual(state["post_id"], player.post_id)
+        self.assertEqual(state["program_id"], player.program_id)
         self.assertEqual(state["layers"][0]["gain"], 0.5)
         self.assertNotIn("token", state)
         self.assertNotIn(player.token, str(state))

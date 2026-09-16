@@ -45,26 +45,28 @@ def vote_about(request):
     return render(request, "app/home.html#tab_about")
 
 
-def get_local_post(request, slug):
+def get_player_program(request, slug):
     player = get_object_or_404(
-        Player.objects.select_related("post__post"),
+        Player.objects.select_related("program__post"),
         token=request.GET.get("player", ""),
-        post__post__slug=slug,
-        post__post__publication_date__isnull=False,
+        program__post__slug=slug,
+        program__post__publication_date__isnull=False,
     )
-    return player.post
+    return player.program
 
 
 @require_GET
 def local_discussion(request, slug):
-    post = get_local_post(request, slug)
-    context = local_discussion_context(request, post, request.GET.get("page", 1))
+    program = get_player_program(request, slug)
+    context = local_discussion_context(
+        request, program, request.GET.get("page", 1)
+    )
     return render(request, "vote/discussion.html", context)
 
 
 @require_POST
 def create_local_comment(request, slug):
-    post = get_local_post(request, slug)
+    program = get_player_program(request, slug)
     if not request.user.is_authenticated:
         return HttpResponse("Sign in to comment.", status=403)
     form = CommentForm(request.POST)
@@ -72,7 +74,9 @@ def create_local_comment(request, slug):
         try:
             with transaction.atomic():
                 Comment.objects.create(
-                    post=post.post, user=request.user, body=form.cleaned_data["body"]
+                    post=program.post,
+                    user=request.user,
+                    body=form.cleaned_data["body"],
                 )
         except IntegrityError:
             # One response per listener, including simultaneous submissions.
@@ -81,11 +85,14 @@ def create_local_comment(request, slug):
             query = request.GET.copy()
             query.pop("page", None)
             return redirect(
-                f"{reverse('vote:vote')}?{query.urlencode()}#local-discussion-{post.pk}"
+                f"{reverse('vote:vote')}?{query.urlencode()}"
+                f"#local-discussion-{program.pk}"
             )
         form = None
     return render(
-        request, "vote/discussion.html", local_discussion_context(request, post, form=form)
+        request,
+        "vote/discussion.html",
+        local_discussion_context(request, program, form=form),
     )
 
 
@@ -141,7 +148,7 @@ def submit_vote(request):
     with transaction.atomic():
         player = (
             Player.objects.select_for_update()
-            .select_related("post")
+            .select_related("program")
             .get(pk=player.pk)
         )
 
@@ -184,10 +191,11 @@ def submit_vote(request):
             # The tap stays deliberately un-voted: silence, and a mix that is
             # being repaired, are both things nobody can hold an opinion about.
             # But the person holding the phone is in the room, so name them for
-            # the policy, which reads saved-sound tags and would otherwise open
-            # every room on the same fixed bootstrap mix. Look them up without
-            # creating anything: a listener we have never seen has no saved
-            # sounds, so they would add no evidence anyway.
+            # the policy so it can read their saved-sound tags instead of
+            # treating the room as empty and choosing the Player Program's
+            # baseline-or-silence fallback. Look them up without creating
+            # anything: a listener we have never seen has no saved sounds, so
+            # they would add no evidence anyway.
             awaken_listener = Listener.objects.filter(user=request.user).first()
         else:
             listener, _ = Listener.objects.get_or_create(user=request.user)
@@ -223,7 +231,7 @@ def submit_vote(request):
     if should_awaken:
         prediction = Algorithm.awaken(player, listener=awaken_listener)
         if prediction is None:
-            has_available_sounds = player.post.collection.exists()
+            has_available_sounds = player.program.collection.exists()
             response = HttpResponse("")
             response["HX-Trigger"] = json.dumps(
                 {

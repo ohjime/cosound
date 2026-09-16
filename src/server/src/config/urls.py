@@ -15,5 +15,5 @@ urlpatterns = [
     path("profile/", include("profile.urls")),
     path("explore/", include("explore.urls")),
     path("admin/", admin.site.urls, name="admin"),
-    path("upload/", include("django_file_form.urls")),
+    path("upload/", include("config.file_upload_urls")),
 ]

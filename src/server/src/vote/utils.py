@@ -70,7 +70,9 @@ def build_vote_context(request):
     player = None
     if token:
         player = (
-            Player.objects.select_related("manager", "post__post").filter(token=token).first()
+            Player.objects.select_related("manager", "program__post")
+            .filter(token=token)
+            .first()
         )
 
     layers = serialize_player_for_carousel(player, request.user, choice) if player else []
@@ -132,25 +134,29 @@ def serialize_player_for_carousel(player, user=None, choice=None):
     return items
 
 
-def local_discussion_context(request, post, page_number=1, form=None):
+def local_discussion_context(request, program, page_number=1, form=None):
     from core.discussion import build_discussion_context
 
     params = request.GET.copy()
     params.pop("page", None)
     query = params.urlencode()
-    discussion_url = reverse("vote:discussion", kwargs={"slug": post.post.slug})
-    comment_url = reverse("vote:create_comment", kwargs={"slug": post.post.slug})
+    discussion_url = reverse(
+        "vote:discussion", kwargs={"slug": program.post.slug}
+    )
+    comment_url = reverse(
+        "vote:create_comment", kwargs={"slug": program.post.slug}
+    )
     return {
         **build_discussion_context(
-            post.post,
+            program.post,
             request.user,
             page_number,
             form,
             discussion_url=f"{discussion_url}?{query}",
             comment_url=f"{comment_url}?{query}",
-            dom_id=f"local-discussion-{post.pk}",
+            dom_id=f"local-discussion-{program.pk}",
         ),
-        "post": post,
+        "program": program,
     }
 
 
@@ -159,10 +165,17 @@ def build_vote_page_context(request):
 
     context = build_vote_context(request)
     player = context["player"]
-    post = player.post if player and player.post.post.publication_date else None
-    context.update(post=post, body_html=render_markdown(post.post.article) if post else "")
-    if post:
-        context.update(local_discussion_context(request, post))
+    program = (
+        player.program
+        if player and player.program.post.publication_date
+        else None
+    )
+    context.update(
+        program=program,
+        body_html=render_markdown(program.post.article) if program else "",
+    )
+    if program:
+        context.update(local_discussion_context(request, program))
     return context
 
 

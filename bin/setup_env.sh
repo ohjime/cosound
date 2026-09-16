@@ -96,8 +96,8 @@ echo ""
 echo "--- Sound selection ---"
 echo "Only the predictor choice lives here, so it can be rolled back with a"
 echo "restart instead of an image rebuild. How the algorithm behaves (layer"
-echo "counts, hold time, disagreement penalty, house sound) is set in"
-echo "src/server/src/config/settings.py."
+echo "counts, hold time, disagreement penalty, baseline) is configured on"
+echo "each Local Post in the Django admin."
 echo "Roll back with: core.predict.random_predictor"
 prompt_optional "COSOUND_CORE_PREDICTOR" COSOUND_CORE_PREDICTOR \
     "core.predict.stable_preference_predictor"
@@ -114,10 +114,10 @@ SITE_ADDRESS=${SITE_ADDRESS}
 PROD_HOSTS=${PROD_HOSTS}
 WEB_CONCURRENCY=1
 VOTE_THROTTLE_SECONDS=60
-SERVER_REFRESH_INTERVAL=30
 
 # --- Sound selection ---
-# Rollback switch only. Algorithm tuning lives in config/settings.py.
+# Rollback switch only. Algorithm tuning is on each Local Post in admin;
+# device runtime tuning stays on Player.
 COSOUND_CORE_PREDICTOR=${COSOUND_CORE_PREDICTOR}
 
 # --- Postgres ---

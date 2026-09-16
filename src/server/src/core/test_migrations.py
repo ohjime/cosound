@@ -245,3 +245,69 @@ class PlayerSleepingMigrationTests(TransactionTestCase):
         self.assertFalse(active.sleeping)
         self.assertIsNone(empty.activated_at)
         self.assertIsNone(active.activated_at)
+
+
+class PlayerProgramRenameMigrationTests(TransactionTestCase):
+    migrate_from = [("core", "0010_localpost_chime")]
+    migrate_to = [
+        ("core", "0011_rename_localpost_playerprogram_and_player_program")
+    ]
+
+    def migrate(self, targets):
+        executor = MigrationExecutor(connection)
+        executor.migrate(targets)
+        return executor.loader.project_state(targets).apps
+
+    def setUp(self):
+        super().setUp()
+        apps = self.migrate(self.migrate_from)
+        User = apps.get_model("core", "User")
+        Manager = apps.get_model("core", "Manager")
+        Player = apps.get_model("core", "Player")
+        LocalPost = apps.get_model("core", "LocalPost")
+        Post = apps.get_model("core", "Post")
+        Sound = apps.get_model("core", "Sound")
+
+        user = User.objects.create(
+            username="program-rename",
+            email="program-rename@example.com",
+        )
+        manager = Manager.objects.create(user=user, name="Program manager")
+        shared_post = Post.objects.create(title="Program writing", composer=user)
+        sound = Sound.objects.create(
+            file="sounds/program.wav",
+            title="Program sound",
+            embeddings=[0] * 5,
+        )
+        local_post = LocalPost.objects.create(post=shared_post)
+        local_post.collection.add(sound)
+        self.player_id = Player.objects.create(
+            manager=manager,
+            name="Program player",
+            post=local_post,
+            token="program-rename-token",
+            playing={"layers": []},
+        ).pk
+        self.program_id = local_post.pk
+        self.post_id = shared_post.pk
+        self.sound_id = sound.pk
+
+    def tearDown(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
+        super().tearDown()
+
+    def test_model_and_player_field_rename_preserve_relationships(self):
+        apps = self.migrate(self.migrate_to)
+        Player = apps.get_model("core", "Player")
+        PlayerProgram = apps.get_model("core", "PlayerProgram")
+
+        player = Player.objects.get(pk=self.player_id)
+        program = PlayerProgram.objects.get(pk=self.program_id)
+
+        self.assertEqual(player.program_id, program.pk)
+        self.assertEqual(program.post_id, self.post_id)
+        self.assertEqual(
+            list(program.collection.values_list("pk", flat=True)),
+            [self.sound_id],
+        )

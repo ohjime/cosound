@@ -14,9 +14,10 @@ flowchart LR
 
 PostgreSQL remains authoritative. Redis contains transient notifications and
 connection groups; it needs no backups or durable volume. Missed messages are
-recovered by a refresh after connection establishment and the player's existing
-30-second reconciliation interval. A Redis outage can delay updates until the
-next REST refresh, but notification failures do not roll back saved state.
+recovered by a refresh after connection establishment and each player's
+admin-managed fallback reconciliation interval (30 seconds by default). A Redis
+outage can delay updates until the next REST refresh, but notification failures
+do not roll back saved state.
 
 ## Local development
 
@@ -126,13 +127,17 @@ not guarantee one delivery per database write. The client reconnects with
 backoff and refreshes when the subscription is ready again. Playback work
 remains serialized by the existing refresh worker.
 
-The REST response includes the player metadata and `sleeping` state. Metadata
+The REST response includes the player metadata, `sleeping` state, a `runtime`
+object with the fallback state-poll interval, and a `chime` descriptor with
+a download URL and stable version. Metadata
 changes refresh the interface without reloading unchanged audio. Changes to
 the desired audio still require downloading, preparing, and crossfading sounds.
 `PLAYER_API_RATE` defaults to `120/m` across the player API endpoints to allow
 event-triggered refreshes; rate limits are keyed by the stable player ID.
-The prediction scheduler retains its current interval: a vote does not create
-a new prediction immediately just because notifications are enabled.
+The prediction scheduler uses the algorithm refresh interval on each player's
+assigned Local Post. A vote does not create a new prediction immediately just
+because notifications are enabled; it is considered on that Local Post's next
+scheduled algorithm run.
 
 ## Model changes and explicit notifications
 
@@ -144,14 +149,22 @@ New votes send a separate event after the database transaction commits:
 {"type": "player.vote_received", "schema_version": 1, "vote_id": 123}
 ```
 
-The connected player plays an original, locally synthesized 450 ms bell over
-the current soundscape. It uses the existing audio output and follows master
-volume and mute. It does not change the mix or wait for the prediction cycle.
-Listener details are never sent. Rejected votes, rolled-back transactions,
-edits to existing votes, and wake-up requests that do not create a vote do not
-play the bell. The player remembers the last 512 vote IDs across reconnects
-within its current run to suppress duplicate events. At most eight bell voices
-overlap during a burst; the newest tap replaces the oldest voice at that limit.
+Each Local Post can provide its own uploaded vote-confirmation chime. The
+player downloads that one-shot into a dedicated, versioned cache, decodes and
+resamples it to the output device, and swaps it in without changing the current
+mix. A changed Local Post chime sends `player.changed`, so the normal refresh
+path picks it up even when the soundscape layers are unchanged. If no custom
+file is configured, the player uses its original locally synthesized 450 ms
+bell. A failed download or invalid file preserves the last working sound and is
+retried on a later refresh.
+
+The chime uses the existing audio output and follows master volume and mute. It
+does not wait for the prediction cycle. Listener details are never sent.
+Rejected votes, rolled-back transactions, edits to existing votes, and wake-up
+requests that do not create a vote do not play it. The player remembers the
+last 512 vote IDs across reconnects within its current run to suppress duplicate
+events. At most eight chime voices overlap during a burst; the newest tap
+replaces the oldest voice at that limit.
 
 These are live, best-effort confirmations, not a persistent notification queue.
 Votes saved while the player is offline or Redis is unavailable remain saved,
@@ -159,10 +172,10 @@ but their sounds are not replayed on reconnection.
 
 ### State changes
 
-Signal hooks cover saved/deleted players, sound collection membership,
-relevant sound metadata and deletions, manager names, and artist credits.
-Notifications run after the surrounding database transaction commits, so a
-rolled-back update does not notify a player.
+Signal hooks cover saved/deleted players, Local Post vote-chime changes, sound
+collection membership, relevant sound metadata and deletions, manager names,
+and artist credits. Notifications run after the surrounding database
+transaction commits, so a rolled-back update does not notify a player.
 
 `QuerySet.update()`, `bulk_update()`, `bulk_create()`, raw SQL, and direct writes
 to many-to-many through tables bypass the normal save or relationship hooks.

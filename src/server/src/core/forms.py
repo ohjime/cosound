@@ -5,7 +5,7 @@ from django.forms import ModelForm
 from taggit.models import Tag
 from unfold.widgets import UnfoldAdminSelect2MultipleWidget
 from core.widgets import AudioUploadWidget
-from core.models import Comment, LocalPost, Post, Sound, User
+from core.models import Comment, PlayerProgram, Post, Sound, User
 from core.fonts import article_font_choices
 from core.post_widgets import AuthorsWidget, EasyMDEWidget
 
@@ -97,10 +97,48 @@ class PostForm(forms.ModelForm):
         return self.cleaned_data.get("authors") or []
 
 
-class LocalPostForm(forms.ModelForm):
+class PlayerProgramForm(FileFormMixin, forms.ModelForm):
+    chime = UploadedFileField(
+        required=False,
+        widget=AudioUploadWidget,
+        accept=".wav,.flac,.ogg,.mp3,.aif,.aiff",
+        label="Vote confirmation chime",
+        help_text=(
+            "Maximum 5 seconds and 5 MB. Supported formats: WAV, FLAC, OGG, "
+            "MP3, and AIFF."
+        ),
+    )
+
     class Meta:
-        model = LocalPost
-        fields = ["post", "collection"]
+        model = PlayerProgram
+        fields = [
+            "post",
+            "collection",
+            "chime",
+            "algorithm_refresh_interval_seconds",
+            "algorithm_active_listener_minutes",
+            "algorithm_sleep_after_minutes",
+            "algorithm_min_layers",
+            "algorithm_max_layers",
+            "algorithm_minimum_hold_seconds",
+            "algorithm_maximum_stay_seconds",
+            "algorithm_disagreement_penalty",
+            "algorithm_exploration_probability",
+            "algorithm_exploration_size",
+            "baseline",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, s3_upload_dir="chimes", **kwargs)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        collection = cleaned_data.get("collection")
+        if collection is not None:
+            self.instance._submitted_collection_sound_ids = {
+                sound.pk for sound in collection
+            }
+        return cleaned_data
 
 
 class CommentForm(forms.ModelForm):

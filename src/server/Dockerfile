@@ -27,8 +27,9 @@ ENV PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:$PATH"
 WORKDIR /app
 
-# psycopg2-binary and Pillow ship manylinux wheels, so python:3.13-slim needs no extra
-# OS packages. (If a future dep has no wheel, add: build-essential libpq-dev.)
+# psycopg2-binary, Pillow, and SoundFile ship manylinux wheels, so
+# python:3.13-slim needs no extra OS packages. (If a future dep has no wheel,
+# add: build-essential libpq-dev.)
 
 # Install Python deps first so this layer caches across source-only changes
 COPY pyproject.toml uv.lock ./

@@ -14,7 +14,7 @@ from django.urls import path, reverse
 from django.utils.safestring import mark_safe
 from django.utils.html import format_html
 from django.template.loader import render_to_string
-from django_file_form.model_admin import FileFormAdmin
+from django_file_form.model_admin import FileFormAdmin, FileFormAdminMixin
 from django.contrib.auth.models import Group
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from unfold.admin import ModelAdmin, TabularInline, StackedInline
@@ -22,8 +22,8 @@ from unfold.contrib.filters.admin import FieldTextFilter
 from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 from taggit.models import Tag
 
-from core.models import Manager, User, Sound, Player, Listener, Cosound, Artist, Set, Comment, LocalPost, Post, Prediction
-from core.forms import LocalPostForm, SoundForm
+from core.models import Manager, User, Sound, Player, Listener, Cosound, Artist, Set, Comment, PlayerProgram, Post, Prediction
+from core.forms import PlayerProgramForm, SoundForm
 from core.post_admin import PostAdmin, PostLinkAdmin
 
 
@@ -51,6 +51,8 @@ class SetInline(TabularInline):
 class PlayerInline(TabularInline):
     model = Player
     extra = 0
+    fields = ["name", "program", "location", "sleeping"]
+    autocomplete_fields = ["program"]
 
 
 model = django_apps.get_model("django_file_form", "TemporaryUploadedFile")
@@ -175,6 +177,7 @@ class SoundResource(resources.ModelResource):
 class SoundAdmin(FileFormAdmin, ModelAdmin, ImportExportModelAdmin):  # type: ignore
     form = SoundForm
     resource_classes = [SoundResource]
+    search_fields = ["title", "artist__name", "artist_legacy"]
 
     # Add Unfold's styled forms for the import/export pages
     import_form_class = ImportForm
@@ -210,23 +213,58 @@ class SoundAdmin(FileFormAdmin, ModelAdmin, ImportExportModelAdmin):  # type: ig
 admin.site.register(Post, PostAdmin)
 
 
-@admin.register(LocalPost)
-class LocalPostAdmin(PostLinkAdmin):
-    form = LocalPostForm
-    fields = ["post", "edit_post", "collection"]
+@admin.register(PlayerProgram)
+class PlayerProgramAdmin(FileFormAdminMixin, PostLinkAdmin):
+    form = PlayerProgramForm
     list_display = ["post"]
     filter_horizontal = ["collection"]
+    autocomplete_fields = ["post", "baseline"]
+    fieldsets = [
+        (
+            None,
+            {
+                "fields": [
+                    "post",
+                    "edit_post",
+                    "collection",
+                    "chime",
+                ],
+            },
+        ),
+        (
+            "Algorithm Tuning",
+            {
+                "description": (
+                    "These parameters apply to the player using this post. "
+                    "Changes take effect while the scheduler is running."
+                ),
+                "fields": [
+                    "algorithm_refresh_interval_seconds",
+                    "algorithm_active_listener_minutes",
+                    "algorithm_sleep_after_minutes",
+                    "algorithm_min_layers",
+                    "algorithm_max_layers",
+                    "algorithm_minimum_hold_seconds",
+                    "algorithm_maximum_stay_seconds",
+                    "algorithm_disagreement_penalty",
+                    "algorithm_exploration_probability",
+                    "algorithm_exploration_size",
+                    "baseline",
+                ],
+            },
+        ),
+    ]
 
 
 @admin.register(Player)
 class PlayerAdmin(ModelAdmin):
     list_display = ["name", "manager", "sleeping", "activated_at"]
     list_filter = [("name", FieldTextFilter), "sleeping"]
-    autocomplete_fields = ["post"]
+    autocomplete_fields = ["program"]
     readonly_fields = [
         "playing_display",
         "token_display",
-        "post_edit_link",
+        "program_edit_link",
         "activated_at",
     ]
     compressed_fields = True
@@ -246,25 +284,35 @@ class PlayerAdmin(ModelAdmin):
             },
         ),
         (
-            "Player Post",
+            "Player Program",
             {
                 "fields": [
-                    "post",
-                    "post_edit_link",
+                    "program",
+                    "program_edit_link",
                     "playing_display",
                 ],
+            },
+        ),
+        (
+            "Device Runtime",
+            {
+                "description": (
+                    "Fallback polling catches state changes missed by the live "
+                    "connection. Changes reach a connected physical player immediately."
+                ),
+                "fields": ["state_refresh_interval_seconds"],
             },
         ),
     ]
 
     @admin.display(description="Writing and sound collection")
-    def post_edit_link(self, obj):
-        if not obj or not obj.post_id:
-            return "Save the Player to create its post, or choose an existing local post."
+    def program_edit_link(self, obj):
+        if not obj or not obj.program_id:
+            return "Save the Player to create its program, or choose an existing one."
         return format_html(
             '<a href="{}">Edit {} — writing and sound collection</a>',
-            reverse("admin:core_localpost_change", args=[obj.post_id]),
-            obj.post.post.title,
+            reverse("admin:core_playerprogram_change", args=[obj.program_id]),
+            obj.program.post.title,
         )
 
     def get_form(self, request, obj=None, change=False, **kwargs):

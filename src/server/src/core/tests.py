@@ -2,7 +2,7 @@ import math
 import random
 from datetime import timedelta
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 from django.contrib.auth.models import Permission
 from django.contrib.messages import get_messages
@@ -14,8 +14,10 @@ from taggit.models import Tag
 
 from core.management.commands.refresh import (
     Command,
-    REFRESH_INTERVAL_SECONDS,
+    SCHEDULER_TICK_SECONDS,
     _get_predictor,
+    _refresh_is_due,
+    _task_is_in_flight,
 )
 from core.models import (
     Post,
@@ -23,7 +25,7 @@ from core.models import (
     Artist,
     Cosound,
     Listener,
-    LocalPost,
+    PlayerProgram,
     Manager,
     PlaybackExposure,
     Player,
@@ -32,7 +34,6 @@ from core.models import (
     User,
 )
 from core.predict import (
-    ACTIVITY_WINDOW,
     Algorithm,
     PREDICTION_RETRY,
     _predict_for_player,
@@ -74,21 +75,24 @@ class RefreshSchedulerTests(SimpleTestCase):
         "core.management.commands.refresh.time.sleep",
         side_effect=KeyboardInterrupt,
     )
-    @patch("core.management.commands.refresh.Player.objects.filter", return_value=[])
+    @patch("core.management.commands.refresh.Player.objects.filter")
     @patch("core.management.commands.refresh._get_predictor")
-    def test_waits_thirty_seconds_between_player_refreshes(
+    def test_waits_one_second_between_scheduler_ticks(
         self,
         _get_predictor,
-        _players,
+        players,
         sleep,
     ):
+        players.return_value.select_related.return_value = []
+
         with self.assertRaises(SystemExit) as stopped:
             Command().handle()
 
         self.assertEqual(stopped.exception.code, 0)
-        self.assertEqual(REFRESH_INTERVAL_SECONDS, 30)
-        _players.assert_called_once_with(sleeping=False)
-        sleep.assert_called_once_with(30)
+        self.assertEqual(SCHEDULER_TICK_SECONDS, 1)
+        players.assert_called_once_with(sleeping=False)
+        players.return_value.select_related.assert_called_once_with("program")
+        sleep.assert_called_once_with(1)
 
     @patch(
         "core.management.commands.refresh.time.sleep",
@@ -102,14 +106,92 @@ class RefreshSchedulerTests(SimpleTestCase):
         players,
         _sleep,
     ):
-        awake = SimpleNamespace(pk=7, name="Awake room")
-        players.return_value = [awake]
+        awake = SimpleNamespace(
+            pk=7,
+            name="Awake room",
+            program=SimpleNamespace(algorithm_refresh_interval_seconds=30),
+        )
+        players.return_value.select_related.return_value = [awake]
 
         with self.assertRaises(SystemExit):
             Command().handle()
 
         players.assert_called_once_with(sleeping=False)
+        players.return_value.select_related.assert_called_once_with("program")
         get_predictor.return_value.enqueue.assert_called_once_with(player_id=awake.pk)
+
+    @patch(
+        "core.management.commands.refresh.time.sleep",
+        side_effect=[None] * 10 + [KeyboardInterrupt],
+    )
+    @patch(
+        "core.management.commands.refresh.time.monotonic",
+        side_effect=list(range(11)),
+    )
+    @patch("core.management.commands.refresh.Player.objects.filter")
+    @patch("core.management.commands.refresh._get_predictor")
+    def test_each_player_is_enqueued_on_its_own_cadence(
+        self,
+        get_predictor,
+        players,
+        _monotonic,
+        sleep,
+    ):
+        every_five_seconds = SimpleNamespace(
+            pk=7,
+            name="Quick room",
+            program=SimpleNamespace(algorithm_refresh_interval_seconds=5),
+        )
+        every_ten_seconds = SimpleNamespace(
+            pk=8,
+            name="Slow room",
+            program=SimpleNamespace(algorithm_refresh_interval_seconds=10),
+        )
+        players.return_value.select_related.return_value = [
+            every_five_seconds,
+            every_ten_seconds,
+        ]
+
+        with self.assertRaises(SystemExit):
+            Command().handle()
+
+        self.assertEqual(
+            get_predictor.return_value.enqueue.call_args_list,
+            [
+                call(player_id=every_five_seconds.pk),
+                call(player_id=every_ten_seconds.pk),
+                call(player_id=every_five_seconds.pk),
+                call(player_id=every_five_seconds.pk),
+                call(player_id=every_ten_seconds.pk),
+            ],
+        )
+        self.assertEqual(players.call_count, 11)
+        players.assert_called_with(sleeping=False)
+        self.assertEqual(
+            players.return_value.select_related.call_args_list,
+            [call("program")] * 11,
+        )
+        self.assertEqual(sleep.call_args_list, [call(1)] * 11)
+
+    def test_a_changed_program_interval_is_used_without_restarting(self):
+        player = SimpleNamespace(
+            pk=7,
+            program=SimpleNamespace(algorithm_refresh_interval_seconds=30),
+        )
+        last_enqueued_at = {player.pk: 0.0}
+
+        self.assertFalse(_refresh_is_due(player, last_enqueued_at, 10.0))
+        player.program.algorithm_refresh_interval_seconds = 5
+        self.assertTrue(_refresh_is_due(player, last_enqueued_at, 10.0))
+
+    def test_an_unfinished_prediction_prevents_overlapping_enqueues(self):
+        task_result = Mock(is_finished=False)
+
+        self.assertTrue(_task_is_in_flight(task_result))
+        task_result.refresh.assert_called_once_with()
+
+        task_result.is_finished = True
+        self.assertFalse(_task_is_in_flight(task_result))
 
 
 class ListenerTestPointAdminTests(TestCase):
@@ -284,12 +366,15 @@ class PlayerAdminAwakenTests(TestCase):
             {
                 "name": self.player.name,
                 "manager": self.manager.pk,
-                "post": self.player.post_id,
+                "post": self.player.program_id,
+                "state_refresh_interval_seconds": (
+                    self.player.state_refresh_interval_seconds
+                ),
             },
         )
 
     def test_player_editor_delegates_waking_to_algorithm(self):
-        self.player.post.collection.add(self.sound)
+        self.player.program.collection.add(self.sound)
 
         with patch("core.predict.Algorithm.awaken", return_value=object()) as awaken:
             with self.captureOnCommitCallbacks(execute=True):
@@ -313,7 +398,7 @@ class PlayerAdminAwakenTests(TestCase):
         )
 
     def test_player_editor_reports_post_commit_algorithm_failure(self):
-        self.player.post.collection.add(self.sound)
+        self.player.program.collection.add(self.sound)
 
         with (
             patch(
@@ -388,7 +473,7 @@ class PredictorTests(TestCase):
     def test_only_voters_from_the_last_five_minutes_are_active(self):
         rock = self.make_sound("rock", "rock")
         jazz = self.make_sound("jazz", "jazz")
-        self.player.post.collection.add(rock, jazz)
+        self.player.program.collection.add(rock, jazz)
         recent_listener = self.make_listener(rock)
         stale_listener = self.make_listener(jazz)
         other_player_listener = self.make_listener(jazz)
@@ -411,7 +496,7 @@ class PredictorTests(TestCase):
 
     def test_multiple_votes_from_one_listener_produce_one_layer(self):
         sound = self.make_sound("ambient", "ambient")
-        self.player.post.collection.add(sound)
+        self.player.program.collection.add(sound)
         listener = self.make_listener(sound)
         self.vote(listener)
         self.vote(listener, value=Vote.DOWNVOTE)
@@ -426,7 +511,7 @@ class PredictorTests(TestCase):
     def test_each_listener_contributes_a_layer_from_their_own_top_tag(self):
         library_rock = self.make_sound("library-rock", "rock")
         library_jazz = self.make_sound("library-jazz", "jazz")
-        self.player.post.collection.add(library_rock, library_jazz)
+        self.player.program.collection.add(library_rock, library_jazz)
         rock_one = self.make_sound("rock-one", "rock")
         rock_two = self.make_sound("rock-two", "rock")
         jazz_one = self.make_sound("jazz-one", "jazz")
@@ -451,7 +536,7 @@ class PredictorTests(TestCase):
     def test_tied_usable_top_tags_are_selected_randomly(self):
         rock = self.make_sound("library-rock", "rock")
         jazz = self.make_sound("library-jazz", "jazz")
-        self.player.post.collection.add(rock, jazz)
+        self.player.program.collection.add(rock, jazz)
         collected = self.make_sound("collected", "rock", "jazz")
         listener = self.make_listener(collected)
         self.vote(listener)
@@ -471,7 +556,7 @@ class PredictorTests(TestCase):
 
     def test_uses_a_matching_tag_when_another_tied_top_tag_is_unavailable(self):
         jazz = self.make_sound("library-jazz", "jazz")
-        self.player.post.collection.add(jazz)
+        self.player.program.collection.add(jazz)
         collected = self.make_sound("collected", "jazz", "unavailable")
         listener = self.make_listener(collected)
         self.vote(listener)
@@ -483,7 +568,7 @@ class PredictorTests(TestCase):
 
     def test_does_not_fall_back_to_a_less_frequent_tag(self):
         jazz = self.make_sound("library-jazz", "jazz")
-        self.player.post.collection.add(jazz)
+        self.player.program.collection.add(jazz)
         unavailable_one = self.make_sound("unavailable-one", "unavailable")
         unavailable_two = self.make_sound("unavailable-two", "unavailable")
         collected_jazz = self.make_sound("collected-jazz", "jazz")
@@ -502,7 +587,7 @@ class PredictorTests(TestCase):
     def test_selected_sound_is_restricted_to_the_players_library(self):
         library_sound = self.make_sound("library", "ambient")
         outside_sound = self.make_sound("outside", "ambient")
-        self.player.post.collection.add(library_sound)
+        self.player.program.collection.add(library_sound)
         listener = self.make_listener(outside_sound)
         self.vote(listener)
 
@@ -514,20 +599,20 @@ class PredictorTests(TestCase):
     def test_switching_posts_predicts_from_the_new_posts_collection(self):
         previous_sound = self.make_sound("previous-library", "ambient")
         next_sound = self.make_sound("next-library", "ambient")
-        self.player.post.collection.add(previous_sound)
+        self.player.program.collection.add(previous_sound)
         listener = self.make_listener(previous_sound)
         self.vote(listener)
         self.assertEqual(self.predict(), 1)
         self.player.refresh_from_db()
         self.assertEqual(self.player.playing.layers[0].sound_id, previous_sound.pk)
 
-        previous_post = self.player.post
-        next_post = LocalPost.objects.create(post=Post.objects.create(
-            composer=self.manager.user, title="The next local post"
+        previous_post = self.player.program
+        next_post = PlayerProgram.objects.create(post=Post.objects.create(
+            composer=self.manager.user, title="The next player program"
         ))
         next_post.collection.add(next_sound)
-        self.player.post = next_post
-        self.player.save(update_fields=["post"])
+        self.player.program = next_post
+        self.player.save(update_fields=["program"])
         self.assertEqual(self.predict(), 1)
         self.player.refresh_from_db()
         self.assertEqual(self.player.playing.layers[0].sound_id, next_sound.pk)
@@ -537,7 +622,7 @@ class PredictorTests(TestCase):
     def test_same_top_tag_uses_distinct_matching_sounds(self):
         library_one = self.make_sound("library-one", "ambient")
         library_two = self.make_sound("library-two", "ambient")
-        self.player.post.collection.add(library_one, library_two)
+        self.player.program.collection.add(library_one, library_two)
         listener_one = self.make_listener(
             self.make_sound("collected-one", "ambient")
         )
@@ -556,7 +641,7 @@ class PredictorTests(TestCase):
 
     def test_same_top_tag_with_one_matching_sound_adds_it_only_once(self):
         library_sound = self.make_sound("library", "ambient")
-        self.player.post.collection.add(library_sound)
+        self.player.program.collection.add(library_sound)
         listener_one = self.make_listener(
             self.make_sound("collected-one", "ambient")
         )
@@ -597,6 +682,10 @@ class PredictorTests(TestCase):
         self.player.playing = Prediction.new()
         self.player.playing.add_layer(existing_sound.pk, gain=0.5)
         self.player.save()
+        PlayerProgram.objects.filter(pk=self.player.program_id).update(
+            algorithm_active_listener_minutes=5,
+            algorithm_sleep_after_minutes=5,
+        )
         stale_listener = self.make_listener(existing_sound)
         self.vote(
             stale_listener,
@@ -629,9 +718,13 @@ class PredictorTests(TestCase):
         recent.assert_not_called()
 
     @override_settings(COSOUND_CORE_PREDICTOR="core.predict.random_predictor")
-    def test_legacy_algorithm_awakens_for_its_activity_window_then_sleeps(self):
+    def test_legacy_algorithm_uses_the_posts_sleep_window(self):
+        PlayerProgram.objects.filter(pk=self.player.program_id).update(
+            algorithm_active_listener_minutes=5,
+            algorithm_sleep_after_minutes=10,
+        )
         sound = self.make_sound("wake-up", "ambient")
-        self.player.post.collection.add(sound)
+        self.player.program.collection.add(sound)
 
         with (
             patch("core.predict.random.choice", return_value=sound.pk),
@@ -651,7 +744,7 @@ class PredictorTests(TestCase):
 
         with patch(
             "core.predict.timezone.now",
-            return_value=activated_at + ACTIVITY_WINDOW - timedelta(seconds=1),
+            return_value=activated_at + timedelta(minutes=10) - timedelta(seconds=1),
         ):
             self.assertEqual(self.predict(), 0)
 
@@ -664,7 +757,7 @@ class PredictorTests(TestCase):
 
         with patch(
             "core.predict.timezone.now",
-            return_value=activated_at + ACTIVITY_WINDOW + timedelta(seconds=1),
+            return_value=activated_at + timedelta(minutes=10) + timedelta(seconds=1),
         ):
             self.assertEqual(self.predict(), 0)
 
@@ -676,7 +769,7 @@ class PredictorTests(TestCase):
     @override_settings(COSOUND_CORE_PREDICTOR="core.predict.random_predictor")
     def test_legacy_awaken_repairs_zero_gain_and_closes_stable_exposure(self):
         sound = self.make_sound("repair", "ambient")
-        self.player.post.collection.add(sound)
+        self.player.program.collection.add(sound)
         silent_prediction = Prediction.new()
         silent_prediction.add_layer(sound.pk, gain=0)
         self.player.update(silent_prediction)
@@ -709,10 +802,12 @@ class PredictorTests(TestCase):
     @override_settings(COSOUND_CORE_PREDICTOR="core.predict.random_predictor")
     def test_legacy_awaken_renews_an_already_playing_room(self):
         sound = self.make_sound("renew", "ambient")
-        self.player.post.collection.add(sound)
+        self.player.program.collection.add(sound)
         playing = Prediction.new()
         playing.add_layer(sound.pk)
-        previous_activation = timezone.now() - ACTIVITY_WINDOW
+        previous_activation = timezone.now() - timedelta(
+            minutes=self.player.program.algorithm_sleep_after_minutes
+        )
         Player.objects.filter(pk=self.player.pk).update(
             playing=playing,
             sleeping=False,
@@ -730,7 +825,7 @@ class PredictorTests(TestCase):
     def test_algorithm_never_returns_a_deleted_prediction_after_a_failed_run(self):
         available = self.make_sound("available", "ambient")
         stale = self.make_sound("stale", "ambient")
-        self.player.post.collection.add(available)
+        self.player.program.collection.add(available)
         prediction = Prediction.new()
         prediction.add_layer(stale.pk)
         Player.objects.filter(pk=self.player.pk).update(
@@ -753,7 +848,7 @@ class PredictorTests(TestCase):
 
     def test_algorithm_retries_one_optimistically_discarded_awaken(self):
         available = self.make_sound("available", "ambient")
-        self.player.post.collection.add(available)
+        self.player.program.collection.add(available)
         predictor = Mock()
         predictor.call.return_value = PREDICTION_RETRY
 
@@ -913,6 +1008,8 @@ class StableSelectionTests(SimpleTestCase):
             SelectionConfig(hold_seconds=120, maximum_stay_seconds=60)
         with self.assertRaisesRegex(ValueError, "cannot exceed"):
             SelectionConfig(min_layers=3, max_layers=2)
+        with self.assertRaisesRegex(ValueError, "baseline_sound_id"):
+            SelectionConfig(baseline_sound_id=0)
 
     def test_saved_tag_affinity_selects_a_matching_single(self):
         listener = ListenerEvidence("listener", saved_sounds=(self.rain,))
@@ -943,7 +1040,7 @@ class StableSelectionTests(SimpleTestCase):
         self.assertGreaterEqual(len(result.selected_mix.layers), 2)
         self.assertLessEqual(len(result.selected_mix.layers), 3)
 
-    def test_house_fallback_respects_minimum_layers(self):
+    def test_baseline_is_a_single_even_when_minimum_layers_is_higher(self):
         result = select_mix(
             sounds=(SoundEvidence(2), SoundEvidence(5), SoundEvidence(8)),
             listeners=(),
@@ -953,13 +1050,13 @@ class StableSelectionTests(SimpleTestCase):
             config=SelectionConfig(
                 min_layers=2,
                 max_layers=3,
-                house_sound_id=5,
+                baseline_sound_id=5,
             ),
         )
 
-        self.assertEqual(result.reason, "house_mix_no_active_listeners")
-        self.assertEqual(len(result.selected_mix.layers), 2)
-        self.assertIn(5, result.selected_mix.sound_ids)
+        self.assertEqual(result.reason, "baseline_no_active_listeners")
+        self.assertEqual(result.selected_mix.sound_ids, (5,))
+        self.assertEqual(result.selected_mix.layers[0].gain, 1.0)
 
     def test_minimum_layers_degrades_to_a_smaller_library(self):
         result = select_mix(
@@ -973,7 +1070,7 @@ class StableSelectionTests(SimpleTestCase):
 
         self.assertEqual(result.selected_mix.sound_ids, (self.rain.sound_id,))
 
-    def test_awaken_bootstraps_a_neutral_configured_mix_without_listeners(self):
+    def test_no_listeners_without_baseline_selects_silence_even_when_awakened(self):
         sounds = (self.rain, self.cafe, SoundEvidence(3, ("forest",)))
         arguments = {
             "sounds": sounds,
@@ -988,28 +1085,39 @@ class StableSelectionTests(SimpleTestCase):
         awakened = select_mix(**arguments, awaken=True)
 
         self.assertIsNone(idle.selected_mix)
-        self.assertEqual(idle.reason, "no_active_listener_fallback")
-        self.assertEqual(awakened.reason, "neutral_bootstrap")
-        self.assertEqual(awakened.selected_mix.sound_ids, (1, 2))
-        self.assertTrue(
-            all(
-                math.isclose(layer.gain, 1 / math.sqrt(2))
-                for layer in awakened.selected_mix.layers
-            )
+        self.assertEqual(idle.reason, "silent_no_active_listeners")
+        self.assertIsNone(awakened.selected_mix)
+        self.assertEqual(awakened.reason, "silent_no_active_listeners")
+
+    def test_minimum_hold_temporarily_retains_listener_mix_before_baseline(self):
+        now = timezone.now()
+        current = Mix((MixLayer(1, 1.0), MixLayer(2, 1.0)))
+        arguments = {
+            "sounds": (SoundEvidence(1), SoundEvidence(2), SoundEvidence(3)),
+            "listeners": (),
+            "current_mix": current,
+            "decision_time": now,
+            "config": SelectionConfig(
+                min_layers=2,
+                max_layers=3,
+                hold_seconds=120,
+                baseline_sound_id=3,
+            ),
+        }
+
+        held = select_mix(
+            **arguments,
+            last_change_at=now - timedelta(seconds=119),
+        )
+        released = select_mix(
+            **arguments,
+            last_change_at=now - timedelta(seconds=121),
         )
 
-    def test_neutral_bootstrap_uses_the_selectors_mix_key_tiebreak(self):
-        result = select_mix(
-            sounds=(SoundEvidence(2), SoundEvidence(10), SoundEvidence(11)),
-            listeners=(),
-            current_mix=None,
-            last_change_at=None,
-            decision_time=timezone.now(),
-            config=SelectionConfig(min_layers=2, max_layers=4),
-            awaken=True,
-        )
-
-        self.assertEqual(result.selected_mix.sound_ids, (10, 11))
+        self.assertEqual(held.reason, "minimum_hold")
+        self.assertEqual(held.selected_mix, current)
+        self.assertEqual(released.reason, "baseline_no_active_listeners")
+        self.assertEqual(released.selected_mix.sound_ids, (3,))
 
     def test_valid_mix_scores_only_one_edit_neighbours_at_four_layers(self):
         now = timezone.now()
@@ -1021,7 +1129,7 @@ class StableSelectionTests(SimpleTestCase):
 
         result = select_mix(
             sounds=sounds,
-            listeners=(),
+            listeners=(ListenerEvidence("listener"),),
             current_mix=current,
             last_change_at=now - timedelta(seconds=181),
             decision_time=now,
@@ -1160,7 +1268,7 @@ class StableSelectionTests(SimpleTestCase):
         self.assertLessEqual(max(len(new_ids - old_ids), len(old_ids - new_ids)), 1)
         self.assertEqual(len(result.selected_mix.layers), len(current.layers))
 
-    def test_maximum_stay_rotates_without_active_listeners(self):
+    def test_no_active_listeners_fall_silent_after_hold(self):
         now = timezone.now()
         current = Mix((MixLayer(1, 1.0), MixLayer(2, 1.0)))
 
@@ -1173,15 +1281,14 @@ class StableSelectionTests(SimpleTestCase):
             config=SelectionConfig(
                 hold_seconds=0,
                 maximum_stay_seconds=10,
-                house_sound_id=None,
             ),
         )
 
-        self.assertEqual(result.reason, "maximum_stay")
-        self.assertNotEqual(result.selected_mix.sound_ids, current.sound_ids)
-        self.assertEqual(len(result.selected_mix.layers), 2)
+        self.assertEqual(result.reason, "silent_no_active_listeners")
+        self.assertIsNone(result.selected_mix)
+        self.assertTrue(result.changed)
 
-    def test_maximum_stay_can_be_indefinite(self):
+    def test_no_active_listeners_do_not_retain_a_mix_indefinitely(self):
         now = timezone.now()
         current = Mix((MixLayer(1, 1.0),))
 
@@ -1197,8 +1304,8 @@ class StableSelectionTests(SimpleTestCase):
             ),
         )
 
-        self.assertEqual(result.reason, "retained_no_active_listeners")
-        self.assertEqual(result.selected_mix, current)
+        self.assertEqual(result.reason, "silent_no_active_listeners")
+        self.assertIsNone(result.selected_mix)
 
     def test_maximum_stay_retains_when_no_layer_edit_exists(self):
         now = timezone.now()
@@ -1206,7 +1313,7 @@ class StableSelectionTests(SimpleTestCase):
 
         result = select_mix(
             sounds=(SoundEvidence(1),),
-            listeners=(),
+            listeners=(ListenerEvidence("listener"),),
             current_mix=current,
             last_change_at=now - timedelta(seconds=11),
             decision_time=now,
@@ -1221,7 +1328,6 @@ class StableSelectionTests(SimpleTestCase):
         self.assertEqual(result.reachable_count, 0)
 
 
-@override_settings(COSOUND_EXPLORATION_PROBABILITY=0.0)
 class StablePredictorIntegrationTests(TestCase):
     """The stable predictor as it behaves inside this project's lifecycle.
 
@@ -1238,8 +1344,22 @@ class StablePredictorIntegrationTests(TestCase):
         )
         self.manager = Manager.objects.create(user=manager_user, name="Manager")
         self.player = Player.objects.create(manager=self.manager, name="Player")
+        PlayerProgram.objects.filter(pk=self.player.program_id).update(
+            algorithm_exploration_probability=0.0
+        )
+        self.player.program.algorithm_exploration_probability = 0.0
         self.cosound = Cosound.objects.create(hashid="stable", hashset="stable")
         self.listener_number = 0
+
+    def configure_algorithm(self, **parameters):
+        """Set the admin-managed algorithm parameters for this player's program."""
+        updates = {
+            f"algorithm_{parameter}": value
+            for parameter, value in parameters.items()
+        }
+        PlayerProgram.objects.filter(pk=self.player.program_id).update(**updates)
+        for field, value in updates.items():
+            setattr(self.player.program, field, value)
 
     def make_sound(self, title, *tags):
         sound = Sound.objects.create(
@@ -1288,7 +1408,7 @@ class StablePredictorIntegrationTests(TestCase):
 
     def test_sleeping_player_is_never_predicted_for(self):
         rain = self.make_sound("rain", "rain")
-        self.player.post.collection.add(rain)
+        self.player.program.collection.add(rain)
         self.make_listener(rain)
         self.assertTrue(self.player.sleeping)
 
@@ -1300,22 +1420,25 @@ class StablePredictorIntegrationTests(TestCase):
         self.assertFalse(AlgorithmDecision.objects.exists())
 
     @override_settings(
-        COSOUND_CORE_PREDICTOR="core.predict.stable_preference_predictor",
-        COSOUND_MIN_LAYERS=2,
-        COSOUND_MAX_LAYERS=4,
-        COSOUND_EXPLORATION_PROBABILITY=0,
+        COSOUND_CORE_PREDICTOR="core.predict.stable_preference_predictor"
     )
     def test_algorithm_awaken_selects_and_records_the_configured_mix(self):
+        self.configure_algorithm(
+            min_layers=2,
+            max_layers=4,
+            exploration_probability=0.0,
+        )
         sounds = [
             self.make_sound("rain", "rain"),
             self.make_sound("cafe", "cafe"),
             self.make_sound("forest", "forest"),
             self.make_sound("waves", "waves"),
         ]
-        self.player.post.collection.add(*sounds)
+        self.player.program.collection.add(*sounds)
+        listener = self.make_listener()
 
         with patch.object(Player, "announce") as announce:
-            prediction = Algorithm.awaken(self.player)
+            prediction = Algorithm.awaken(self.player, listener=listener)
 
         self.player.refresh_from_db()
         self.assertIsNotNone(prediction)
@@ -1328,7 +1451,7 @@ class StablePredictorIntegrationTests(TestCase):
         for layer in self.player.playing.layers:
             self.assertAlmostEqual(layer.sound_gain, 1 / math.sqrt(2))
         decision = AlgorithmDecision.objects.get()
-        self.assertEqual(decision.outcome, "neutral_bootstrap")
+        self.assertEqual(decision.outcome, "selected")
         self.assertEqual(decision.policy_version, "stable-preference-mixer-v2")
         self.assertEqual(decision.configuration["min_layers"], 2)
         self.assertEqual(decision.configuration["max_layers"], 4)
@@ -1337,15 +1460,90 @@ class StablePredictorIntegrationTests(TestCase):
         announce.assert_called_once()
 
     @override_settings(
-        COSOUND_CORE_PREDICTOR="core.predict.stable_preference_predictor",
-        COSOUND_MIN_LAYERS=2,
-        COSOUND_MAX_LAYERS=4,
-        COSOUND_EXPLORATION_PROBABILITY=0,
+        COSOUND_CORE_PREDICTOR="core.predict.stable_preference_predictor"
+    )
+    def test_decision_records_the_complete_post_configuration_snapshot(self):
+        baseline = self.make_sound("baseline", "ambient")
+        other_sound = self.make_sound("other", "ambient")
+        self.player.program.collection.add(baseline, other_sound)
+        self.player.program.baseline = baseline
+        self.player.program.save(update_fields=["baseline"])
+        self.configure_algorithm(
+            refresh_interval_seconds=13,
+            min_layers=1,
+            max_layers=2,
+            active_listener_minutes=7,
+            sleep_after_minutes=31,
+            minimum_hold_seconds=11,
+            maximum_stay_seconds=22,
+            disagreement_penalty=0.75,
+            exploration_probability=0.0,
+            exploration_size=3,
+        )
+
+        with patch.object(Player, "announce"):
+            self.assertIsNotNone(Algorithm.awaken(self.player))
+
+        self.assertEqual(
+            AlgorithmDecision.objects.get().configuration,
+            {
+                "min_layers": 1,
+                "max_layers": 2,
+                "disagreement_penalty": 0.75,
+                "hold_seconds": 11,
+                "maximum_stay_seconds": 22,
+                "score_precision": 8,
+                "exploration_probability": 0.0,
+                "exploration_size": 3,
+                "baseline_sound_id": baseline.pk,
+                "active_listener_minutes": 7,
+                "sleep_after_minutes": 31,
+                "refresh_interval_seconds": 13,
+            },
+        )
+
+    @override_settings(
+        COSOUND_CORE_PREDICTOR="core.predict.stable_preference_predictor"
+    )
+    def test_reassigning_the_post_uses_the_new_posts_policy(self):
+        self.configure_algorithm(min_layers=2, max_layers=2)
+        previous_post = self.player.program
+        rain = self.make_sound("rain", "rain")
+        cafe = self.make_sound("cafe", "cafe")
+        next_post = PlayerProgram.objects.create(
+            post=Post.objects.create(
+                composer=self.manager.user,
+                title="A single-layer post",
+            ),
+            algorithm_min_layers=1,
+            algorithm_max_layers=1,
+            algorithm_exploration_probability=0.0,
+        )
+        next_post.collection.add(rain, cafe)
+        self.player.program = next_post
+        self.player.save(update_fields=["program"])
+        listener = self.make_listener(rain)
+
+        with patch.object(Player, "announce"):
+            prediction = Algorithm.awaken(self.player, listener=listener)
+
+        self.assertEqual(previous_post.algorithm_min_layers, 2)
+        self.assertEqual([layer.sound_id for layer in prediction.layers], [rain.pk])
+        self.assertEqual(AlgorithmDecision.objects.get().configuration["min_layers"], 1)
+
+    @override_settings(
+        COSOUND_CORE_PREDICTOR="core.predict.stable_preference_predictor"
     )
     def test_algorithm_awaken_retries_a_library_change_during_selection(self):
+        self.configure_algorithm(
+            min_layers=2,
+            max_layers=4,
+            exploration_probability=0.0,
+        )
         first = self.make_sound("rain", "rain")
         added_during_selection = self.make_sound("cafe", "cafe")
-        self.player.post.collection.add(first)
+        self.player.program.collection.add(first)
+        listener = self.make_listener()
         real_select_mix = run_stable_prediction.__globals__["select_mix"]
         selection_count = 0
 
@@ -1354,7 +1552,7 @@ class StablePredictorIntegrationTests(TestCase):
             selection_count += 1
             result = real_select_mix(**kwargs)
             if selection_count == 1:
-                self.player.post.collection.add(added_during_selection)
+                self.player.program.collection.add(added_during_selection)
             return result
 
         with (
@@ -1364,7 +1562,7 @@ class StablePredictorIntegrationTests(TestCase):
             ),
             patch.object(Player, "announce"),
         ):
-            prediction = Algorithm.awaken(self.player)
+            prediction = Algorithm.awaken(self.player, listener=listener)
 
         self.assertIsNotNone(prediction)
         self.assertEqual(selection_count, 2)
@@ -1372,11 +1570,10 @@ class StablePredictorIntegrationTests(TestCase):
         self.assertEqual(AlgorithmDecision.objects.count(), 1)
 
     @override_settings(
-        COSOUND_CORE_PREDICTOR="core.predict.stable_preference_predictor",
-        COSOUND_MIN_LAYERS=2,
-        COSOUND_MAX_LAYERS=4,
+        COSOUND_CORE_PREDICTOR="core.predict.stable_preference_predictor"
     )
     def test_algorithm_awaken_leaves_an_empty_library_sleeping(self):
+        self.configure_algorithm(min_layers=2, max_layers=4)
         with patch.object(Player, "announce") as announce:
             prediction = Algorithm.awaken(self.player)
 
@@ -1389,14 +1586,13 @@ class StablePredictorIntegrationTests(TestCase):
         announce.assert_not_called()
 
     @override_settings(
-        COSOUND_CORE_PREDICTOR="core.predict.stable_preference_predictor",
-        COSOUND_MIN_LAYERS=1,
-        COSOUND_MAX_LAYERS=1,
+        COSOUND_CORE_PREDICTOR="core.predict.stable_preference_predictor"
     )
     def test_algorithm_awaken_uses_recent_listener_evidence(self):
+        self.configure_algorithm(min_layers=1, max_layers=1)
         cafe = self.make_sound("cafe", "cafe")
         rain = self.make_sound("rain", "rain")
-        self.player.post.collection.add(cafe, rain)
+        self.player.program.collection.add(cafe, rain)
         self.vote(self.make_listener(rain))
 
         with patch.object(Player, "announce"):
@@ -1406,13 +1602,12 @@ class StablePredictorIntegrationTests(TestCase):
         self.assertEqual(AlgorithmDecision.objects.get().outcome, "selected")
 
     @override_settings(
-        COSOUND_CORE_PREDICTOR="core.predict.stable_preference_predictor",
-        COSOUND_MIN_LAYERS=1,
-        COSOUND_MAX_LAYERS=1,
+        COSOUND_CORE_PREDICTOR="core.predict.stable_preference_predictor"
     )
     def test_algorithm_awaken_records_one_failure_with_its_intent(self):
+        self.configure_algorithm(min_layers=1, max_layers=1)
         rain = self.make_sound("rain", "rain")
-        self.player.post.collection.add(rain)
+        self.player.program.collection.add(rain)
 
         with (
             patch(
@@ -1429,15 +1624,13 @@ class StablePredictorIntegrationTests(TestCase):
         self.assertEqual(decision.outcome, "error")
         self.assertEqual(decision.trace["intent"], "awaken")
 
-    @override_settings(
-        COSOUND_HOUSE_SOUND_ID=None,
-        COSOUND_SLEEP_AFTER_MINUTES=180,
-    )
-    def test_inactive_room_falls_silent_rather_than_playing_a_house_sound(self):
+    def test_inactive_room_falls_silent_without_a_baseline(self):
+        self.configure_algorithm(sleep_after_minutes=180)
         rain = self.make_sound("rain", "rain")
-        self.player.post.collection.add(rain)
+        self.player.program.collection.add(rain)
+        listener = self.make_listener(rain)
         with patch.object(Player, "announce"):
-            self.assertIsNotNone(Algorithm.awaken(self.player))
+            self.assertIsNotNone(Algorithm.awaken(self.player, listener=listener))
         exposure = self.player.current_exposure
         now = timezone.now()
         Player.objects.filter(pk=self.player.pk).update(
@@ -1464,13 +1657,13 @@ class StablePredictorIntegrationTests(TestCase):
         self.assertEqual(exposure.status, PlaybackExposure.ENDED)
         self.assertIsNotNone(exposure.ended_at)
 
-    @override_settings(
-        COSOUND_ACTIVE_LISTENER_MINUTES=5,
-        COSOUND_SLEEP_AFTER_MINUTES=180,
-    )
-    def test_recent_activity_keeps_room_awake_without_stale_listener_influence(self):
+    def test_recent_but_inactive_listener_falls_silent_without_a_baseline(self):
+        self.configure_algorithm(
+            active_listener_minutes=5,
+            sleep_after_minutes=180,
+        )
         rain = self.make_sound("rain", "rain")
-        self.player.post.collection.add(rain)
+        self.player.program.collection.add(rain)
         self.wake_playing(rain)
         listener = self.make_listener(rain)
         now = timezone.now()
@@ -1480,17 +1673,19 @@ class StablePredictorIntegrationTests(TestCase):
         )
 
         with patch("core.prediction.live.timezone.now", return_value=now):
-            self.assertEqual(self.predict(), 1)
+            self.assertEqual(self.predict(), 0)
 
         self.player.refresh_from_db()
-        self.assertFalse(self.player.sleeping)
+        self.assertTrue(self.player.sleeping)
         decision = AlgorithmDecision.objects.get()
         self.assertEqual(decision.active_listener_ids, [])
-        self.assertEqual(decision.outcome, "retained_no_active_listeners")
+        self.assertEqual(decision.outcome, "silent_no_active_listeners")
 
-    def test_activation_grace_period_keeps_a_freshly_woken_room_playing(self):
+    def test_baseline_keeps_a_freshly_active_room_playing_without_listeners(self):
         rain = self.make_sound("rain", "rain")
-        self.player.post.collection.add(rain)
+        self.player.program.collection.add(rain)
+        self.player.program.baseline = rain
+        self.player.program.save(update_fields=["baseline"])
         self.wake_playing(rain)
         Player.objects.filter(pk=self.player.pk).update(activated_at=timezone.now())
 
@@ -1502,25 +1697,30 @@ class StablePredictorIntegrationTests(TestCase):
         self.assertIsNotNone(self.player.current_exposure)
         self.assertEqual(
             AlgorithmDecision.objects.get().outcome,
-            "retained_no_active_listeners",
+            "baseline_no_active_listeners",
         )
 
     @override_settings(
-        COSOUND_CORE_PREDICTOR="core.predict.stable_preference_predictor",
-        COSOUND_MIN_LAYERS=2,
-        COSOUND_MAX_LAYERS=3,
-        COSOUND_MINIMUM_HOLD_SECONDS=120,
-        COSOUND_MAX_STAY_SECONDS=180,
+        COSOUND_CORE_PREDICTOR="core.predict.stable_preference_predictor"
     )
-    def test_awakened_room_rotates_at_maximum_stay_without_a_vote(self):
+    def test_awakened_room_returns_to_baseline_after_hold_without_a_vote(self):
+        self.configure_algorithm(
+            min_layers=2,
+            max_layers=3,
+            minimum_hold_seconds=120,
+            maximum_stay_seconds=180,
+        )
         sounds = [
             self.make_sound("rain", "rain"),
             self.make_sound("cafe", "cafe"),
             self.make_sound("forest", "forest"),
         ]
-        self.player.post.collection.add(*sounds)
+        self.player.program.collection.add(*sounds)
+        self.player.program.baseline = sounds[2]
+        self.player.program.save(update_fields=["baseline"])
+        listener = self.make_listener()
         with patch.object(Player, "announce"):
-            Algorithm.awaken(self.player)
+            Algorithm.awaken(self.player, listener=listener)
         original_ids = {
             layer.sound_id for layer in self.player.playing.layers
         }
@@ -1540,15 +1740,16 @@ class StablePredictorIntegrationTests(TestCase):
         self.player.refresh_from_db()
         next_ids = {layer.sound_id for layer in self.player.playing.layers}
         self.assertNotEqual(next_ids, original_ids)
+        self.assertEqual(next_ids, {sounds[2].pk})
         self.assertEqual(
             AlgorithmDecision.objects.latest("decided_at").outcome,
-            "maximum_stay",
+            "baseline_no_active_listeners",
         )
 
     def test_selects_records_a_decision_and_then_holds(self):
         rain = self.make_sound("rain", "rain")
         cafe = self.make_sound("cafe", "cafe")
-        self.player.post.collection.add(rain, cafe)
+        self.player.program.collection.add(rain, cafe)
         self.wake_playing(cafe)
         self.vote(self.make_listener(rain))
 
@@ -1579,7 +1780,7 @@ class StablePredictorIntegrationTests(TestCase):
 
     def test_failure_retains_the_previous_mix_and_records_it(self):
         rain = self.make_sound("rain", "rain")
-        self.player.post.collection.add(rain)
+        self.player.program.collection.add(rain)
         self.wake_playing(rain)
         self.vote(self.make_listener(rain))
 
@@ -1602,7 +1803,7 @@ class StablePredictorIntegrationTests(TestCase):
     def test_stale_exposure_is_closed_and_replaced(self):
         current = self.make_sound("current", "ambient")
         other = self.make_sound("old", "noise")
-        self.player.post.collection.add(current, other)
+        self.player.program.collection.add(current, other)
         self.wake_playing(current)
         self.vote(self.make_listener(current))
 
@@ -1635,7 +1836,7 @@ class StablePredictorIntegrationTests(TestCase):
         re-fetch and re-evaluate a mix it is already playing.
         """
         rain = self.make_sound("rain", "rain")
-        self.player.post.collection.add(rain)
+        self.player.program.collection.add(rain)
         self.wake_playing(rain)
         self.vote(self.make_listener(rain))
         notify.reset_mock()
@@ -1654,7 +1855,7 @@ class StablePredictorIntegrationTests(TestCase):
         """Selection runs off the row lock, so the world can move under it."""
         rain = self.make_sound("rain", "rain")
         cafe = self.make_sound("cafe", "cafe")
-        self.player.post.collection.add(rain, cafe)
+        self.player.program.collection.add(rain, cafe)
         self.wake_playing(cafe)
         self.vote(self.make_listener(rain))
 
@@ -1680,6 +1881,43 @@ class StablePredictorIntegrationTests(TestCase):
         self.assertTrue(
             any(
                 "changed while it was being scored" in str(call)
+                for call in log_info.call_args_list
+            )
+        )
+
+    def test_parameters_changed_while_scoring_discard_the_decision(self):
+        rain = self.make_sound("rain", "rain")
+        cafe = self.make_sound("cafe", "cafe")
+        self.player.program.collection.add(rain, cafe)
+        self.configure_algorithm(min_layers=1, max_layers=1)
+        self.wake_playing(cafe)
+        self.vote(self.make_listener(rain))
+
+        real_select_mix = run_stable_prediction.__globals__["select_mix"]
+
+        def select_then_reconfigure(**kwargs):
+            result = real_select_mix(**kwargs)
+            PlayerProgram.objects.filter(pk=self.player.program_id).update(
+                algorithm_disagreement_penalty=0.75
+            )
+            return result
+
+        with (
+            patch(
+                "core.prediction.live.select_mix",
+                side_effect=select_then_reconfigure,
+            ),
+            patch("core.prediction.live.logger.info") as log_info,
+        ):
+            self.assertEqual(run_stable_prediction(self.player.pk), 0)
+
+        self.player.refresh_from_db()
+        self.assertEqual(self.player.playing.layers[0].sound_id, cafe.pk)
+        self.assertEqual(self.player.program.algorithm_disagreement_penalty, 0.75)
+        self.assertFalse(AlgorithmDecision.objects.exists())
+        self.assertTrue(
+            any(
+                "parameters changed while it was being scored" in str(call)
                 for call in log_info.call_args_list
             )
         )

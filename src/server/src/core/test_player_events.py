@@ -95,7 +95,7 @@ class PlayerChangeSignalTests(TestCase):
         cls.collecting_player = Player.objects.create(
             name="Collection room", manager=cls.manager
         )
-        cls.collecting_player.post.collection.add(cls.sound)
+        cls.collecting_player.program.collection.add(cls.sound)
         prediction = Prediction()
         prediction.add_layer(cls.sound.pk)
         cls.playing_player = Player.objects.create(
@@ -104,7 +104,7 @@ class PlayerChangeSignalTests(TestCase):
         cls.unrelated_player = Player.objects.create(
             name="Unrelated room", manager=other_manager
         )
-        cls.unrelated_player.post.collection.add(cls.other_sound)
+        cls.unrelated_player.program.collection.add(cls.other_sound)
 
     def assert_notified(self, publish, player_ids):
         notified = {
@@ -175,7 +175,7 @@ class PlayerChangeSignalTests(TestCase):
 
     @patch("core.player_events.publish_player_changes")
     def test_collection_add_remove_and_clear_notify_the_owner(self, publish):
-        collection = self.collecting_player.post.collection
+        collection = self.collecting_player.program.collection
         for operation in (
             lambda: collection.add(self.other_sound),
             lambda: collection.remove(self.other_sound),
@@ -189,10 +189,10 @@ class PlayerChangeSignalTests(TestCase):
 
     @patch("core.player_events.publish_player_changes")
     def test_reverse_collection_changes_and_clear_find_affected_players(self, publish):
-        collection = self.sound.localpost_set
+        collection = self.sound.playerprogram_set
         for operation, expected in (
-            (lambda: collection.add(self.unrelated_player.post), [self.unrelated_player.pk]),
-            (lambda: collection.remove(self.unrelated_player.post), [self.unrelated_player.pk]),
+            (lambda: collection.add(self.unrelated_player.program), [self.unrelated_player.pk]),
+            (lambda: collection.remove(self.unrelated_player.program), [self.unrelated_player.pk]),
             (collection.clear, [self.collecting_player.pk]),
         ):
             with self.subTest(operation=operation):

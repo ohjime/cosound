@@ -22,7 +22,15 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Button, Static
 
-from app.client import get_latest_manifest, get_player_info, get_sound
+from app.chime import load_vote_chime
+from app.client import (
+    discard_vote_chime,
+    get_latest_manifest,
+    get_player_info,
+    get_sound,
+    get_vote_chime,
+    prune_vote_chimes,
+)
 from app.conditioning import condition_manifest
 from app.live import watch_player_changes
 from app.utils import the_love_life_you_wish_you_had
@@ -30,6 +38,7 @@ from app.utils import the_love_life_you_wish_you_had
 ROOT_DIR = os.path.join(os.path.dirname(__file__), "..", "..")
 CONDITIONED_DIR = os.path.join(ROOT_DIR, "conditioned")
 REFRESH_INTERVAL = 30  # In Seconds
+MIN_REFRESH_INTERVAL = 5  # Limit fallback polling to a safe API request rate.
 METER_INTERVAL = 1 / 15  # Peak bar refresh rate
 PEAK_DECAY = 0.82  # Per-tick falloff so bars release smoothly
 PEAK_CURVE = 0.3  # Display exponent (<1 lifts quiet peaks so bars visibly move)
@@ -570,6 +579,9 @@ class CosoundPlayerApp(App):
         self._cosound_signature = None
         self._current_entry: CosoundEntry | None = None
         self._last_gains: dict[str, float] = {}
+        self._vote_chime_version: str | None = None
+        self._state_refresh_interval_seconds = REFRESH_INTERVAL
+        self._state_refresh_timer = None
         self._refresh_generation = 0
         self._refresh_worker_running = False
         self._refresh_lock = Lock()
@@ -608,7 +620,9 @@ class CosoundPlayerApp(App):
     def on_mount(self) -> None:
         self._show_volume(self.player.master_gain)
         self.set_interval(METER_INTERVAL, self._update_meters)
-        self.set_interval(REFRESH_INTERVAL, self.refresh_cosound)
+        self._state_refresh_timer = self.set_interval(
+            self._state_refresh_interval_seconds, self.refresh_cosound
+        )
         self.refresh_cosound()
         self._watch_live_updates()
 
@@ -623,6 +637,28 @@ class CosoundPlayerApp(App):
 
     def _show_live_status(self, status: str) -> None:
         self.query_one("#live-status", Static).update(form_row("LIVE UPDATES", status))
+
+    def _sync_state_refresh_interval(self, info: dict) -> None:
+        """Apply a valid server-managed fallback poll interval, when present."""
+        runtime = info.get("runtime")
+        if not isinstance(runtime, dict):
+            return
+        interval = runtime.get("state_refresh_interval_seconds")
+        if type(interval) is not int or interval < MIN_REFRESH_INTERVAL:
+            return
+        if interval == self._state_refresh_interval_seconds:
+            return
+
+        previous_timer = self._state_refresh_timer
+        if previous_timer is None:
+            self._state_refresh_interval_seconds = interval
+            return
+        replacement_timer = self.set_interval(
+            interval, self.refresh_cosound
+        )
+        previous_timer.stop()
+        self._state_refresh_timer = replacement_timer
+        self._state_refresh_interval_seconds = interval
 
     # --- Periodic refresh (network + audio transition, off the UI thread) ---
 
@@ -683,6 +719,10 @@ class CosoundPlayerApp(App):
     def _run_refresh(self) -> None:
         """Fetch, prepare, and apply one serialized player refresh."""
         info = get_player_info(self.api_key)
+        # Runtime policy is independent of optional audio preparation. Apply it
+        # as soon as the authoritative snapshot arrives so a missing or corrupt
+        # layer cannot indefinitely delay a changed fallback poll interval.
+        self.call_from_thread(self._sync_state_refresh_interval, info)
         manifest = dict(self.manifest)
 
         # Same cosound as last time: leave audio and the history list alone.
@@ -702,9 +742,63 @@ class CosoundPlayerApp(App):
             self.manifest.update(manifest)
             _queue_manifest_layers(self.manifest, layers, self.player)
 
+        # Chime identity is independent of the layer signature.  A Player admin
+        # edit therefore updates the one-shot without forcing a mix transition.
+        # It is optional audio: a bad upload or transient media failure must not
+        # prevent the authoritative player/mix snapshot from being applied.
+        try:
+            self._sync_vote_chime(info)
+        except Exception as error:
+            self.log(f"Vote chime refresh failed: {error}")
+
         # Textual waits for this UI callback to finish, so the worker cannot
         # begin a newer refresh until this state is visible.
         self.call_from_thread(self._apply_state, info, changed)
+
+    def _sync_vote_chime(self, info: dict) -> None:
+        """Install the snapshot's custom chime, preserving the last good one."""
+        # Older `/player` responses (and the `/cosound` compatibility fallback)
+        # do not know about this optional field.  They must not erase a custom
+        # chime already loaded from a newer snapshot.
+        if "chime" not in info:
+            return
+        descriptor = info.get("chime")
+        if descriptor is None:
+            descriptor = {}
+        if not isinstance(descriptor, dict):
+            raise ValueError("Invalid vote chime descriptor")
+
+        remote_path = descriptor.get("url", "")
+        version = descriptor.get("version", "")
+        if remote_path == "" and version == "":
+            if self._vote_chime_version is not None:
+                self.player.set_vote_chime()
+                self._vote_chime_version = None
+            prune_vote_chimes()
+            return
+        if (
+            not isinstance(remote_path, str)
+            or not isinstance(version, str)
+            or not version
+        ):
+            raise ValueError("Invalid vote chime descriptor")
+        if version == self._vote_chime_version:
+            return
+
+        local_path = get_vote_chime(version, remote_path)
+        try:
+            prepared = load_vote_chime(local_path, self.player.fs)
+        except Exception:
+            # An interrupted old process or externally damaged cache file must
+            # not poison this version forever.  A later refresh can fetch it
+            # again while the current in-memory chime remains untouched.
+            discard_vote_chime(version)
+            raise
+        # Downloading and decoding happen above, outside the audio lock.  Only
+        # this small in-memory swap touches the real-time player.
+        self.player.set_vote_chime(prepared)
+        self._vote_chime_version = version
+        prune_vote_chimes(version)
 
     def _show_refresh_error_if_latest(
         self, generation: int, error: Exception

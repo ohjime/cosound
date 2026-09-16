@@ -14,7 +14,6 @@ from core.models import PlaybackExposure, Player, Prediction, Sound
 from vote.models import Vote
 
 
-ACTIVITY_WINDOW = timedelta(minutes=5)
 REFRESH_INTENT = "refresh"
 AWAKEN_INTENT = "awaken"
 PREDICTION_RETRY = -1
@@ -51,13 +50,13 @@ def _predict_for_player(player_id: int, *, intent: str = REFRESH_INTENT) -> int:
     with transaction.atomic():
         player = (
             Player.objects.select_for_update()
-            .select_related("post")
+            .select_related("program")
             .get(pk=player_id)
         )
 
         if intent == AWAKEN_INTENT:
             sound_ids = list(
-                player.post.collection.select_for_update()
+                player.program.collection.select_for_update()
                 .order_by("pk")
                 .values_list("pk", flat=True)
             )
@@ -96,18 +95,31 @@ def _predict_for_player(player_id: int, *, intent: str = REFRESH_INTENT) -> int:
         elif player.sleeping:
             return 0
         else:
+            program = player.program
+            activity_window = timedelta(
+                minutes=program.algorithm_active_listener_minutes
+            )
             recent_votes = Vote.recent(
                 player,
-                minutes=int(ACTIVITY_WINDOW.total_seconds() // 60),
+                minutes=int(activity_window.total_seconds() // 60),
             )
             if not recent_votes:
-                if (
+                decision_time = timezone.now()
+                sleep_cutoff = decision_time - timedelta(
+                    minutes=program.algorithm_sleep_after_minutes
+                )
+                recently_activated = bool(
                     player.activated_at is not None
-                    and player.activated_at >= timezone.now() - ACTIVITY_WINDOW
-                    and player.playing
-                ):
+                    and player.activated_at >= sleep_cutoff
+                )
+                recently_voted = Vote.objects.filter(
+                    player=player,
+                    created_at__gte=sleep_cutoff,
+                    created_at__lte=decision_time,
+                ).exists()
+                if player.playing and (recently_activated or recently_voted):
                     return 0
-                _end_current_exposure(player, timezone.now())
+                _end_current_exposure(player, decision_time)
                 player.playing = Prediction.new()
                 player.save(update_fields=["playing", "current_exposure"])
                 return 0
@@ -120,7 +132,7 @@ def _predict_for_player(player_id: int, *, intent: str = REFRESH_INTENT) -> int:
             selected_sound_ids: set[int] = set()
 
             library_by_tag: dict[int, list[Sound]] = defaultdict(list)
-            for sound in player.post.collection.prefetch_related("tags"):
+            for sound in program.collection.prefetch_related("tags"):
                 for tag in sound.tags.all():
                     library_by_tag[tag.pk].append(sound)
 
@@ -228,10 +240,10 @@ class Algorithm:
 
         ``listener`` is whoever asked for the activation, when a request can
         name them. A tap that wakes a resting room casts no vote — there is no
-        mix yet to have an opinion about — so without this the policy sees an
-        empty room and falls back to a bootstrap that is identical every time.
-        Naming them lets it weigh their saved sounds instead. Policies that
-        have no use for it ignore the argument.
+        mix yet to have an opinion about. Naming them lets the policy treat the
+        requester as active and weigh their saved sounds; without a requester,
+        the Player Program's baseline-or-silence fallback applies. Policies that
+        have no use for the listener ignore the argument.
         """
         if player.pk is None:
             raise ValueError("Cannot awaken an unsaved player")
@@ -259,7 +271,7 @@ class Algorithm:
                 and playable_ids
                 and len(playable_ids) == len(layers)
                 and len(playable_ids) == len(set(playable_ids))
-                and player.post.collection.filter(pk__in=playable_ids).count()
+                and player.program.collection.filter(pk__in=playable_ids).count()
                 == len(playable_ids)
             )
             if completed == 1 and prediction_is_playable:

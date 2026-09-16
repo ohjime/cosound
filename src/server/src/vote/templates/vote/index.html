@@ -24,12 +24,12 @@
     {% if player %}
         <article class="w-full max-w-200 text-base-content rounded-3xl overflow-hidden text-left">
             <div class="px-6 sm:px-12 pb-20">
-                {% if post %}<c-core-post-heading :post="post.post" />{% endif %}
+                {% if program %}<c-core-post-heading :post="program.post" />{% endif %}
                 <div class="mb-12 mt-8 flex w-full flex-col items-center">
-                    <c-vote-display :layers="layers" :post="post" :choice="choice" :sleeping="sleeping" :throttle_seconds_left="throttle_seconds_left" />
+                    <c-vote-display :layers="layers" :program="program" :choice="choice" :sleeping="sleeping" :throttle_seconds_left="throttle_seconds_left" />
                 </div>
-                {% if post %}
-                    <c-core-post-body :post="post.post" :body_html="body_html" />
+                {% if program %}
+                    <c-core-post-body :post="program.post" :body_html="body_html" />
                     <div class="max-w-160 mx-auto mt-12">
                         <c-core-discussion :comments_page="comments_page" :comment_body="comment_body" :comment_errors="comment_errors" :comment_count="comment_count" :has_commented="has_commented" :pagination_items="pagination_items" :discussion_url="discussion_url" :comment_url="comment_url" :dom_id="dom_id" />
                     </div>

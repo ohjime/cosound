@@ -1,4 +1,4 @@
-<c-vars layers="" post="" choice="" sleeping="" throttle_seconds_left="0" />
+<c-vars layers="" program="" choice="" sleeping="" throttle_seconds_left="0" />
 <div class="w-full max-w-80"
      x-data="voteDisplay"
      data-vote-display
@@ -6,7 +6,7 @@
      data-has-vote-action="{% if choice == '1' or choice == '0' %}true{% else %}false{% endif %}"
      data-player-sleeping="{% if sleeping %}true{% else %}false{% endif %}"
      data-throttle-seconds-left="{{ throttle_seconds_left|default:0 }}"
-     data-post-title="{% if post %}{{ post.post.title }}{% endif %}"
+     data-post-title="{% if program %}{{ program.post.title }}{% endif %}"
      @vote-success.window="handleVoteSuccess()"
      @vote-throttled.window="handleThrottle($event.detail?.seconds_left)"
      @vote-auth-unavailable.window="handleVoteAuthUnavailable($event.detail)"

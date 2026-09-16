@@ -20,9 +20,9 @@ class SelectionConfig:
     score_precision: int = 8
     exploration_probability: float = 0.0
     exploration_size: int = 5
-    # Kept in step with settings.COSOUND_HOUSE_SOUND_ID, which is None: a room
-    # with nobody in it should fall silent rather than play a default sound.
-    house_sound_id: int | None = None
+    # Isolated callers default to silence. The live adapter supplies each
+    # post's optional admin-managed baseline explicitly.
+    baseline_sound_id: int | None = None
 
     def __post_init__(self) -> None:
         if self.min_layers < 1:
@@ -51,8 +51,8 @@ class SelectionConfig:
             raise ValueError("exploration_size must be at least one")
         if self.score_precision < 0:
             raise ValueError("score_precision cannot be negative")
-        if self.house_sound_id is not None and self.house_sound_id <= 0:
-            raise ValueError("house_sound_id must be positive or None")
+        if self.baseline_sound_id is not None and self.baseline_sound_id <= 0:
+            raise ValueError("baseline_sound_id must be positive or None")
 
 
 @dataclass(frozen=True)
@@ -185,19 +185,6 @@ def _equal_power_mix(sound_ids) -> Mix:
     )
 
 
-def _lowest_key_equal_power_mix(sound_ids: set[int], layer_count: int) -> Mix:
-    """Return the lexically first fixed-size mix without enumerating them all."""
-    remaining = sorted(sound_ids)
-    selected: list[int] = []
-    for position in range(layer_count):
-        slots_after = layer_count - position - 1
-        feasible = remaining[: len(remaining) - slots_after]
-        sound_id = min(feasible, key=lambda candidate: f"{candidate}@")
-        selected.append(sound_id)
-        remaining = [candidate for candidate in remaining if candidate > sound_id]
-    return _equal_power_mix(selected)
-
-
 def _enumerate_reachable_candidates(
     sounds: tuple[SoundEvidence, ...],
     current_mix: Mix,
@@ -298,18 +285,6 @@ def _score_candidate(
     )
 
 
-def _neutral_candidate_score(candidate: Mix) -> CandidateScore:
-    """Represent an unobserved candidate without inventing a listener."""
-    return CandidateScore(
-        mix=candidate,
-        listener_scores=(),
-        mean=0.5,
-        minimum=0.5,
-        disagreement=0.0,
-        group_score=0.5,
-    )
-
-
 def _rank_scores(
     scores: list[CandidateScore],
     current_mix: Mix | None,
@@ -382,9 +357,9 @@ def select_mix(
     sounds_by_id = {sound.sound_id: sound for sound in sounds}
     effective_min_layers = min(config.min_layers, len(sounds)) if sounds else 1
     # Counted rather than enumerated. Every outcome below reports
-    # candidate_count, but only the scoring path and the house fallback need
-    # the candidates themselves, and those two are the rare cases: a room
-    # inside its minimum hold is the common tick. See count_candidates.
+    # candidate_count, but only the scoring path needs the candidates
+    # themselves; a room inside its minimum hold is the common tick. See
+    # count_candidates.
     candidate_count = count_candidates(
         len(sounds),
         min_layers=effective_min_layers,
@@ -397,12 +372,18 @@ def select_mix(
         effective_min_layers,
         config.max_layers,
     )
+    current_is_baseline = bool(
+        current_mix is not None
+        and config.baseline_sound_id in available_ids
+        and current_mix.key
+        == Mix((MixLayer(config.baseline_sound_id, 1.0),)).key
+    )
 
     if not candidate_count:
         return _fixed_result(None, "no_feasible_mix", current_mix, 0)
 
     maximum_stay_reached = False
-    if current_is_valid and last_change_at is not None:
+    if (current_is_valid or current_is_baseline) and last_change_at is not None:
         elapsed = (decision_time - last_change_at).total_seconds()
         if elapsed < config.hold_seconds:
             return _fixed_result(
@@ -416,71 +397,21 @@ def select_mix(
             and elapsed >= config.maximum_stay_seconds
         )
 
-    if not listeners and not maximum_stay_reached:
-        if current_is_valid:
+    if not listeners:
+        if config.baseline_sound_id in available_ids:
+            baseline_mix = Mix((MixLayer(config.baseline_sound_id, 1.0),))
             return _fixed_result(
-                current_mix,
-                "retained_no_active_listeners",
+                baseline_mix,
+                "baseline_no_active_listeners",
                 current_mix,
                 candidate_count,
             )
-        if config.house_sound_id in available_ids:
-            # Reached only when the current mix is invalid, so nothing has
-            # been appended to the enumerated set here.
-            house_mix = min(
-                (
-                    mix
-                    for mix in enumerate_candidates(
-                        sounds,
-                        min_layers=effective_min_layers,
-                        max_layers=config.max_layers,
-                    )
-                    if config.house_sound_id in mix.sound_ids
-                ),
-                key=lambda mix: (len(mix.layers), mix.key),
-            )
-            return _fixed_result(
-                house_mix,
-                "house_mix_no_active_listeners",
-                current_mix,
-                candidate_count,
-            )
-        if awaken and config.exploration_probability == 0:
-            # With no listener evidence every candidate has the same neutral
-            # score. The normal ranker would therefore choose the smallest
-            # feasible mix, so construct that winner directly instead of
-            # enumerating a potentially enormous candidate set just to prove
-            # the tie. Once exploration is enabled we use the normal path
-            # below so its probabilities and random choice remain exact.
-            selected_mix = _lowest_key_equal_power_mix(
-                available_ids,
-                effective_min_layers,
-            )
-            selected_score = _neutral_candidate_score(selected_mix)
-            return SelectionResult(
-                selected_mix=selected_mix,
-                reason="neutral_bootstrap",
-                changed=(current_mix.key if current_mix else None)
-                != selected_mix.key,
-                explored=False,
-                selected_action_probability=1.0,
-                candidate_count=candidate_count,
-                reachable_count=candidate_count,
-                action_probabilities=((selected_mix.key, 1.0),),
-                selected_score=selected_score,
-                ranked_scores=(selected_score,),
-            )
-        if awaken:
-            # Exploration needs the ranked set and its exact action
-            # probabilities, so continue through the regular scoring path.
-            pass
-        else:
-            return _fixed_result(
-                None,
-                "no_active_listener_fallback",
-                current_mix,
-                candidate_count,
-            )
+        return _fixed_result(
+            None,
+            "silent_no_active_listeners",
+            current_mix,
+            candidate_count,
+        )
 
     if current_is_valid:
         candidates = list(
@@ -522,18 +453,15 @@ def select_mix(
                 reachable_count=0,
             )
 
-    if listeners:
-        scores = [
-            _score_candidate(
-                candidate,
-                listeners,
-                sounds_by_id,
-                config.disagreement_penalty,
-            )
-            for candidate in reachable
-        ]
-    else:
-        scores = [_neutral_candidate_score(candidate) for candidate in reachable]
+    scores = [
+        _score_candidate(
+            candidate,
+            listeners,
+            sounds_by_id,
+            config.disagreement_penalty,
+        )
+        for candidate in reachable
+    ]
     ranked = _rank_scores(
         scores,
         current_mix,
@@ -574,8 +502,6 @@ def select_mix(
         reason = "maximum_stay"
     elif explored:
         reason = "exploration"
-    elif awaken and not listeners:
-        reason = "neutral_bootstrap"
     elif changed:
         reason = "selected"
     else:

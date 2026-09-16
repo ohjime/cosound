@@ -1,12 +1,32 @@
 """Notify players when saved state or the sounds they use change."""
 
-from django.db import connections
+import logging
+from functools import partial
+
+from django.db import connections, transaction
 from django.db.models import Q
-from django.db.models.signals import m2m_changed, post_delete, post_save, pre_delete
+from django.db.models.signals import (
+    m2m_changed,
+    post_delete,
+    post_save,
+    pre_delete,
+    pre_save,
+)
 from django.dispatch import receiver
 
-from core.models import Artist, LocalPost, Manager, Player, Sound
+from core.models import Artist, PlayerProgram, Manager, Player, Sound
 from core.player_events import notify_players_changed
+
+
+logger = logging.getLogger(__name__)
+
+
+def _delete_unreferenced_chime(name, storage, using):
+    try:
+        if not PlayerProgram.objects.using(using).filter(chime=name).exists():
+            storage.delete(name)
+    except Exception:
+        logger.warning("Could not delete superseded chime %s", name, exc_info=True)
 
 
 def _player_ids_for_sounds(sound_ids, using):
@@ -15,7 +35,7 @@ def _player_ids_for_sounds(sound_ids, using):
         return set()
 
     players = Player.objects.using(using)
-    collection_match = Q(post__collection__pk__in=sound_ids)
+    collection_match = Q(program__collection__pk__in=sound_ids)
     if connections[using].features.supports_json_field_contains:
         # A playing sound may already have been removed from the collection.
         # Query the prediction too so its display credit/file stays current.
@@ -47,16 +67,93 @@ def player_deleted(sender, instance, using, **kwargs):
 
 
 @receiver(
+    pre_save,
+    sender=PlayerProgram,
+    dispatch_uid="player_events.program_before_save",
+)
+def program_before_save(sender, instance, using, raw=False, update_fields=None, **kwargs):
+    instance._chime_changed = False
+    instance._previous_chime_name = ""
+    if raw or not instance.pk:
+        return
+    if update_fields is not None and "chime" not in update_fields:
+        return
+    previous = (
+        PlayerProgram.objects.using(using)
+        .filter(pk=instance.pk)
+        .values_list("chime", flat=True)
+        .first()
+    )
+    current = instance.chime.name if instance.chime else ""
+    newly_uploaded = bool(
+        instance.chime
+        and not getattr(instance.chime, "_committed", True)
+    )
+    instance._chime_changed = newly_uploaded or previous != current
+    if instance._chime_changed:
+        instance._previous_chime_name = previous or ""
+
+
+@receiver(
+    post_save,
+    sender=PlayerProgram,
+    dispatch_uid="player_events.program_saved",
+)
+def program_saved(sender, instance, using, raw=False, created=False, **kwargs):
+    if raw or created or not getattr(instance, "_chime_changed", False):
+        return
+    player_ids = (
+        Player.objects.using(using)
+        .filter(program_id=instance.pk)
+        .values_list("pk", flat=True)
+    )
+    notify_players_changed(player_ids, using=using)
+    previous = getattr(instance, "_previous_chime_name", "")
+    current = instance.chime.name if instance.chime else ""
+    if previous and previous != current:
+        transaction.on_commit(
+            partial(
+                _delete_unreferenced_chime,
+                previous,
+                instance.chime.storage,
+                using,
+            ),
+            using=using,
+        )
+
+
+@receiver(
+    post_delete,
+    sender=PlayerProgram,
+    dispatch_uid="player_events.program_deleted",
+)
+def program_deleted(sender, instance, using, **kwargs):
+    if not instance.chime:
+        return
+    transaction.on_commit(
+        partial(
+            _delete_unreferenced_chime,
+            instance.chime.name,
+            instance.chime.storage,
+            using,
+        ),
+        using=using,
+    )
+
+
+@receiver(
     m2m_changed,
-    sender=LocalPost.collection.through,
+    sender=PlayerProgram.collection.through,
     dispatch_uid="player_events.collection_changed",
 )
 def collection_changed(sender, instance, action, reverse, pk_set, using, **kwargs):
     if action == "pre_clear":
         matches = (
-            Q(post__collection=instance.pk) if reverse else Q(post_id=instance.pk)
+            Q(program__collection=instance.pk)
+            if reverse
+            else Q(program_id=instance.pk)
         )
-        # Reverse clear removes the only path to the affected local posts.
+        # Reverse clear removes the only path to the affected player programs.
         instance._player_event_collection_clear_ids = tuple(
             Player.objects.using(using).filter(matches).values_list("pk", flat=True)
         )
@@ -64,9 +161,9 @@ def collection_changed(sender, instance, action, reverse, pk_set, using, **kwarg
         player_ids = instance.__dict__.pop("_player_event_collection_clear_ids", ())
         notify_players_changed(player_ids, using=using)
     elif action in {"post_add", "post_remove"}:
-        post_ids = pk_set if reverse else [instance.pk]
+        program_ids = pk_set if reverse else [instance.pk]
         player_ids = Player.objects.using(using).filter(
-            post_id__in=post_ids
+            program_id__in=program_ids
         ).values_list("pk", flat=True)
         notify_players_changed(player_ids, using=using)
 

@@ -70,7 +70,11 @@ def main(
 
     # Auto-detect the output so we can condition audio to its native rate.
     device = detect_output(output_device)
-    print(f"Output: {device.name} — {device.channels}ch @ {device.samplerate} Hz")
+    note = ""
+    if device.channels_assumed:
+        reported = int(device.raw.get("max_output_channels", 0))
+        note = f" (assumed stereo; '{device.name}' advertises {reported}ch routing max)"
+    print(f"Output: {device.name} — {device.channels}ch @ {device.samplerate} Hz{note}")
 
     manifest = setup(api_key, device.samplerate)
     player = SoundDevicePlayer(
@@ -96,7 +100,7 @@ if __name__ == "__main__":
         "--channels",
         type=int,
         default=int(os.environ.get("COSOUND_OUTPUT_CHANNELS", "0")),
-        help="Output channels. 0 means use the device maximum.",
+        help="Output channels. 0 means auto-detect (see devices.py).",
     )
     parser.add_argument(
         "--output-device",

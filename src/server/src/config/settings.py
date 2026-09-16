@@ -292,7 +292,9 @@ if not DEBUG:
 # S3 direct uploads are enabled by passing s3_upload_dir to the form constructor
 # The AWS_* settings are already configured above for django-storages
 FILE_FORM_UPLOAD_DIR = "file-form-uploads"
-FILE_FORM_MUST_LOGIN = True  # Require authentication for uploads
+# Protect authenticated TUS uploads. S3 multipart routes are separately wrapped
+# with staff-only access in config.file_upload_urls.
+FILE_FORM_MUST_LOGIN = True
 
 # Upload size limit - must be >= chunk size (default 2.5MB)
 # See: https://mbraak.github.io/django-file-form/details/#production
@@ -416,9 +418,9 @@ UNFOLD = {
                         "link": reverse_lazy("admin:core_post_changelist"),
                     },
                     {
-                        "title": _("Local posts"),
+                        "title": _("Player programs"),
                         "icon": "description",
-                        "link": reverse_lazy("admin:core_localpost_changelist"),
+                        "link": reverse_lazy("admin:core_playerprogram_changelist"),
                     },
                     {
                         "title": _("Sounds"),
@@ -448,12 +450,18 @@ COSOUND_CORE_PREDICTOR = os.environ.get(
     "core.predict.stable_preference_predictor",
 )
 
-# Stable preference mixer policy. These are deliberately plain values rather
-# than environment reads: they are not secrets and not deployment wiring, they
-# are how the algorithm behaves, and a room's character should be reviewable
-# and diffable rather than depending on what happens to be in a .env on one
-# machine. core.prediction.selector.SelectionConfig validates the values the
-# live adapter passes explicitly; its defaults are only for isolated callers.
+# Algorithm defaults copied onto each new Player Program. Changing the post assigned
+# to a player therefore switches its complete policy, including the baseline.
+# These remain plain values rather than environment reads so new-post behaviour
+# stays reviewable and diffable.
+
+# How often the scheduler reconsiders an awake player's mix.
+COSOUND_REFRESH_INTERVAL_SECONDS = 30
+
+# How often a physical player reconciles with the REST snapshot if a live
+# notification is missed. This device/runtime value remains on Player rather
+# than following the Player Program's algorithm policy.
+PLAYER_STATE_REFRESH_INTERVAL_SECONDS = 30
 
 # How many sounds may play at once. This drives candidate enumeration, which
 # grows as the sum of binomials. Once a mix is playing only its one-edit
@@ -486,8 +494,3 @@ COSOUND_DISAGREEMENT_PENALTY = 0.25
 # highest-ranked candidates exploration may choose among.
 COSOUND_EXPLORATION_PROBABILITY = 0.5
 COSOUND_EXPLORATION_SIZE = 5
-
-# Off by design. The selector's house fallback keeps a room playing when nobody
-# is voting, which contradicts the sleeping state: an inactive player is meant
-# to fall silent and wait to be woken. Set a sound id to re-enable it.
-COSOUND_HOUSE_SOUND_ID = None

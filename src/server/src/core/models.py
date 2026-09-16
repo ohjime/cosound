@@ -1,4 +1,5 @@
 import hashlib
+import math
 import secrets
 import uuid
 from decimal import ROUND_UP, Decimal
@@ -7,7 +8,12 @@ from typing import List
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
-from django.core.validators import URLValidator
+from django.core.validators import (
+    FileExtensionValidator,
+    MaxValueValidator,
+    MinValueValidator,
+    URLValidator,
+)
 from django.db import models as DjangoDB
 from django.db import router, transaction
 from django.urls import reverse
@@ -24,6 +30,23 @@ from core.utils import (
     generate_layers_string,
     get_random_avatar_url,
 )
+from core.validators import validate_chime
+
+
+MIN_ALGORITHM_REFRESH_SECONDS = 5
+MIN_PLAYER_STATE_REFRESH_SECONDS = 5
+MAX_ALGORITHM_LAYERS = 5
+
+
+def chime_upload_path(instance, filename):
+    """Give every chime upload a new immutable storage key.
+
+    The original filename cannot be used as a cache version: S3 is allowed to
+    overwrite an existing key, and its signed URL may change between requests.
+    """
+    suffix = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    suffix = f".{suffix}" if suffix else ""
+    return f"chimes/{uuid.uuid4().hex}{suffix}"
 
 
 class Sound(DjangoDB.Model):
@@ -333,8 +356,8 @@ class Set(DjangoDB.Model):
 
 
 class Player(DjangoDB.Model):
-    post = DjangoDB.OneToOneField(
-        "LocalPost",
+    program = DjangoDB.OneToOneField(
+        "PlayerProgram",
         on_delete=DjangoDB.PROTECT,
         related_name="player",
         blank=True,
@@ -350,6 +373,15 @@ class Player(DjangoDB.Model):
     )
     bio = DjangoDB.TextField(blank=True, max_length=200)
     location = DjangoDB.CharField(max_length=255, blank=True)
+    state_refresh_interval_seconds = DjangoDB.PositiveIntegerField(
+        default=settings.PLAYER_STATE_REFRESH_INTERVAL_SECONDS,
+        validators=[MinValueValidator(MIN_PLAYER_STATE_REFRESH_SECONDS)],
+        verbose_name="fallback state poll interval (seconds)",
+        help_text=(
+            "How often the physical player checks for missed state changes "
+            "(minimum 5). Live updates still arrive immediately."
+        ),
+    )
     current_exposure = DjangoDB.ForeignKey(
         "PlaybackExposure",
         on_delete=DjangoDB.SET_NULL,
@@ -357,6 +389,14 @@ class Player(DjangoDB.Model):
         blank=True,
         related_name="current_for_players",
     )
+
+    class Meta:
+        constraints = [
+            DjangoDB.CheckConstraint(
+                condition=DjangoDB.Q(state_refresh_interval_seconds__gte=5),
+                name="player_state_refresh_at_least_5",
+            ),
+        ]
 
     def __str__(self):
         return self.name
@@ -384,18 +424,18 @@ class Player(DjangoDB.Model):
         kwargs["using"] = using
         if update_fields is not None:
             kwargs["update_fields"] = update_fields
-        post_field = self._meta.get_field("post")
-        supplied_post = post_field.get_cached_value(self, default=None)
-        if self.post_id is not None or supplied_post is not None:
+        program_field = self._meta.get_field("program")
+        supplied_program = program_field.get_cached_value(self, default=None)
+        if self.program_id is not None or supplied_program is not None:
             # Keep Django's normal unsaved-related-object validation when a
-            # caller explicitly supplied an unsaved LocalPost.
+            # caller explicitly supplied an unsaved PlayerProgram.
             return super().save(*args, **kwargs)
 
         # New players retain the public name/bio they previously displayed.
-        # A separately authored LocalPost keeps the shared Post draft default.
+        # A separately authored PlayerProgram keeps the shared Post draft default.
         # Both records must commit together, including when the player fails a
         # uniqueness constraint or the caller is using another database.
-        created_post = None
+        created_program = None
         try:
             with transaction.atomic(using=using):
                 composer_id = Manager.objects.using(using).values_list(
@@ -407,19 +447,21 @@ class Player(DjangoDB.Model):
                     composer_id=composer_id,
                     publication_date=timezone.now(),
                 )
-                created_post = LocalPost.objects.using(using).create(post=shared_post)
-                self.post = created_post
+                created_program = PlayerProgram.objects.using(using).create(
+                    post=shared_post
+                )
+                self.program = created_program
                 if update_fields is not None:
-                    update_fields.add("post")
+                    update_fields.add("program")
                 return super().save(*args, **kwargs)
         except Exception:
-            if created_post is not None:
+            if created_program is not None:
                 # Permit retrying this instance after its creation rolls back.
-                self.post = None
+                self.program = None
             raise
 
     def library(self) -> List[Sound]:
-        return list(self.post.collection.all())
+        return list(self.program.collection.all())
 
     def update(self, prediction: Prediction) -> None:
         self.playing = prediction
@@ -599,21 +641,311 @@ class Post(DjangoDB.Model):
         return article_font_css_stack(self.font_family)
 
 
-class LocalPost(DjangoDB.Model):
-    """A player's writing and selectable sounds, independent of its live mix."""
+class PlayerProgram(DjangoDB.Model):
+    """A player's post, selectable sounds, and playback policy."""
 
     post = DjangoDB.ForeignKey(
         Post,
         on_delete=DjangoDB.PROTECT,
-        related_name="local_posts",
+        related_name="player_programs",
     )
     collection = DjangoDB.ManyToManyField(Sound, blank=True)
+    algorithm_refresh_interval_seconds = DjangoDB.PositiveIntegerField(
+        default=settings.COSOUND_REFRESH_INTERVAL_SECONDS,
+        validators=[MinValueValidator(MIN_ALGORITHM_REFRESH_SECONDS)],
+        verbose_name="refresh interval (seconds)",
+        help_text="How often the server re-runs this program's algorithm (minimum 5).",
+    )
+    algorithm_min_layers = DjangoDB.PositiveSmallIntegerField(
+        default=settings.COSOUND_MIN_LAYERS,
+        validators=[MinValueValidator(1), MaxValueValidator(MAX_ALGORITHM_LAYERS)],
+        verbose_name="minimum layers",
+        help_text="Minimum number of sounds in a generated mix.",
+    )
+    algorithm_max_layers = DjangoDB.PositiveSmallIntegerField(
+        default=settings.COSOUND_MAX_LAYERS,
+        validators=[MinValueValidator(1), MaxValueValidator(MAX_ALGORITHM_LAYERS)],
+        verbose_name="maximum layers",
+        help_text=(
+            "Maximum number of sounds in a generated mix. Larger values make "
+            "the initial candidate search grow quickly."
+        ),
+    )
+    algorithm_active_listener_minutes = DjangoDB.PositiveIntegerField(
+        default=settings.COSOUND_ACTIVE_LISTENER_MINUTES,
+        validators=[MinValueValidator(1)],
+        verbose_name="active listener window (minutes)",
+        help_text="A listener's votes influence the mix for this long.",
+    )
+    algorithm_sleep_after_minutes = DjangoDB.PositiveIntegerField(
+        default=settings.COSOUND_SLEEP_AFTER_MINUTES,
+        validators=[MinValueValidator(1)],
+        verbose_name="sleep after (minutes)",
+        help_text="Put this program's player to sleep after this much inactivity.",
+    )
+    algorithm_minimum_hold_seconds = DjangoDB.PositiveIntegerField(
+        default=settings.COSOUND_MINIMUM_HOLD_SECONDS,
+        verbose_name="minimum hold (seconds)",
+        help_text="Keep a selected mix for at least this long before reconsidering it.",
+    )
+    algorithm_maximum_stay_seconds = DjangoDB.PositiveIntegerField(
+        default=settings.COSOUND_MAX_STAY_SECONDS,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1)],
+        verbose_name="maximum stay (seconds)",
+        help_text="Force eventual rotation after this long. Leave blank for no limit.",
+    )
+    algorithm_disagreement_penalty = DjangoDB.FloatField(
+        default=settings.COSOUND_DISAGREEMENT_PENALTY,
+        validators=[MinValueValidator(0.0)],
+        verbose_name="disagreement penalty",
+        help_text="Higher values favor consensus over mixes that split the room.",
+    )
+    algorithm_exploration_probability = DjangoDB.FloatField(
+        default=settings.COSOUND_EXPLORATION_PROBABILITY,
+        validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],
+        verbose_name="exploration probability",
+        help_text="Chance of trying another highly ranked mix, from 0 to 1.",
+    )
+    algorithm_exploration_size = DjangoDB.PositiveIntegerField(
+        default=settings.COSOUND_EXPLORATION_SIZE,
+        validators=[MinValueValidator(1)],
+        verbose_name="exploration pool size",
+        help_text="Number of top-ranked candidates that exploration may choose from.",
+    )
+    baseline = DjangoDB.ForeignKey(
+        Sound,
+        on_delete=DjangoDB.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="baseline_programs",
+        verbose_name="baseline",
+        help_text=(
+            "Optional fallback when no listener evidence or valid mix exists. "
+            "The baseline must also be in this program's sound collection."
+        ),
+    )
+    chime = DjangoDB.FileField(
+        upload_to=chime_upload_path,
+        blank=True,
+        max_length=255,
+        validators=[
+            FileExtensionValidator(
+                allowed_extensions=["wav", "flac", "ogg", "mp3", "aif", "aiff"]
+            ),
+            validate_chime,
+        ],
+        verbose_name="vote confirmation chime",
+        help_text=(
+            "Played by this program's player when a listener vote is received. "
+            "Maximum 5 seconds and 5 MB. Supported formats: WAV, FLAC, OGG, "
+            "MP3, and AIFF."
+        ),
+    )
 
     class Meta:
         ordering = ["-post__publication_date", "-post__created_at"]
+        constraints = [
+            DjangoDB.CheckConstraint(
+                condition=DjangoDB.Q(algorithm_refresh_interval_seconds__gte=5),
+                name="playerprogram_algorithm_refresh_at_least_5",
+            ),
+            DjangoDB.CheckConstraint(
+                condition=(
+                    DjangoDB.Q(algorithm_min_layers__gte=1)
+                    & DjangoDB.Q(algorithm_min_layers__lte=MAX_ALGORITHM_LAYERS)
+                    & DjangoDB.Q(algorithm_max_layers__gte=1)
+                    & DjangoDB.Q(algorithm_max_layers__lte=MAX_ALGORITHM_LAYERS)
+                    & DjangoDB.Q(
+                        algorithm_min_layers__lte=DjangoDB.F(
+                            "algorithm_max_layers"
+                        )
+                    )
+                ),
+                name="playerprogram_algorithm_layer_range",
+            ),
+            DjangoDB.CheckConstraint(
+                condition=(
+                    DjangoDB.Q(algorithm_active_listener_minutes__gte=1)
+                    & DjangoDB.Q(
+                        algorithm_sleep_after_minutes__gte=DjangoDB.F(
+                            "algorithm_active_listener_minutes"
+                        )
+                    )
+                ),
+                name="playerprogram_algorithm_listener_windows",
+            ),
+            DjangoDB.CheckConstraint(
+                condition=(
+                    DjangoDB.Q(algorithm_maximum_stay_seconds__isnull=True)
+                    | (
+                        DjangoDB.Q(algorithm_maximum_stay_seconds__gte=1)
+                        & DjangoDB.Q(
+                            algorithm_maximum_stay_seconds__gte=DjangoDB.F(
+                                "algorithm_minimum_hold_seconds"
+                            )
+                        )
+                    )
+                ),
+                name="playerprogram_algorithm_stay_after_hold",
+            ),
+            DjangoDB.CheckConstraint(
+                condition=DjangoDB.Q(algorithm_disagreement_penalty__gte=0),
+                name="playerprogram_algorithm_nonnegative_penalty",
+            ),
+            DjangoDB.CheckConstraint(
+                condition=(
+                    DjangoDB.Q(algorithm_exploration_probability__gte=0)
+                    & DjangoDB.Q(algorithm_exploration_probability__lte=1)
+                ),
+                name="playerprogram_algorithm_probability_range",
+            ),
+            DjangoDB.CheckConstraint(
+                condition=DjangoDB.Q(algorithm_exploration_size__gte=1),
+                name="playerprogram_algorithm_exploration_size",
+            ),
+        ]
 
     def __str__(self):
         return str(self.post)
+
+    def clean(self):
+        super().clean()
+        errors = {}
+        if (
+            self.algorithm_min_layers is not None
+            and self.algorithm_max_layers is not None
+            and self.algorithm_min_layers > self.algorithm_max_layers
+        ):
+            errors["algorithm_max_layers"] = (
+                "Maximum layers cannot be lower than minimum layers."
+            )
+        maximum_stay = self.algorithm_maximum_stay_seconds
+        if (
+            maximum_stay is not None
+            and self.algorithm_minimum_hold_seconds is not None
+            and maximum_stay < self.algorithm_minimum_hold_seconds
+        ):
+            errors["algorithm_maximum_stay_seconds"] = (
+                "Maximum stay cannot be shorter than the minimum hold."
+            )
+        if (
+            self.algorithm_active_listener_minutes is not None
+            and self.algorithm_sleep_after_minutes is not None
+            and self.algorithm_sleep_after_minutes
+            < self.algorithm_active_listener_minutes
+        ):
+            errors["algorithm_sleep_after_minutes"] = (
+                "Sleep time cannot be shorter than the active listener window."
+            )
+        if (
+            self.algorithm_disagreement_penalty is not None
+            and not math.isfinite(self.algorithm_disagreement_penalty)
+        ):
+            errors["algorithm_disagreement_penalty"] = "Enter a finite number."
+        if (
+            self.algorithm_exploration_probability is not None
+            and not math.isfinite(self.algorithm_exploration_probability)
+        ):
+            errors["algorithm_exploration_probability"] = "Enter a finite number."
+        if self.baseline_id is not None:
+            submitted_ids = getattr(self, "_submitted_collection_sound_ids", None)
+            if submitted_ids is not None:
+                in_collection = self.baseline_id in submitted_ids
+            else:
+                using = self._state.db or router.db_for_read(
+                    type(self),
+                    instance=self,
+                )
+                in_collection = bool(
+                    self.pk
+                    and type(self)
+                    .objects.using(using)
+                    .filter(
+                        pk=self.pk,
+                        collection__pk=self.baseline_id,
+                    )
+                    .exists()
+                )
+            if not in_collection:
+                errors["baseline"] = (
+                    "The baseline must be in this program's sound collection."
+                )
+        if errors:
+            raise ValidationError(errors)
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        instance = super().from_db(db, field_names, values)
+        if "chime" in field_names:
+            value = values[field_names.index("chime")]
+            instance._loaded_chime_name = value or ""
+        return instance
+
+    def refresh_from_db(self, using=None, fields=None, **kwargs):
+        if fields is not None:
+            fields = tuple(fields)
+        result = super().refresh_from_db(using=using, fields=fields, **kwargs)
+        if fields is None or "chime" in fields:
+            self._loaded_chime_name = self.chime.name if self.chime else ""
+        return result
+
+    def save(self, *args, **kwargs):
+        """Serialize chime updates and preserve untouched values from stale forms."""
+        using = kwargs.get("using") or router.db_for_write(type(self), instance=self)
+        kwargs["using"] = using
+        if self._state.adding or self.pk is None:
+            result = super().save(*args, **kwargs)
+            self._loaded_chime_name = self.chime.name if self.chime else ""
+            return result
+
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            update_fields = frozenset(update_fields)
+            kwargs["update_fields"] = update_fields
+        if update_fields is not None and "chime" not in update_fields:
+            return super().save(*args, **kwargs)
+
+        # The chime signal reads the previous storage key before saving and
+        # removes it after commit. Keep that read and write behind one row lock;
+        # otherwise two concurrent replacements can both observe the same old
+        # key and leave whichever new upload loses the database race orphaned.
+        with transaction.atomic(using=using):
+            locked = (
+                type(self)
+                .objects.using(using)
+                .select_for_update()
+                .only("pk", "chime")
+                .get(pk=self.pk)
+            )
+            database_name = locked.chime.name if locked.chime else ""
+            current_name = self.chime.name if self.chime else ""
+            loaded_name = getattr(self, "_loaded_chime_name", None)
+            newly_uploaded = bool(
+                self.chime
+                and not getattr(self.chime, "_committed", True)
+            )
+            if (
+                loaded_name is not None
+                and not newly_uploaded
+                and current_name == loaded_name
+                and database_name != current_name
+            ):
+                # The caller changed another field on an instance loaded before
+                # a concurrent chime update. Do not restore its stale file key.
+                self.chime = database_name
+
+            result = super().save(*args, **kwargs)
+            self._loaded_chime_name = self.chime.name if self.chime else ""
+            return result
+
+    @property
+    def chime_version(self):
+        """Stable cache identity that changes with every managed upload."""
+        if not self.chime:
+            return ""
+        return hashlib.sha256(self.chime.name.encode("utf-8")).hexdigest()
 
     def get_absolute_url(self):
         try:

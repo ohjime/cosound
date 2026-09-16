@@ -6,10 +6,10 @@ from django.test import TestCase
 from django.urls import reverse
 
 from core.discussion import build_discussion_context
-from core.models import Comment, LocalPost, Manager, Player, Sound, Post
+from core.models import Comment, PlayerProgram, Manager, Player, Sound, Post
 
 
-class LocalPostAdminTests(TestCase):
+class PlayerProgramAdminTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.admin = get_user_model().objects.create_superuser(
@@ -39,6 +39,35 @@ class LocalPostAdminTests(TestCase):
             **overrides,
         }
 
+    def player_fields(self, **overrides):
+        return {
+            "name": self.player.name,
+            "bio": self.player.bio,
+            "manager": self.manager.pk,
+            "location": self.player.location,
+            "sleeping": "on",
+            "state_refresh_interval_seconds": 30,
+            **overrides,
+        }
+
+    def program_fields(self, **overrides):
+        return {
+            "post": self.player.program.post_id,
+            "collection": [],
+            "algorithm_refresh_interval_seconds": 30,
+            "algorithm_active_listener_minutes": 5,
+            "algorithm_sleep_after_minutes": 180,
+            "algorithm_min_layers": 2,
+            "algorithm_max_layers": 5,
+            "algorithm_minimum_hold_seconds": 120,
+            "algorithm_maximum_stay_seconds": 180,
+            "algorithm_disagreement_penalty": 0.25,
+            "algorithm_exploration_probability": 0.5,
+            "algorithm_exploration_size": 5,
+            "baseline": "",
+            **overrides,
+        }
+
     def test_add_page_exposes_shared_writing_and_local_collection(self):
         response = self.client.get(reverse("admin:core_post_add"))
 
@@ -47,7 +76,7 @@ class LocalPostAdminTests(TestCase):
         self.assertContains(response, 'id="id_font_family"')
         self.assertNotContains(response, 'id="id_cosound"')
         self.assertNotContains(response, 'id="id_publication_date"')
-        response = self.client.get(reverse("admin:core_localpost_add"))
+        response = self.client.get(reverse("admin:core_playerprogram_add"))
         self.assertContains(response, 'id="id_post"')
         self.assertContains(response, 'id="id_collection"')
 
@@ -59,9 +88,12 @@ class LocalPostAdminTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         shared = Post.objects.get(title="Garden writing")
-        response = self.client.post(reverse("admin:core_localpost_add"), {"post": shared.pk, "collection": [self.sound.pk]})
+        response = self.client.post(
+            reverse("admin:core_playerprogram_add"),
+            self.program_fields(post=shared.pk, collection=[self.sound.pk]),
+        )
         self.assertEqual(response.status_code, 302)
-        post = LocalPost.objects.get(post=shared)
+        post = PlayerProgram.objects.get(post=shared)
         self.assertEqual(post.post.article, "Listen to the **garden**.")
         self.assertEqual(post.post.font_family, "newsreader")
         self.assertEqual(post.post.authors, [
@@ -70,8 +102,8 @@ class LocalPostAdminTests(TestCase):
         self.assertEqual(list(post.collection.all()), [self.sound])
         self.assertIsNotNone(post.post.publication_date)
 
-    def test_existing_local_post_can_publish_with_an_empty_collection(self):
-        post = LocalPost.objects.create(post=Post.objects.create(title="Draft", composer=self.admin))
+    def test_existing_program_can_publish_with_an_empty_collection(self):
+        post = PlayerProgram.objects.create(post=Post.objects.create(title="Draft", composer=self.admin))
 
         response = self.client.post(
             reverse("admin:core_post_change", args=[post.post_id]),
@@ -88,36 +120,43 @@ class LocalPostAdminTests(TestCase):
             reverse("admin:core_player_change", args=[self.player.pk])
         )
 
-        self.assertContains(response, 'id="id_post"')
-        self.assertContains(response, reverse("admin:core_localpost_change", args=[self.player.post_id]))
+        self.assertContains(response, 'id="id_program"')
+        self.assertContains(
+            response,
+            reverse("admin:core_playerprogram_change", args=[self.player.program_id]),
+        )
         self.assertContains(response, "writing and sound collection")
         self.assertNotContains(response, 'id="id_sounds"')
 
-    def test_player_add_can_omit_the_post_and_receive_an_editable_local_post(self):
+    def test_player_add_can_omit_the_post_and_receive_an_editable_program(self):
         response = self.client.post(
             reverse("admin:core_player_add"),
-            {"name": "New player", "bio": "New writing", "manager": self.manager.pk},
+            self.player_fields(
+                name="New player",
+                bio="New writing",
+                program="",
+            ),
         )
 
         self.assertEqual(response.status_code, 302)
         player = Player.objects.get(name="New player")
-        self.assertEqual(player.post.post.title, "New player")
-        self.assertEqual(player.post.post.article, "New writing")
-        self.assertEqual(player.post.post.composer, self.admin)
+        self.assertEqual(player.program.post.title, "New player")
+        self.assertEqual(player.program.post.article, "New writing")
+        self.assertEqual(player.program.post.composer, self.admin)
 
-    def test_player_editor_can_assign_a_different_local_post(self):
-        replacement = LocalPost.objects.create(post=Post.objects.create(title="Replacement", composer=self.admin))
-        original_id = self.player.post_id
+    def test_player_editor_can_assign_a_different_program(self):
+        replacement = PlayerProgram.objects.create(post=Post.objects.create(title="Replacement", composer=self.admin))
+        original_id = self.player.program_id
 
         response = self.client.post(
             reverse("admin:core_player_change", args=[self.player.pk]),
-            {"name": self.player.name, "manager": self.manager.pk, "post": replacement.pk},
+            self.player_fields(program=replacement.pk),
         )
 
         self.assertEqual(response.status_code, 302)
         self.player.refresh_from_db()
-        self.assertEqual(self.player.post, replacement)
-        self.assertTrue(LocalPost.objects.filter(pk=original_id).exists())
+        self.assertEqual(self.player.program, replacement)
+        self.assertTrue(PlayerProgram.objects.filter(pk=original_id).exists())
 
 
 class SharedDiscussionContextTests(TestCase):
@@ -125,17 +164,17 @@ class SharedDiscussionContextTests(TestCase):
         composer = get_user_model().objects.create_user(
             username="discussion-composer", email="discussion-composer@example.com"
         )
-        local_post = LocalPost.objects.create(post=Post.objects.create(title="A local discussion", composer=composer))
+        program = PlayerProgram.objects.create(post=Post.objects.create(title="A local discussion", composer=composer))
         for index in range(11):
             listener = get_user_model().objects.create_user(
                 username=f"discussion-listener-{index}",
                 email=f"discussion-listener-{index}@example.com",
             )
-            Comment.objects.create(post=local_post.post, user=listener, body=f"Response {index}")
+            Comment.objects.create(post=program.post, user=listener, body=f"Response {index}")
         discussion_url = "/vote/comments/?player=token&choice=up&section=water&page=1#discussion"
 
         context = build_discussion_context(
-            local_post.post, composer,
+            program.post, composer,
             discussion_url=discussion_url,
             comment_url="/vote/comments/new/?player=token&section=water",
             dom_id="player-discussion",
@@ -148,6 +187,6 @@ class SharedDiscussionContextTests(TestCase):
         self.assertEqual(parse_qs(url.query), {
             "player": ["token"], "choice": ["up"], "section": ["water"], "page": ["2"]
         })
-        self.assertEqual(context["post"], local_post.post)
+        self.assertEqual(context["post"], program.post)
         self.assertEqual(context["comment_count"], 11)
         self.assertEqual(context["dom_id"], "player-discussion")

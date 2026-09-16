@@ -548,7 +548,7 @@
     <div class="flags">
       <div class="flag">
         <h4>The 400 ms gap is a scheduling problem, not an algorithm problem</h4>
-        <p>Fig. 4 blames the soundscape&rsquo;s gradualness, but the delay is in the plumbing. <code>refresh</code> sleeps <code>REFRESH_INTERVAL_SECONDS = 30</code> between passes, and <code>/api/cosound</code> is throttled to <code>10/m</code> &mdash; a 6-second poll ceiling. Worst case from tap to audible layer is roughly <b>36 seconds</b>, and no predictor will fix that. Enqueue the prediction from <code>submit_vote</code> on the vote itself, and keep the 30-second sweep as a decay floor. The receipt the field notes want depends on this more than on anything in this memo.</p>
+        <p>Fig. 4 blames the soundscape&rsquo;s gradualness, but the delay is in the plumbing. At the time of this review, <code>refresh</code> slept for a fixed 30 seconds between passes and <code>/api/cosound</code> was throttled to <code>10/m</code> &mdash; a 6-second poll ceiling. The algorithm sweep now follows the assigned Local Post, while the physical player&rsquo;s fallback state poll remains a separate player setting; live notifications pull playback state forward as soon as a committed mix changes. The broader point remains: no predictor can remove delays introduced by scheduling and transport.</p>
       </div>
       <div class="flag">
         <h4>There is no path from an anonymous account to a real one</h4>

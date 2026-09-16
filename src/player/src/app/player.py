@@ -43,7 +43,15 @@ class SoundDevicePlayer(CommunalPlayer):
         # --- Resolve and probe the output device (auto-detect, see devices.py) ---
         self.device_obj = detect_output(device)
         if channels and int(channels) > 0:
-            self.device_obj.channels = min(int(channels), self.device_obj.channels)
+            requested = int(channels)
+            # An assumed count is a guess, not a ceiling — a plugin device will
+            # accept whatever we ask for, so an explicit request wins outright.
+            self.device_obj.channels = (
+                requested
+                if self.device_obj.channels_assumed
+                else min(requested, self.device_obj.channels)
+            )
+            self.device_obj.channels_assumed = False
         self.device = self.device_obj.index
         self.device_info = self.device_obj.raw or {"name": self.device_obj.name}
         self.channels = self.device_obj.channels
@@ -73,7 +81,8 @@ class SoundDevicePlayer(CommunalPlayer):
         self.muted = False
         self.levels = {}
         self.last_status = None
-        self._vote_chime = vote_chime(self.fs)
+        self._default_vote_chime = vote_chime(self.fs)
+        self._vote_chime = self._default_vote_chime
         self._vote_chime_positions = []
 
         # Source positions for layered tracks (AAS used an even 45° spread).
@@ -102,6 +111,24 @@ class SoundDevicePlayer(CommunalPlayer):
         with self.lock:
             # Bound burst cost while allowing new taps to sound immediately.
             self._vote_chime_positions = self._vote_chime_positions[-7:] + [0]
+
+    def set_vote_chime(self, samples=None):
+        """Atomically install a prepared one-shot, or reset to the built-in tone."""
+        prepared = self._default_vote_chime if samples is None else np.asarray(samples)
+        if prepared.ndim != 1 or prepared.size == 0:
+            raise ValueError("Vote chime must be a non-empty mono buffer")
+        if not np.isfinite(prepared).all():
+            raise ValueError("Vote chime contains non-finite samples")
+        if samples is not None:
+            # Own the installed buffer so a caller cannot mutate data while the
+            # real-time callback is reading it.
+            prepared = np.array(prepared, dtype=np.float32, order="C", copy=True)
+        with self.lock:
+            self._vote_chime = prepared
+            # A playback cursor into the old buffer may be beyond the end of a
+            # shorter replacement.  Dropping an in-flight acknowledgement makes
+            # the swap safe; the next vote starts the new sound immediately.
+            self._vote_chime_positions = []
 
     def set_muted(self, muted):
         with self.lock:

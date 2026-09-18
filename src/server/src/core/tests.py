@@ -1456,27 +1456,73 @@ class StablePredictorIntegrationTests(TestCase):
         self.player.program.collection.add(*sounds)
         listener = self.make_listener()
 
-        with patch.object(Player, "announce") as announce:
+        with (
+            patch("core.prediction.live.secrets.randbits", return_value=123),
+            patch.object(Player, "announce") as announce,
+        ):
             prediction = Algorithm.awaken(self.player, listener=listener)
 
         self.player.refresh_from_db()
         self.assertIsNotNone(prediction)
         self.assertFalse(self.player.sleeping)
         self.assertIsNotNone(self.player.activated_at)
-        self.assertEqual(
-            [layer.sound_id for layer in self.player.playing.layers],
-            [sounds[0].pk, sounds[1].pk],
+        self.assertEqual(len(self.player.playing.layers), 2)
+        self.assertTrue(
+            {layer.sound_id for layer in self.player.playing.layers}
+            <= {sound.pk for sound in sounds}
         )
-        for layer in self.player.playing.layers:
-            self.assertAlmostEqual(layer.sound_gain, 1 / math.sqrt(2))
+        baseline_gain = 1 / math.sqrt(2)
+        gains = [layer.sound_gain for layer in self.player.playing.layers]
+        self.assertNotEqual(gains[0], gains[1])
+        for gain in gains:
+            self.assertGreaterEqual(gain, baseline_gain * 0.8)
+            self.assertLessEqual(gain, baseline_gain * 1.2)
         decision = AlgorithmDecision.objects.get()
         self.assertEqual(decision.outcome, "selected")
-        self.assertEqual(decision.policy_version, "stable-preference-mixer-v2")
+        self.assertEqual(decision.policy_version, "stable-preference-mixer-v3")
         self.assertEqual(decision.configuration["min_layers"], 2)
         self.assertEqual(decision.configuration["max_layers"], 4)
         self.assertEqual(decision.trace["intent"], "awaken")
+        self.assertEqual(decision.trace["gain_seed"], 123)
+        self.assertEqual(decision.selected_layers, decision.trace["playback_layers"])
         self.assertEqual(self.player.current_exposure.opening_decision, decision)
         announce.assert_called_once()
+
+    def test_varied_three_layer_mix_holds_and_votes_still_match(self):
+        self.configure_algorithm(min_layers=3, max_layers=3, minimum_hold_seconds=0)
+        sounds = [self.make_sound(str(index), "ambient") for index in range(3)]
+        self.player.program.collection.add(*sounds)
+        listener = self.make_listener()
+
+        with (
+            patch("core.prediction.live.secrets.randbits", return_value=17),
+            patch.object(Player, "announce"),
+        ):
+            Algorithm.awaken(self.player, listener=listener)
+
+        self.player.refresh_from_db()
+        exposure = self.player.current_exposure
+        gains = [layer.sound_gain for layer in self.player.playing.layers]
+        baseline_gain = 1 / math.sqrt(3)
+        self.assertEqual(len(gains), 3)
+        self.assertGreater(len(set(gains)), 1)
+        for gain in gains:
+            self.assertGreaterEqual(gain, baseline_gain * 0.8)
+            self.assertLessEqual(gain, baseline_gain * 1.2)
+
+        vote = self.vote(listener)
+        vote.exposure = exposure
+        vote.save(update_fields=["exposure"])
+        self.assertEqual(self.predict(), 1)
+
+        self.player.refresh_from_db()
+        decision = AlgorithmDecision.objects.latest("decided_at")
+        self.assertEqual(decision.outcome, "retained_best")
+        self.assertEqual(self.player.current_exposure, exposure)
+        self.assertEqual(
+            [layer.sound_gain for layer in self.player.playing.layers], gains
+        )
+        self.assertIn("1 prior vote", decision.trace["explanation"])
 
     @override_settings(
         COSOUND_CORE_PREDICTOR="core.predict.stable_preference_predictor"
@@ -1825,7 +1871,7 @@ class StablePredictorIntegrationTests(TestCase):
         self.assertEqual(decision.outcome, "selected")
         self.assertEqual(decision.trace["schema_version"], "1")
         self.assertEqual(decision.trace["decision_id"], str(decision.decision_id))
-        self.assertEqual(decision.policy_version, "stable-preference-mixer-v2")
+        self.assertEqual(decision.policy_version, "stable-preference-mixer-v3")
         self.assertIn("active listener equally", decision.trace["explanation"])
 
         # Immediately again: the minimum hold must keep the same mix, and say so.

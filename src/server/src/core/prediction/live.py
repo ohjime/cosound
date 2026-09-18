@@ -26,6 +26,7 @@ Three things here differ from a naive wiring, and each is deliberate:
 
 import json
 import logging
+import math
 import random
 import secrets
 from dataclasses import asdict
@@ -53,11 +54,12 @@ from core.prediction.selector import SelectionConfig, select_mix
 
 
 logger = logging.getLogger("core.predict")
-STABLE_POLICY_VERSION = "stable-preference-mixer-v2"
+STABLE_POLICY_VERSION = "stable-preference-mixer-v3"
 TRACE_SCHEMA_VERSION = "1"
-FEATURE_VERSION = "current-collection-tags-and-exact-mix-votes-v1"
+FEATURE_VERSION = "current-collection-tags-and-sound-set-votes-v2"
 SCORING_VERSION = "tag-prior-beta-update-mean-disagreement-v1"
 CANDIDATE_VERSION = "configured-equal-power-subsets-v2"
+GAIN_VARIATION = 0.20
 
 
 def _activity_window(program: PlayerProgram) -> timedelta:
@@ -77,6 +79,30 @@ def _mix_from_prediction(prediction: Prediction) -> Mix | None:
     return Mix(layers) if layers else None
 
 
+def _canonical_mix(sound_ids) -> Mix | None:
+    """Use the selector's equal power gains to identify a sound set."""
+    ordered_ids = tuple(sorted(sound_ids))
+    if not ordered_ids:
+        return None
+    gain = 1 / math.sqrt(len(ordered_ids))
+    return Mix(tuple(MixLayer(sound_id, gain) for sound_id in ordered_ids))
+
+
+def _playback_mix(selected: Mix | None, rng: random.Random) -> Mix | None:
+    """Vary new multilayer playback within 20% of each canonical gain."""
+    if selected is None or len(selected.layers) == 1:
+        return selected
+    return Mix(
+        tuple(
+            MixLayer(
+                layer.sound_id,
+                layer.gain * rng.uniform(1 - GAIN_VARIATION, 1 + GAIN_VARIATION),
+            )
+            for layer in selected.layers
+        )
+    )
+
+
 def _prediction_from_mix(mix: Mix | None) -> Prediction:
     prediction = Prediction.new()
     if mix is not None:
@@ -93,7 +119,7 @@ def _sound_evidence(sound) -> SoundEvidence:
 
 
 def _legacy_vote_mix_key(vote, max_layers: int) -> str | None:
-    """Map a rounded stored Cosound to this policy's fixed-gain candidate.
+    """Map a rounded stored Cosound to this policy's canonical candidate.
 
     Historical random-gain votes have uncertain gain attribution, and a stored
     Cosound rounds gains up onto a 0.05 grid, so its gains never equal a mix
@@ -109,10 +135,7 @@ def _legacy_vote_mix_key(vote, max_layers: int) -> str | None:
         or len(sound_ids) != len(set(sound_ids))
     ):
         return None
-    gain = 1 / (len(sound_ids) ** 0.5)
-    return Mix(
-        tuple(MixLayer(sound_id=sound_id, gain=gain) for sound_id in sound_ids)
-    ).key
+    return _canonical_mix(sound_ids).key
 
 
 def _stable_config(program: PlayerProgram) -> SelectionConfig:
@@ -198,7 +221,7 @@ def _explain_selection(result, listeners, config: SelectionConfig) -> str:
     if result.selected_mix is None or result.selected_score is None:
         return f"Completed the decision with outcome {result.reason}."
 
-    exact_vote_count = sum(
+    matched_vote_count = sum(
         vote.mix_key == result.selected_mix.key
         for listener in listeners
         for vote in listener.votes
@@ -207,8 +230,8 @@ def _explain_selection(result, listeners, config: SelectionConfig) -> str:
     return (
         f"{selection_kind} this mix after weighting {listener_count} active "
         f"listener{'s' if listener_count != 1 else ''} equally. Saved-sound "
-        f"tags supplied weak prior evidence and {exact_vote_count} prior "
-        f"vote{'s' if exact_vote_count != 1 else ''} applied to this exact mix. "
+        f"tags supplied weak prior evidence and {matched_vote_count} prior "
+        f"vote{'s' if matched_vote_count != 1 else ''} applied to this sound set. "
         f"Its group score was {result.selected_score.group_score:.3f} "
         f"(mean {result.selected_score.mean:.3f}, disagreement "
         f"{result.selected_score.disagreement:.3f}) among "
@@ -275,7 +298,10 @@ def _listener_evidence(
             rejected_vote_count += 1
             continue
         if vote.exposure_id and vote.exposure.player_id == player.pk:
-            mix_key = vote.exposure.mix_key
+            mix = _canonical_mix(
+                layer["sound_id"] for layer in vote.exposure.layers
+            )
+            mix_key = mix.key if mix else None
         elif vote.exposure_id:
             rejected_vote_count += 1
             continue
@@ -420,6 +446,7 @@ def run_stable_prediction(
     config = None
     configuration = {}
     exploration_seed = None
+    gain_seed = None
     prediction_to_announce = None
 
     try:
@@ -450,6 +477,9 @@ def run_stable_prediction(
             library_ids = tuple(sound.pk for sound in library)
             sounds = tuple(_sound_evidence(sound) for sound in library)
             current_mix = _mix_from_prediction(player.playing)
+            selection_current_mix = (
+                _canonical_mix(current_mix.sound_ids) if current_mix else None
+            )
 
             stored_exposure = player.current_exposure
             current_exposure = stored_exposure
@@ -488,12 +518,22 @@ def run_stable_prediction(
         result = select_mix(
             sounds=sounds,
             listeners=listeners,
-            current_mix=current_mix,
+            current_mix=selection_current_mix,
             last_change_at=last_change_at,
             decision_time=decision_time,
             config=config,
             rng=random.Random(exploration_seed),
             awaken=awakening,
+        )
+        if (
+            result.changed
+            and result.selected_mix
+            and len(result.selected_mix.layers) > 1
+        ):
+            gain_seed = secrets.randbits(64)
+        playback_mix = (
+            _playback_mix(result.selected_mix, random.Random(gain_seed))
+            if result.changed else current_mix
         )
 
         trace = result.as_dict(top=config.exploration_size)
@@ -510,6 +550,10 @@ def run_stable_prediction(
             last_change_at.isoformat() if last_change_at is not None else None
         )
         trace["exploration_seed"] = exploration_seed
+        trace["gain_seed"] = gain_seed
+        trace["gain_variation_fraction"] = GAIN_VARIATION
+        trace["playback_mix_key"] = playback_mix.key if playback_mix else None
+        trace["playback_layers"] = playback_mix.as_layers() if playback_mix else []
         trace["explanation"] = _explain_selection(result, listeners, config)
         trace["candidate_manifest"] = {
             "source": "input_snapshot.library",
@@ -594,7 +638,7 @@ def run_stable_prediction(
                 decided_at=decision_time,
                 previous_layers=current_mix.as_layers() if current_mix else [],
                 selected_layers=(
-                    result.selected_mix.as_layers() if result.selected_mix else []
+                    playback_mix.as_layers() if playback_mix else []
                 ),
                 active_listener_ids=active_listener_ids,
                 input_snapshot=input_snapshot,
@@ -613,20 +657,20 @@ def run_stable_prediction(
                 if current_exposure is not None and current_exposure.ended_at is None:
                     _close_exposure(current_exposure, decision_time)
 
-                next_prediction = _prediction_from_mix(result.selected_mix)
+                next_prediction = _prediction_from_mix(playback_mix)
                 next_exposure = None
-                if result.selected_mix is not None:
+                if playback_mix is not None:
                     next_exposure = PlaybackExposure.objects.create(
                         player=player,
                         opening_decision=decision,
-                        mix_key=result.selected_mix.key,
-                        layers=result.selected_mix.as_layers(),
+                        mix_key=playback_mix.key,
+                        layers=playback_mix.as_layers(),
                         commanded_at=decision_time,
                     )
                 player.playing = next_prediction
                 player.current_exposure = next_exposure
                 update_fields = ["playing", "current_exposure"]
-                if awakening and result.selected_mix is not None:
+                if awakening and playback_mix is not None:
                     player.activated_at = decision_time
                     update_fields.append("activated_at")
                 # The mix really changed, so let post_save publish
@@ -634,14 +678,14 @@ def run_stable_prediction(
                 player.save(update_fields=update_fields)
                 current_exposure = next_exposure
                 prediction_to_announce = next_prediction if next_prediction else None
-            elif result.selected_mix is not None and current_exposure is None:
+            elif playback_mix is not None and current_exposure is None:
                 # Adopt an exposure for a mix that is already playing, so the
                 # hold clock has something to measure from.
                 current_exposure = PlaybackExposure.objects.create(
                     player=player,
                     opening_decision=decision,
-                    mix_key=result.selected_mix.key,
-                    layers=result.selected_mix.as_layers(),
+                    mix_key=playback_mix.key,
+                    layers=playback_mix.as_layers(),
                     commanded_at=decision_time,
                 )
                 _set_current_exposure_quietly(player, current_exposure)
@@ -692,4 +736,4 @@ def run_stable_prediction(
                 "announcement failed",
                 player_id,
             )
-    return 1 if result.selected_mix else 0
+    return 1 if playback_mix else 0

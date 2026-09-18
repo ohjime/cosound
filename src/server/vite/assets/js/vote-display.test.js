@@ -104,17 +104,29 @@ test("choice URLs preset Pleasant while the slider can reverse the vote", () => 
     }
 });
 
-test("vote slider moves continuously and snaps to the nearest end on release", () => {
+test("vote slider stays where released and changes the vote at halfway", () => {
+    const display = voteDisplay();
+    display.updateVoteSlider("0.38");
+    assert.equal(display.voteSlider, 0.38);
+    assert.equal(display.pleasant, 0);
+    display.updateVoteSlider(0.5);
+    assert.equal(display.pleasant, 1);
+    assert.equal(display.voteSlider, 0.5);
+    display.updateVoteSlider(0.67);
+    assert.equal(display.voteSlider, 0.67);
+});
+
+test("thumb buttons move both the vote and its range input", () => {
     const display = voteDisplay();
     const input = { value: "0.38" };
-    display.updateVoteSlider(input.value);
-    assert.equal(display.voteSlider, 0.38);
-    display.snapVoteSlider(input);
+    display.$refs = { voteRange: input };
+    display.setVoteChoice(0);
     assert.equal(display.pleasant, 0);
+    assert.equal(display.voteSlider, 0);
     assert.equal(input.value, "0");
-    display.updateVoteSlider(0.67);
-    display.snapVoteSlider(input);
+    display.setVoteChoice(1);
     assert.equal(display.pleasant, 1);
+    assert.equal(display.voteSlider, 1);
     assert.equal(input.value, "1");
 });
 

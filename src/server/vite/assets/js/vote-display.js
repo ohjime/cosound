@@ -6,7 +6,6 @@ export function voteDisplay(initialLayers = [], initialSleeping = false) {
         title: "",
         pleasant: 1,
         voteSlider: 1,
-        voteSliderDragging: false,
         voteAnonymously: true,
         playerSleeping: Boolean(initialSleeping),
         activationMode: Boolean(initialSleeping),
@@ -97,32 +96,12 @@ export function voteDisplay(initialLayers = [], initialSleeping = false) {
         setVoteChoice(value) {
             this.pleasant = value;
             this.voteSlider = value;
+            if (this.$refs?.voteRange) this.$refs.voteRange.value = String(value);
         },
 
         updateVoteSlider(value) {
             this.voteSlider = Math.max(0, Math.min(1, Number(value) || 0));
             this.pleasant = this.voteSlider >= 0.5 ? 1 : 0;
-        },
-
-        snapVoteSlider(input) {
-            this.voteSliderDragging = false;
-            this.setVoteChoice(this.voteSlider >= 0.5 ? 1 : 0);
-            if (input) input.value = String(this.pleasant);
-        },
-
-        beginVoteDrag(event) {
-            this.voteSliderDragging = true;
-            event.currentTarget.setPointerCapture?.(event.pointerId);
-        },
-
-        moveVoteDrag(event) {
-            if (!this.voteSliderDragging) return;
-            const rect = this.$refs.voteTrack.getBoundingClientRect();
-            this.updateVoteSlider((event.clientX - rect.left) / rect.width);
-        },
-
-        endVoteDrag() {
-            if (this.voteSliderDragging) this.snapVoteSlider(this.$refs.voteRange);
         },
 
         handlePlayerActivated(detail) {

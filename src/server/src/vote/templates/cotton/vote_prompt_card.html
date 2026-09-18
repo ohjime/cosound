@@ -1,5 +1,5 @@
 <c-vars choice="" throttle_seconds_left="0" />
-<c-core-card showExit="false" bgColor="bg-[#3a536f]" ringColor="ring-[#2d2d2d]">
+<c-core-card showExit="false" bgColor="bg-[#3a536f]" ringColor="ring-[#46566b]">
     <div data-vote-card data-vote-prompt-card class="contents">
         <figure class="relative mx-6 mt-7 overflow-visible rounded-t-md bg-base-300 ring-7 ring-neutral-content/70">
             <c-vote-layer-indicator-dock>
@@ -21,19 +21,19 @@
             </button>
         </figure>
         <div class="z-20 flex flex-row items-center justify-center w-full px-5.5 gap-3" role="group" aria-label="Pleasant vote">
-            <button type="button" class="btn btn-xs btn-circle shrink-0 border-none bg-[#8f2f38] text-white" aria-label="Downvote" :aria-pressed="pleasant === 0" @click="setVoteChoice(0)"><span class="material-symbols-outlined text-sm leading-none" aria-hidden="true">thumb_down</span></button>
+            <button type="button" class="btn btn-xs btn-circle shrink-0 border-none bg-[#8f2f38] p-0 text-white" aria-label="Downvote" :aria-pressed="pleasant === 0" @click="setVoteChoice(0)"><svg class="size-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 21a3.13 3.13 0 0 1-3-2.88Z"/></svg></button>
             <div class="w-full min-w-0 px-2 py-6 select-none touch-none">
-                <div x-ref="voteTrack" class="relative h-2 w-full rounded-full bg-amber-500 transition-[filter]">
-                    <div class="absolute top-1/2 z-10 -translate-y-16 -translate-x-1/2 size-22 scale-y-75 scale-x-125 flex items-center justify-center pointer-events-none duration-300" :class="voteSliderDragging ? '' : 'transition-[left] ease-out'" :style="`left: ${voteSlider * 100}%`">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" class="rotate-90 drop-shadow-md pointer-events-none text-amber-600 stroke-white" fill="currentColor" aria-hidden="true">
-                            <path d="M400-280v-400l200 200-200 200Z" stroke-width="40" stroke-linejoin="round" class="pointer-events-auto cursor-grab active:cursor-grabbing" @pointerdown.stop="beginVoteDrag($event)" @pointermove="moveVoteDrag($event)" @pointerup="endVoteDrag()" @pointercancel="endVoteDrag()" />
-                            <ellipse cx="760" cy="-480" rx="120" ry="80" class="pointer-events-auto cursor-grab active:cursor-grabbing" @pointerdown.stop="beginVoteDrag($event)" @pointermove="moveVoteDrag($event)" @pointerup="endVoteDrag()" @pointercancel="endVoteDrag()" />
+                <div class="relative h-2 w-full rounded-full bg-amber-500">
+                    <div class="pointer-events-none absolute top-1/2 z-10 flex size-22 -translate-x-1/2 -translate-y-16 scale-x-125 scale-y-75 items-center justify-center" :style="`left: ${voteSlider * 100}%`">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" class="pointer-events-none rotate-90 text-amber-600 stroke-white drop-shadow-md" fill="currentColor" aria-hidden="true">
+                            <path d="M400-280v-400l200 200-200 200Z" stroke-width="40" stroke-linejoin="round" />
+                            <ellipse cx="760" cy="-480" rx="120" ry="80" />
                         </svg>
                     </div>
-                    <input x-ref="voteRange" type="range" min="0" max="1" step="0.01" class="absolute inset-x-0 -top-5 h-12 w-full cursor-pointer opacity-0" aria-label="Pleasant vote: 0 downvote, 1 upvote" :value="voteSlider" @pointerdown="voteSliderDragging = true" @input="updateVoteSlider($event.target.value)" @change="snapVoteSlider($event.target)" @pointerup="snapVoteSlider($event.target)" @pointercancel="snapVoteSlider($event.target)" @keydown.arrow-left.prevent="setVoteChoice(0)" @keydown.arrow-right.prevent="setVoteChoice(1)">
+                    <input x-ref="voteRange" type="range" min="0" max="1" step="0.01" class="absolute inset-x-0 -top-5 h-12 w-full cursor-pointer opacity-0" aria-label="Pleasant vote: 0 downvote, 1 upvote" :value="voteSlider" @input="updateVoteSlider($event.target.value)">
                 </div>
             </div>
-            <button type="button" class="btn btn-xs btn-circle shrink-0 border-none bg-[#155c45] text-white" aria-label="Upvote" :aria-pressed="pleasant === 1" @click="setVoteChoice(1)"><span class="material-symbols-outlined text-sm leading-none" aria-hidden="true">thumb_up</span></button>
+            <button type="button" class="btn btn-xs btn-circle shrink-0 border-none bg-[#155c45] p-0 text-white" aria-label="Upvote" :aria-pressed="pleasant === 1" @click="setVoteChoice(1)"><svg class="size-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 3a3.13 3.13 0 0 1 3 2.88Z"/></svg></button>
         </div>
         <div class="relative mx-4 mb-4 rounded-xs rounded-b-2xl bg-white/65 text-black ring-5 ring-amber-600/60">
             <div class="h-30 overflow-y-auto px-4 py-2">
@@ -56,7 +56,7 @@
             </div>
             <div class="pointer-events-none absolute inset-x-0 bottom-0 h-6 rounded-b-2xl bg-gradient-to-t from-neutral-content/80 to-transparent"></div>
         </div>
-        <div class="absolute z-10 bottom-0 left-1/2 flex w-52 -translate-x-1/2 justify-center overflow-hidden rounded-t-2xl bg-base-100 ring-6 ring-[#2d2d2d]/60 drop-shadow-2xl">
+        <div class="absolute z-10 bottom-0 left-1/2 flex w-52 -translate-x-1/2 justify-center overflow-hidden rounded-t-2xl bg-base-100 ring-6 ring-[#46566b]/60 drop-shadow-2xl">
             <button type="button" data-nfc-vote data-submit-vote class="btn btn-sm btn-soft h-10 w-full rounded-t-xl" aria-label="Submit vote" hx-post="{% url 'vote:submit_vote' %}?{{ request.GET.urlencode }}" :hx-vals="submissionPayload" hx-swap="none" hx-disabled-elt="this" @htmx:before-request="voteError = ''">SUBMIT VOTE</button>
         </div>
     </div>

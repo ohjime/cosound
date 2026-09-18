@@ -9,6 +9,7 @@ import { installSoundscapeBridge } from './soundscape-store.js';
 import { installSoundSelectorGuard } from './sound-selector-guard.js';
 import { studioBuilder } from './studio-builder.js';
 import { trimTrack } from './trim-track.js';
+import { voteCountdown } from './vote-countdown.js';
 import { voteDisplay } from './vote-display.js';
 import './explore-fonts.js';
 
@@ -23,6 +24,7 @@ Alpine.data('cardDemo', cardDemo);
 Alpine.data('layerCarousel', layerCarousel);
 Alpine.data('studioBuilder', studioBuilder);
 Alpine.data('trimTrack', trimTrack);
+Alpine.data('voteCountdown', voteCountdown);
 Alpine.data('voteDisplay', voteDisplay);
 Alpine.start();
 

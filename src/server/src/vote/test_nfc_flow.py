@@ -251,6 +251,9 @@ class NFCVoteFlowTests(TestCase):
         self.assertGreater(page.context["throttle_seconds_left"], 0)
         self.assertEqual(self.page_buttons(page), [])
         self.assertNotIn("data-vote-prompt-card", page.content.decode())
+        self.assertIn("Next vote in", page.content.decode())
+        self.assertIn('class="countdown"', page.content.decode())
+        self.assertIn('style="display: none" class="text-sm">Now voting', page.content.decode())
 
     def test_guest_login_allows_the_original_button_post_to_resume_with_rotated_csrf(self):
         client = Client(enforce_csrf_checks=True)

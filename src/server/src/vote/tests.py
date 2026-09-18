@@ -88,6 +88,7 @@ class SubmitVoteTests(TestCase):
         trigger = json.loads(response.headers["HX-Trigger"])
         self.assertIn("vote-success", trigger)
         self.assertEqual(trigger["vote-success"]["voters"][0]["id"], vote.pk)
+        self.assertGreater(trigger["vote-success"]["seconds_left"], 0)
         # With no exposure open, there is nothing to attribute the vote to.
         self.assertIsNone(vote.exposure)
         self.assertEqual(vote.attribution_quality, Vote.UNATTRIBUTED)

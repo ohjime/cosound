@@ -225,7 +225,12 @@ def submit_vote(request):
 
             response = HttpResponse("")
             response["HX-Trigger"] = json.dumps(
-                {"vote-success": {"voters": serialize_recent_votes(player)}}
+                {
+                    "vote-success": {
+                        "voters": serialize_recent_votes(player),
+                        "seconds_left": get_throttle_seconds_left(listener),
+                    }
+                }
             )
 
     if should_awaken:

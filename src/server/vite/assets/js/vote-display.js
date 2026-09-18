@@ -15,6 +15,9 @@ export function voteDisplay(initialLayers = [], initialSleeping = false) {
         activationError: "",
         voteError: "",
         voted: false,
+        activeVote: false,
+        volumeNotice: false,
+        volumeNoticeTimer: null,
         secondsLeft: 0,
         timer: null,
 
@@ -32,6 +35,7 @@ export function voteDisplay(initialLayers = [], initialSleeping = false) {
             this.pleasant = this.$el?.dataset.voteChoice === "0" ? 0 : 1;
             this.voteSlider = this.pleasant;
             this.playerSleeping = this.$el?.dataset.playerSleeping === "true";
+            this.activeVote = this.$el?.dataset.voteActive === "true";
             this.activationMode = this.playerSleeping;
             this.renderedActivationCard = this.activationMode;
             this.secondsLeft = Number(this.$el?.dataset.throttleSecondsLeft) || 0;
@@ -40,6 +44,7 @@ export function voteDisplay(initialLayers = [], initialSleeping = false) {
 
         destroy() {
             if (this.timer) clearInterval(this.timer);
+            if (this.volumeNoticeTimer) clearTimeout(this.volumeNoticeTimer);
         },
 
         get carouselSlides() {
@@ -121,6 +126,7 @@ export function voteDisplay(initialLayers = [], initialSleeping = false) {
         },
 
         handlePlayerActivated(detail) {
+            this.activeVote = false;
             if (Array.isArray(detail?.layers)) {
                 this.layers = detail.layers.map((layer) => ({ ...layer }));
             }
@@ -166,11 +172,24 @@ export function voteDisplay(initialLayers = [], initialSleeping = false) {
             this.$el?.querySelector("[data-vote-prompt-card]")?.closest("[data-core-card]")?.dispatchEvent(new CustomEvent("card:remove", { bubbles: true }));
         },
 
+        handleCardRemoved(detail) {
+            if (detail?.card?.querySelector?.("[data-vote-prompt-card]")) this.activeVote = false;
+        },
+
         select(index) {
             this.currentIndex = Math.max(0, Math.min(this.carouselSlides.length - 1, index));
             const carousel = this.$refs?.carousel;
             const item = carousel?.querySelectorAll("[data-vote-layer]")[this.currentIndex];
             if (item) carousel.scrollTo({ left: item.offsetLeft, behavior: "instant" });
+        },
+
+        showVolumeNotice() {
+            this.volumeNotice = true;
+            if (this.volumeNoticeTimer) clearTimeout(this.volumeNoticeTimer);
+            this.volumeNoticeTimer = setTimeout(() => {
+                this.volumeNotice = false;
+                this.volumeNoticeTimer = null;
+            }, 2400);
         },
 
         move(delta) { this.select(this.currentIndex + delta); },

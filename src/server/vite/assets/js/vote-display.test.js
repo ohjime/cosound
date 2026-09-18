@@ -273,3 +273,32 @@ test("vote success and throttling drive the card labels", () => {
     assert.equal(downvote.secondsLeft, 12);
     clearInterval(downvote.timer);
 });
+
+test("active vote spacing ends after the prompt card leaves the stack", () => {
+    const display = voteDisplay(layers);
+    display.$el = { dataset: { voteActive: "true" }, querySelector: () => null };
+    display.init();
+    assert.equal(display.activeVote, true);
+    display.handleVoteSuccess();
+    assert.equal(display.activeVote, true);
+    display.handleCardRemoved({ card: { querySelector: () => ({}) } });
+    assert.equal(display.activeVote, false);
+
+    const throttled = voteDisplay(layers);
+    throttled.$el = { dataset: { voteActive: "true" }, querySelector: () => null };
+    throttled.init();
+    throttled.handleThrottle(12);
+    assert.equal(throttled.activeVote, true);
+    throttled.handleCardRemoved({ card: { querySelector: () => ({}) } });
+    assert.equal(throttled.activeVote, false);
+    throttled.destroy();
+});
+
+test("trying the fixed public volume shows a temporary notice", () => {
+    const display = voteDisplay(layers);
+    display.showVolumeNotice();
+    assert.equal(display.volumeNotice, true);
+    assert.notEqual(display.volumeNoticeTimer, null);
+    display.showVolumeNotice();
+    display.destroy();
+});

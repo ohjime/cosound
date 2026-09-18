@@ -37,6 +37,7 @@
             <div class="aspect-square w-full rounded-t-md overflow-hidden">
                 <c-vote-card-figure><c-vote-layer-carousel /></c-vote-card-figure>
             </div>
+            <div x-cloak x-show="volumeNotice" x-transition.opacity.duration.200ms role="status" class="pointer-events-none absolute inset-x-3 top-14 z-40 rounded-lg bg-neutral-900/90 px-3 py-2 text-center text-xs font-medium text-neutral-100 shadow-lg">Layer volume is fixed in the public player.</div>
             <template x-if="carouselSlides.length > 1">
                 <div class="contents"><c-vote-arrows /></div>
             </template>

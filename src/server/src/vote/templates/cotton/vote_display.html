@@ -5,6 +5,7 @@
      data-vote-choice="{{ choice }}"
      data-authenticated="{% if request.user.is_authenticated %}true{% else %}false{% endif %}"
      data-player-sleeping="{% if sleeping %}true{% else %}false{% endif %}"
+     data-vote-active="{% if not sleeping and not throttle_seconds_left and choice == '1' or not sleeping and not throttle_seconds_left and choice == '0' %}true{% else %}false{% endif %}"
      data-throttle-seconds-left="{{ throttle_seconds_left|default:0 }}"
      data-post-title="{% if program %}{{ program.post.title }}{% endif %}"
      @vote-success.window="handleVoteSuccess()"
@@ -12,10 +13,16 @@
      @vote-auth-unavailable.window="handleVoteAuthUnavailable($event.detail)"
      @player-activated.window="handlePlayerActivated($event.detail)"
      @player-activation-unavailable.window="handleActivationUnavailable($event.detail)"
+     @card:removed="handleCardRemoved($event.detail)"
      @layer-saved.window="onLayerSaved($event.detail)">
     <div data-vote-layers hidden>{{ layers|json_script:"vote-display-layers" }}</div>
-    <c-core-deck id="deck" depth_translate_y="28">
-        <c-vote-card :layers="layers" :sleeping="sleeping" />
-        {% if not sleeping and not throttle_seconds_left and choice == '1' or not sleeping and not throttle_seconds_left and choice == '0' %}<c-vote-prompt-card :choice="choice" :throttle_seconds_left="throttle_seconds_left" />{% endif %}
-    </c-core-deck>
+    <!-- The 44px top space covers the 34px card offset and leaves 10px above the visible stack. -->
+    <div class="w-full transition-[padding-top] duration-700 ease-out motion-reduce:transition-none"
+         style="padding-top: {% if not sleeping and not throttle_seconds_left and choice == '1' or not sleeping and not throttle_seconds_left and choice == '0' %}44{% else %}0{% endif %}px"
+         :style="`padding-top: ${activeVote ? 44 : 0}px`">
+        <c-core-deck id="deck" depth_translate_y="34" depth_transition_ms="700">
+            <c-vote-card :layers="layers" :sleeping="sleeping" />
+            {% if not sleeping and not throttle_seconds_left and choice == '1' or not sleeping and not throttle_seconds_left and choice == '0' %}<c-vote-prompt-card :choice="choice" :throttle_seconds_left="throttle_seconds_left" />{% endif %}
+        </c-core-deck>
+    </div>
 </div>

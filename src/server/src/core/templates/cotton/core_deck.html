@@ -1,5 +1,5 @@
 <!-- djlint:off -->
-<c-vars id="" depth_translate_y="24" />
+<c-vars id="" depth_translate_y="24" depth_transition_ms="200" />
 <!--
 One overlay at a time. Cards rendered with a `key` (the ones views push onto
 the deck) are mutually exclusive: drawing a card whose key is already on the
@@ -27,6 +27,7 @@ a second time.
         exitToY: 20,
         exitToScale: 1.0,
         depthTranslateY: {{ depth_translate_y }},
+        depthTransitionMs: {{ depth_transition_ms }},
         depthScale: 0.07,
         cardCount: 0,
     }"

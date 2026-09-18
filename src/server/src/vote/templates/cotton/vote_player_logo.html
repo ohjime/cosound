@@ -1,5 +1,5 @@
 <c-vars placeholder="false" />
-<div class="z-20 flex w-full flex-row items-center justify-center gap-3 px-5.5">
+<div class="z-20 flex w-full cursor-not-allowed flex-row items-center justify-center gap-3 px-5.5" role="button" tabindex="0" aria-label="Layer volume is fixed in the public player" @pointerdown.prevent="showVolumeNotice()" @keydown.enter.prevent="showVolumeNotice()" @keydown.space.prevent="showVolumeNotice()">
     <span role="img" aria-label="Volume" class="btn btn-xs btn-circle pointer-events-none shrink-0 border-none !bg-amber-500 !text-amber-900">
         <svg class="size-[1.7em] fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="M560-131v-82q90-26 145-100t55-168q0-94-55-168T560-749v-82q124 28 202 125t78 225q0 128-78 225T560-131ZM120-360v-240h160l200-200v640L280-360H120Zm440 40v-322q47 22 73.5 66t26.5 96q0 51-26.5 94.5T560-320ZM400-606l-86 86H200v80h114l86 86v-252Z" /></svg>
     </span>

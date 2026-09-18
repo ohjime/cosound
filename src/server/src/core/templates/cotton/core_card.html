@@ -32,7 +32,7 @@
          :style="`
              transition-property: transform, opacity;
              transition-timing-function: ease-out;
-             transition-duration: ${removing ? exitMs : enterMs}ms;
+             transition-duration: ${removing ? exitMs : depthTransitionMs}ms;
              transition-delay: ${removing ? exitDelayMs : enterDelayMs}ms;
              transform: translateY(${mounted && !removing
                  ? -depth * depthTranslateY + 'px'

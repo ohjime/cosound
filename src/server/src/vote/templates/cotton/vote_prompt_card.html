@@ -1,5 +1,5 @@
 <c-vars choice="" throttle_seconds_left="0" />
-<c-core-card showExit="false" bgColor="bg-[#1f3f23]" ringColor="ring-[#2d2d2d]">
+<c-core-card showExit="false" bgColor="bg-[#33263d]" ringColor="ring-[#2d2d2d]">
     <div data-vote-card data-vote-prompt-card class="contents">
         <figure class="relative mx-6 mt-7 overflow-visible rounded-t-md bg-base-300 ring-7 ring-neutral-content/70">
             <c-vote-layer-indicator-dock>
@@ -18,14 +18,14 @@
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-full w-full" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="M400-280v-400l200 200-200 200Z" stroke-width="40" stroke-linejoin="round" /></svg>
             </button>
         </figure>
-        <div class="z-20 flex w-full items-center justify-center gap-3 px-5.5" role="group" aria-label="Pleasant vote">
+        <div class="z-20 flex flex-row items-center justify-center w-full px-5.5 gap-3" role="group" aria-label="Pleasant vote">
             <button type="button" class="btn btn-xs btn-circle shrink-0 border-none bg-amber-500 text-amber-900" aria-label="Downvote" :aria-pressed="pleasant === 0" @click="setVoteChoice(0)"></button>
             <div class="w-full min-w-0 px-2 py-6 select-none touch-none">
-                <div x-ref="voteTrack" class="relative h-2 w-full rounded-full bg-amber-500">
-                    <div class="pointer-events-none absolute top-1/2 z-10 -translate-y-16 -translate-x-1/2 size-22 scale-y-75 scale-x-125 flex items-center justify-center" :class="voteSliderDragging ? '' : 'transition-[left] duration-300 ease-out'" :style="`left: ${voteSlider * 100}%`">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" class="rotate-90 drop-shadow-md pointer-events-auto text-amber-600 stroke-white" fill="currentColor" aria-hidden="true" @pointerdown.stop="beginVoteDrag($event)" @pointermove="moveVoteDrag($event)" @pointerup="endVoteDrag()" @pointercancel="endVoteDrag()">
-                            <path d="M400-280v-400l200 200-200 200Z" stroke-width="40" stroke-linejoin="round" />
-                            <ellipse cx="760" cy="-480" rx="120" ry="80" />
+                <div x-ref="voteTrack" class="relative h-2 w-full rounded-full bg-amber-500 transition-[filter]">
+                    <div class="absolute top-1/2 z-10 -translate-y-16 -translate-x-1/2 size-22 scale-y-75 scale-x-125 flex items-center justify-center pointer-events-none duration-300" :class="voteSliderDragging ? '' : 'transition-[left] ease-out'" :style="`left: ${voteSlider * 100}%`">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" class="rotate-90 drop-shadow-md pointer-events-none text-amber-600 stroke-white" fill="currentColor" aria-hidden="true">
+                            <path d="M400-280v-400l200 200-200 200Z" stroke-width="40" stroke-linejoin="round" class="pointer-events-auto cursor-grab active:cursor-grabbing" @pointerdown.stop="beginVoteDrag($event)" @pointermove="moveVoteDrag($event)" @pointerup="endVoteDrag()" @pointercancel="endVoteDrag()" />
+                            <ellipse cx="760" cy="-480" rx="120" ry="80" class="pointer-events-auto cursor-grab active:cursor-grabbing" @pointerdown.stop="beginVoteDrag($event)" @pointermove="moveVoteDrag($event)" @pointerup="endVoteDrag()" @pointercancel="endVoteDrag()" />
                         </svg>
                     </div>
                     <input x-ref="voteRange" type="range" min="0" max="1" step="0.01" class="absolute inset-x-0 -top-5 h-12 w-full cursor-pointer opacity-0" aria-label="Pleasant vote: 0 downvote, 1 upvote" :value="voteSlider" @pointerdown="voteSliderDragging = true" @input="updateVoteSlider($event.target.value)" @change="snapVoteSlider($event.target)" @pointerup="snapVoteSlider($event.target)" @pointercancel="snapVoteSlider($event.target)" @keydown.arrow-left.prevent="setVoteChoice(0)" @keydown.arrow-right.prevent="setVoteChoice(1)">

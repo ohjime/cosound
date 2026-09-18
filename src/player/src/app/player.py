@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import random
 import threading
 import numpy as np
 import sounddevice as sd
@@ -11,10 +12,12 @@ from app.reverb import FDNReverb
 from app.conditioning import _resample as resample_audio
 from app.chime import (
     VOTE_CHIME_DEFAULT_VOLUME,
+    VOTE_CHIME_DOWNVOTE_DEGREES,
     VOTE_CHIME_MAX_RATIO,
     VOTE_CHIME_OUTPUT_CEILING,
     VOTE_CHIME_RMS_FLOOR,
     VOTE_CHIME_RMS_SECONDS,
+    VOTE_CHIME_UPVOTE_DEGREES,
     chime_loudness,
     vote_chime_scale,
 )
@@ -142,14 +145,18 @@ class SoundDevicePlayer(CommunalPlayer):
         with self.lock:
             self.master_gain = max(0.0, min(1.0, float(gain)))
 
-    def play_vote_chime(self):
+    def play_vote_chime(self, pleasant=None):
         """Start a one-shot on the existing output, independently of mix changes."""
         with self.lock:
-            # Step to the next degree so no acknowledgement repeats the pitch of
-            # the one before it; the scale itself keeps the sequence musical.
-            self._vote_chime_degree = (self._vote_chime_degree + 1) % len(
-                self._vote_chime
-            )
+            if pleasant == 0 and type(pleasant) is int:
+                degrees = VOTE_CHIME_DOWNVOTE_DEGREES
+            elif pleasant == 1 and type(pleasant) is int:
+                degrees = VOTE_CHIME_UPVOTE_DEGREES
+            else:
+                degrees = range(len(self._vote_chime))
+            # Pick freely within the consonant set, avoiding an immediate repeat.
+            choices = [degree for degree in degrees if degree != self._vote_chime_degree]
+            self._vote_chime_degree = random.choice(choices)
             # Bound burst cost while allowing new taps to sound immediately.
             self._vote_chime_positions = self._vote_chime_positions[-7:] + [
                 (self._vote_chime_degree, 0)

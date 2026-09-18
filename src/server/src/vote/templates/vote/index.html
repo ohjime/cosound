@@ -24,7 +24,7 @@
         <article class="w-full max-w-200 text-base-content rounded-3xl overflow-hidden text-left">
             <div class="px-6 sm:px-12 pb-20">
                 {% if program %}
-                    <c-core-post-heading :post="program.post" hideDate="true" />
+                    <c-core-post-heading :post="program.post" :announcersCall="player.name" hideDate="true" />
                     <div class="mx-auto -mt-2 max-w-160 text-center font-sans text-base-content/70"
                          x-data="voteCountdown({{ throttle_seconds_left|default:0 }}, {% if sleeping %}true{% else %}false{% endif %})"
                          @vote-success.window="onVoteSuccess($event.detail)"

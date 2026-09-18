@@ -77,7 +77,11 @@ async def _receive_changes(websocket, refresh: Callable[[], None], status,
             vote_id = event.get("vote_id")
             if type(vote_id) is int and vote_id > 0 and vote_id not in seen_votes:
                 seen_votes.append(vote_id)
-                on_vote()
+                pleasant = event.get("pleasant")
+                if type(pleasant) is int and pleasant in (0, 1):
+                    on_vote(pleasant)
+                else:
+                    on_vote()
 
 
 async def watch_player_changes(
@@ -86,7 +90,7 @@ async def watch_player_changes(
     status: Callable[[str], None],
     *,
     url: str | None = None,
-    on_vote: Callable[[], None] | None = None,
+    on_vote: Callable[..., None] | None = None,
 ) -> None:
     """Listen until cancelled, reconnecting with bounded, jittered backoff.
 

@@ -88,12 +88,12 @@ class PlayerSocketTests(TransactionTestCase):
         async with socket_connection(self.player.token) as socket:
             await self.assert_ready(socket)
             layer = get_channel_layer()
-            event = {"type": "player.vote_received", "vote_id": 123, "voter": "private"}
+            event = {"type": "player.vote_received", "vote_id": 123, "pleasant": 0, "voter": "private"}
             await layer.group_send(player_group_name(self.other.pk), event)
             self.assertTrue(await socket.receive_nothing(timeout=0.03))
             await layer.group_send(player_group_name(self.player.pk), event)
             message = await socket.receive_output()
-            self.assertJSONEqual(message["text"], {"type": "player.vote_received", "schema_version": 1, "vote_id": 123})
+            self.assertJSONEqual(message["text"], {"type": "player.vote_received", "schema_version": 1, "vote_id": 123, "pleasant": 0})
             await database_sync_to_async(Player.objects.filter(pk=self.player.pk).update)(token="rotated")
             await layer.group_send(player_group_name(self.player.pk), event)
             self.assertEqual(await socket.receive_output(), {"type": "websocket.close", "code": 4401})

@@ -60,6 +60,8 @@ class LocalVotePageTests(TestCase):
         self.assertNotContains(response, "mountStore(")
         self.assertNotContains(response, '<script>alert(1)</script>')
         self.assertNotContains(response, "VOTE SENT")
+        self.assertRegex(response.content.decode(), r">Reading room\s*</p>")
+        self.assertNotContains(response, "Presenting")
         self.assertFalse(Vote.objects.exists())
         self.assertEqual(response.context["player"].pk, self.player.pk)
         self.assertEqual(response.context["section"], "west wall")

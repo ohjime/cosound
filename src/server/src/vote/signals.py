@@ -9,4 +9,4 @@ from vote.models import Vote
 def vote_received(sender, instance, created, raw, using, **kwargs):
     # Rejected requests never create a vote. Edits and fixture loads aren't taps.
     if created and not raw:
-        notify_player_vote(instance.player_id, instance.pk, using=using)
+        notify_player_vote(instance.player_id, instance.pk, instance.pleasant, using=using)

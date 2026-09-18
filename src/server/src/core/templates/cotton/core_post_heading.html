@@ -1,5 +1,5 @@
-<c-vars post="" hideDate="" />
-        <p style="font-family: {{ post.font_css_stack }}" class="explore-font text-[18px] italic text-base-content/60 text-center">{{ post.announcers_call }}
+<c-vars post="" hideDate="" announcersCall="" />
+        <p style="font-family: {{ post.font_css_stack }}" class="explore-font text-[18px] italic text-base-content/60 text-center">{% if announcersCall %}{{ announcersCall }}{% else %}{{ post.announcers_call }}{% endif %}
         </p>
         <h2
             class="font-sans text-[30px] sm:text-[44px] font-semibold leading-[110%] tracking-[-0.02em] text-center pb-4">

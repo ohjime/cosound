@@ -127,10 +127,15 @@ class PlayerConsumer(AsyncJsonWebsocketConsumer):
 
     async def player_vote_received(self, event):
         vote_id = event.get("vote_id")
-        if type(vote_id) is int and vote_id > 0 and await self._authorized():
+        pleasant = event.get("pleasant")
+        if (
+            type(vote_id) is int and vote_id > 0
+            and type(pleasant) is int and pleasant in (0, 1)
+            and await self._authorized()
+        ):
             await self.send_json({
                 "type": "player.vote_received", "schema_version": 1,
-                "vote_id": vote_id,
+                "vote_id": vote_id, "pleasant": pleasant,
             })
 
     async def close(self, code=None, reason=None):

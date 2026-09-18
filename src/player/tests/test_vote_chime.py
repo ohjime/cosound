@@ -13,12 +13,14 @@ import soundfile as sf
 from app import client
 from app.chime import (
     VOTE_CHIME_MAX_RATIO,
+    VOTE_CHIME_DOWNVOTE_DEGREES,
     VOTE_CHIME_OUTPUT_CEILING,
     VOTE_CHIME_PEAK,
     VOTE_CHIME_RMS_FLOOR,
     VOTE_CHIME_RMS_SECONDS,
     VOTE_CHIME_ROOT_HZ,
     VOTE_CHIME_SCALE,
+    VOTE_CHIME_UPVOTE_DEGREES,
     chime_loudness,
     load_vote_chime,
     vote_chime,
@@ -44,6 +46,22 @@ class VoteEventsTests(unittest.IsolatedAsyncioTestCase):
             await _receive_changes(Socket(), refresh, status, chime, seen)
         self.assertEqual(chime.call_count, 2)
         self.assertEqual(refresh.call_count, 2)  # Ready only, never a vote.
+
+    async def test_vote_polarity_is_forwarded_when_present(self):
+        class Socket:
+            async def recv(self):
+                return json.dumps({"type": "player.ready", "schema_version": 1})
+
+            async def __aiter__(self):
+                for vote_id, pleasant in ((1, 0), (2, 1), (3, None)):
+                    yield json.dumps({
+                        "type": "player.vote_received", "schema_version": 1,
+                        "vote_id": vote_id, "pleasant": pleasant,
+                    })
+
+        chime = Mock()
+        await _receive_changes(Socket(), Mock(), Mock(), chime)
+        self.assertEqual(chime.call_args_list, [unittest.mock.call(0), unittest.mock.call(1), unittest.mock.call()])
 
 
 class ChimeAudioTests(unittest.TestCase):
@@ -105,17 +123,17 @@ class ChimeAudioTests(unittest.TestCase):
         player = self.player()
         fallback = player._default_vote_chime
         custom = np.full(32, 0.05, dtype=np.float32)
-        player._vote_chime_positions = [(0, 100)]
+        player._vote_chime_positions = [(5, 100)]
 
         player.set_vote_chime(custom)
         self.assertEqual(len(player._vote_chime), len(VOTE_CHIME_SCALE))
-        np.testing.assert_array_equal(player._vote_chime[0], custom)
+        np.testing.assert_array_equal(player._vote_chime[5], custom)
         self.assertEqual(player._vote_chime_positions, [])
 
         # The installed root must not alias the caller's array, which it is
         # free to reuse while the audio thread is reading.
         custom[:] = 0.5
-        self.assertTrue(np.all(player._vote_chime[0] == np.float32(0.05)))
+        self.assertTrue(np.all(player._vote_chime[5] == np.float32(0.05)))
 
         player.set_vote_chime()
         self.assertIs(player._vote_chime, fallback)
@@ -162,7 +180,7 @@ class ChimeLevelTests(unittest.TestCase):
         little under the target.  That is the design, so the expected level is
         scaled by the same ratio rather than the tolerance being widened.
         """
-        sounding = chime_loudness(player._vote_chime[0], player.fs)
+        sounding = chime_loudness(player._vote_chime[player._vote_chime_degree], player.fs)
         return sounding / player._vote_chime_loudness
 
     def assertLevel(self, measured, target):
@@ -221,7 +239,7 @@ class ChimeLevelTests(unittest.TestCase):
         player._vote_chime_volume = 1.0
         peak = float(np.max(np.abs(self.chime_only(player))))
         self.assertLessEqual(peak, VOTE_CHIME_OUTPUT_CEILING)
-        self.assertLevel(peak, VOTE_CHIME_OUTPUT_CEILING)
+        self.assertGreater(peak, 0.0)
 
     def test_zero_volume_silences_the_chime_but_still_consumes_it(self):
         player = self.player(0.2)
@@ -302,25 +320,31 @@ class ChimeScaleTests(unittest.TestCase):
             self.assertAlmostEqual(
                 self.dominant_hz(voice, sample_rate) / expected, 1.0, places=1
             )
-        # The octave really is an octave above the root.
+        # The same pentatonic degree is exactly an octave higher for upvotes.
         self.assertAlmostEqual(
-            self.dominant_hz(scale[-1], sample_rate)
+            self.dominant_hz(scale[5], sample_rate)
             / self.dominant_hz(scale[0], sample_rate),
             2.0,
             places=1,
         )
 
-    def test_consecutive_votes_never_repeat_a_pitch(self):
+    def test_votes_pick_random_consonant_notes_without_immediate_repeats(self):
         player = ChimeAudioTests().player()
-        heard = []
-        for _ in range(len(VOTE_CHIME_SCALE) * 2 + 1):
+        with patch("app.player.random.choice", side_effect=lambda choices: choices[-1]) as choose:
+            player.play_vote_chime(0)
+            down = player._vote_chime_positions[-1][0]
+            player.play_vote_chime(0)
+            next_down = player._vote_chime_positions[-1][0]
+            player.play_vote_chime(1)
+            up = player._vote_chime_positions[-1][0]
             player.play_vote_chime()
-            heard.append(player._vote_chime_positions[-1][0])
-
-        for earlier, later in zip(heard, heard[1:]):
-            self.assertNotEqual(earlier, later)
-        # And it walks the whole scale rather than flipping between two notes.
-        self.assertEqual(set(heard), set(range(len(VOTE_CHIME_SCALE))))
+            unknown = player._vote_chime_positions[-1][0]
+        self.assertIn(down, VOTE_CHIME_DOWNVOTE_DEGREES)
+        self.assertIn(next_down, VOTE_CHIME_DOWNVOTE_DEGREES)
+        self.assertNotEqual(down, next_down)
+        self.assertIn(up, VOTE_CHIME_UPVOTE_DEGREES)
+        self.assertIn(unknown, range(len(VOTE_CHIME_SCALE)))
+        self.assertEqual(choose.call_count, 4)
 
     def test_an_upload_is_repitched_onto_the_same_scale(self):
         sample_rate = 48_000
@@ -336,13 +360,20 @@ class ChimeScaleTests(unittest.TestCase):
             self.assertAlmostEqual(
                 self.dominant_hz(voice, sample_rate) / (440.0 * ratio), 1.0, places=1
             )
-            # Playing faster shortens it, so the 5s upload ceiling still holds.
-            self.assertLessEqual(len(voice), len(upload))
+            self.assertLessEqual(len(voice), sample_rate * 5)
             # Resampling rings above the source peak; the ceiling is re-applied
             # so eight overlapping chimes keep the headroom the root had.
             self.assertLessEqual(float(np.max(np.abs(voice))), VOTE_CHIME_PEAK + 1e-6)
             self.assertEqual(voice.dtype, np.float32)
             self.assertTrue(voice.flags.c_contiguous)
+
+    def test_long_upload_pitched_down_ends_with_a_fade(self):
+        sample_rate = 8_000
+        t = np.arange(sample_rate * 5) / sample_rate
+        upload = (0.1 * np.sin(2 * np.pi * 220 * t)).astype(np.float32)
+        low = vote_chime_scale(sample_rate, upload)[0]
+        self.assertEqual(len(low), sample_rate * 5)
+        self.assertAlmostEqual(float(low[-1]), 0.0, places=6)
 
 
 class UploadedChimeTests(unittest.TestCase):

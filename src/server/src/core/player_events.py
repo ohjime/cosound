@@ -60,16 +60,18 @@ def notify_players_changed(player_ids, *, using=None):
         )
 
 
-def publish_player_vote(player_id, vote_id):
+def publish_player_vote(player_id, vote_id, pleasant):
     """A transient acknowledgement; never include listener information."""
     try:
         async_to_sync(_send_player_changes)((player_id,), {
             "type": "player.vote_received", "schema_version": 1,
-            "vote_id": vote_id,
+            "vote_id": vote_id, "pleasant": pleasant,
         })
     except Exception:
         logger.warning("Could not publish player vote notification", exc_info=True)
 
 
-def notify_player_vote(player_id, vote_id, *, using=None):
-    transaction.on_commit(partial(publish_player_vote, player_id, vote_id), using=using)
+def notify_player_vote(player_id, vote_id, pleasant, *, using=None):
+    transaction.on_commit(
+        partial(publish_player_vote, player_id, vote_id, pleasant), using=using
+    )

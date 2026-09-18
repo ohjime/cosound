@@ -16,20 +16,29 @@ class VoteNotificationTests(TestCase):
         sound = Sound.objects.create(title="Rain", file="sounds/rain.wav", embeddings=[0] * 5)
         self.cosound = Cosound.get_or_create_from_layers([(sound.pk, 1.0)])
 
-    def vote(self):
-        return Vote.objects.create(player=self.player, voter=self.listener, cosound=self.cosound, pleasant=1)
+    def vote(self, pleasant=1):
+        return Vote.objects.create(
+            player=self.player, voter=self.listener, cosound=self.cosound,
+            pleasant=pleasant,
+        )
 
     @patch("core.player_events.publish_player_vote")
     def test_new_vote_notifies_only_after_commit_and_edits_do_not_replay(self, publish):
         with self.captureOnCommitCallbacks(execute=True):
             vote = self.vote()
             publish.assert_not_called()
-        publish.assert_called_once_with(self.player.pk, vote.pk)
+        publish.assert_called_once_with(self.player.pk, vote.pk, 1)
         publish.reset_mock()
         with self.captureOnCommitCallbacks(execute=True):
             vote.section = "Updated"
             vote.save()
         publish.assert_not_called()
+
+    @patch("core.player_events.publish_player_vote")
+    def test_downvote_publishes_its_value(self, publish):
+        with self.captureOnCommitCallbacks(execute=True):
+            vote = self.vote(pleasant=0)
+        publish.assert_called_once_with(self.player.pk, vote.pk, 0)
 
     @patch("core.player_events.publish_player_vote")
     def test_rolled_back_vote_never_chimes(self, publish):

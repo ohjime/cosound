@@ -42,19 +42,13 @@ VOTE_CHIME_OUTPUT_CEILING = 0.7
 # with the Player Program's own setting.  Matches COSOUND_CHIME_VOLUME.
 VOTE_CHIME_DEFAULT_VOLUME = 0.5
 
-# Successive acknowledgements step through a scale rather than repeating one
-# pitch, so a room that is voting hears a phrase instead of a rattle.
-#
-# Major pentatonic, as semitones above the root.  The set matters because vote
-# chimes overlap: the callback mixes up to eight one-shots at once, and this
-# scale contains no minor second and no tritone, so *any* combination of its
-# degrees sounding together is consonant.  A scale with adjacent semitones --
-# major, minor, chromatic -- would beat and clash exactly when the room is
-# busiest.  It spans a full octave so the cycle resolves where it started.
-VOTE_CHIME_SCALE = (0, 2, 4, 7, 9, 12)
-# A5: the pitch the built-in tone was already tuned to, kept as the root so the
-# familiar chime is still degree zero.
-VOTE_CHIME_ROOT_HZ = 880.0
+# C major pentatonic stays consonant even when several votes overlap.  The
+# lower octave is reserved for downvotes; upvotes use the same notes in the
+# middle register.  A notification without polarity may use either octave.
+VOTE_CHIME_SCALE = (-12, -10, -8, -5, -3, 0, 2, 4, 7, 9)
+VOTE_CHIME_DOWNVOTE_DEGREES = tuple(range(5))
+VOTE_CHIME_UPVOTE_DEGREES = tuple(range(5, 10))
+VOTE_CHIME_ROOT_HZ = 261.625565  # C4; the bottom note is C3.
 # The built-in tone's second partial, a perfect fifth up.  Held as a ratio so
 # transposing moves the whole timbre instead of detuning it.
 VOTE_CHIME_PARTIAL = 1.5
@@ -101,14 +95,13 @@ def vote_chime(sample_rate, semitones=0):
 
 
 def transpose_chime(samples, semitones, sample_rate):
-    """Repitch a prepared one-shot up the scale, the way a sampler would.
+    """Repitch a prepared one-shot, the way a sampler would.
 
     An upload is a fixed recording, so its degrees have to come from replaying
-    it faster.  Resampling to ``sample_rate / ratio`` and then handing the
+    it at a different speed. Resampling to ``sample_rate / ratio`` and handing the
     result to a stream running at ``sample_rate`` is exactly that, and it lets
-    the resampler band-limit the result instead of aliasing.  Every degree of
-    the scale is at or above the root, so this only ever shortens a chime --
-    the upload's five-second ceiling still holds.
+    the resampler band-limit the result instead of aliasing.  Lower notes take
+    longer, so trim the prepared buffer to the upload's five-second limit.
     """
     mono = np.asarray(samples, dtype=np.float32)
     if semitones == 0:
@@ -117,6 +110,12 @@ def transpose_chime(samples, semitones, sample_rate):
         return np.array(mono, dtype=np.float32, order="C", copy=True)
     target = round(sample_rate / _pitch_ratio(semitones))
     shifted = _resample(mono[:, np.newaxis], sample_rate, target)[:, 0]
+    limit = round(sample_rate * VOTE_CHIME_SECONDS_LIMIT)
+    if len(shifted) > limit:
+        shifted = shifted[:limit].copy()
+        # A long upload can still be sounding at the cutoff after pitching down.
+        fade = min(round(sample_rate * 0.02), limit)
+        shifted[-fade:] *= np.linspace(1.0, 0.0, fade, dtype=np.float32)
     # Band-limiting a transient rings above the source peak -- measured at up to
     # a quarter over on a square-edged one-shot.  Re-apply the ceiling so every
     # degree keeps the headroom the root was given, eight-deep at the clipper.

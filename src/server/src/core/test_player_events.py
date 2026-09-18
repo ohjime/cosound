@@ -14,13 +14,13 @@ class PlayerPublisherTests(SimpleTestCase):
     @patch("core.player_events.get_channel_layer")
     def test_vote_event_is_private_and_transport_failure_does_not_fail_vote(self, get_layer):
         get_layer.return_value = SimpleNamespace(group_send=AsyncMock())
-        publish_player_vote(7, 21)
+        publish_player_vote(7, 21, 0)
         get_layer.return_value.group_send.assert_awaited_once_with(
-            "player.7", {"type": "player.vote_received", "schema_version": 1, "vote_id": 21},
+            "player.7", {"type": "player.vote_received", "schema_version": 1, "vote_id": 21, "pleasant": 0},
         )
         get_layer.return_value.group_send.side_effect = ConnectionError("offline")
         with self.assertLogs("core.player_events", level="WARNING"):
-            publish_player_vote(7, 22)
+            publish_player_vote(7, 22, 1)
 
     @patch("core.player_events.get_channel_layer")
     def test_publishes_only_an_invalidation_to_each_player_group(self, get_layer):

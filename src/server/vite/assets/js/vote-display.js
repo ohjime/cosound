@@ -60,6 +60,7 @@ export function voteDisplay(initialLayers = [], initialSleeping = false) {
         get currentSlide() { return this.carouselSlides[this.currentIndex] ?? null; },
         get currentLayer() { return this.currentSlide?.kind === "layer" ? this.currentSlide : null; },
         get isEmpty() { return this.layers.length === 0; },
+        get canVote() { return ["0", "1"].includes(this.$el?.dataset.voteChoice); },
         get isUpvote() { return this.pleasant === 1; },
         get voteLabel() { return this.activationMode ? "ACTIVATE" : this.isUpvote ? "UPVOTE" : "DOWNVOTE"; },
         get votePastLabel() { return this.isUpvote ? "Upvoted" : "Downvoted"; },
@@ -91,6 +92,12 @@ export function voteDisplay(initialLayers = [], initialSleeping = false) {
             this.timer = null;
             this.secondsLeft = 0;
             this.$el?.querySelector("[data-vote-prompt-card]")?.closest("[data-core-card]")?.dispatchEvent(new CustomEvent("card:remove", { bubbles: true }));
+        },
+
+        openVoteCard() {
+            if (this.canVote && !this.playerSleeping && !this.voted && this.secondsLeft <= 0) {
+                this.activeVote = true;
+            }
         },
 
         setVoteChoice(value) {

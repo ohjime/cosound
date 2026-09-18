@@ -245,11 +245,11 @@ def _listener_evidence(
     decision_time,
     requesting_listener_id=None,
 ):
-    from core.models import Listener
+    from core.models import Listener, ListenerPresence
     from vote.models import Vote
 
     active_cutoff = decision_time - _activity_window(program)
-    active_listener_ids = list(
+    recent_voter_ids = list(
         Vote.objects.filter(
             player=player,
             created_at__gte=active_cutoff,
@@ -259,6 +259,14 @@ def _listener_evidence(
         .values_list("voter_id", flat=True)
         .distinct()
     )
+    recent_visitor_ids = list(
+        ListenerPresence.objects.filter(
+            player=player,
+            visited_at__gte=active_cutoff,
+            visited_at__lte=decision_time,
+        ).values_list("listener_id", flat=True)
+    )
+    active_listener_ids = sorted(set(recent_voter_ids) | set(recent_visitor_ids))
     if (
         requesting_listener_id is not None
         and requesting_listener_id not in active_listener_ids
@@ -369,6 +377,7 @@ def _lifecycle_gate(player, program, decision_time):
     lifetime, so stale listeners stop shaping mixes before the room sleeps.
     """
     from vote.models import Vote
+    from core.models import ListenerPresence
 
     if player.sleeping:
         return 0
@@ -378,7 +387,12 @@ def _lifecycle_gate(player, program, decision_time):
         player,
         minutes=int(activity_window.total_seconds() // 60),
     )
-    if not recent_votes:
+    recent_visits = ListenerPresence.objects.filter(
+        player=player,
+        visited_at__gte=decision_time - activity_window,
+        visited_at__lte=decision_time,
+    ).exists()
+    if not recent_votes and not recent_visits:
         # Listener relevance and room lifetime are deliberately separate. A
         # room can remain awake after its listeners age out of scoring without
         # letting their stale preferences influence every new mix.
@@ -392,7 +406,12 @@ def _lifecycle_gate(player, program, decision_time):
             created_at__gte=sleep_cutoff,
             created_at__lte=decision_time,
         ).exists()
-        if player.playing and (recently_activated or recently_voted):
+        recently_visited = ListenerPresence.objects.filter(
+            player=player,
+            visited_at__gte=sleep_cutoff,
+            visited_at__lte=decision_time,
+        ).exists()
+        if player.playing and (recently_activated or recently_voted or recently_visited):
             return None
         current_exposure = player.current_exposure
         if current_exposure is not None and current_exposure.ended_at is None:

@@ -303,6 +303,21 @@ class Listener(DjangoDB.Model):
         return list(self.collection.all())
 
 
+class ListenerPresence(DjangoDB.Model):
+    """The most recent NFC visit by one listener at one player."""
+
+    player = DjangoDB.ForeignKey("Player", on_delete=DjangoDB.CASCADE)
+    listener = DjangoDB.ForeignKey(Listener, on_delete=DjangoDB.CASCADE)
+    visited_at = DjangoDB.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        constraints = [
+            DjangoDB.UniqueConstraint(
+                fields=["player", "listener"], name="unique_listener_presence"
+            )
+        ]
+
+
 class Manager(DjangoDB.Model):
     user = DjangoDB.ForeignKey(User, on_delete=DjangoDB.CASCADE)
     name = DjangoDB.CharField(max_length=255)
@@ -675,7 +690,7 @@ class PlayerProgram(DjangoDB.Model):
         default=settings.COSOUND_ACTIVE_LISTENER_MINUTES,
         validators=[MinValueValidator(1)],
         verbose_name="active listener window (minutes)",
-        help_text="A listener's votes influence the mix for this long.",
+        help_text="A listener's visits or votes influence the mix for this long.",
     )
     algorithm_sleep_after_minutes = DjangoDB.PositiveIntegerField(
         default=settings.COSOUND_SLEEP_AFTER_MINUTES,

@@ -2,12 +2,15 @@ import json
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, urlencode, urlsplit
 from unittest.mock import patch
+from datetime import timedelta
 
 from django.test import Client, TestCase
 from django.urls import reverse
+from django.utils import timezone
 
-from core.models import Listener, Manager, Player, Prediction, Sound, User
+from core.models import Listener, ListenerPresence, Manager, Player, Prediction, Sound, User
 from core.predict import _predict_for_player
+from core.prediction.live import _listener_evidence
 from vote.models import Vote
 
 
@@ -129,6 +132,39 @@ class NFCVoteFlowTests(TestCase):
                 self.assertEqual(button["hx-vals"], '{"activation":"1"}')
         self.client.get(reverse("vote:about"), self.params(), HTTP_HX_REQUEST="true")
         self.assertFalse(Vote.objects.exists())
+
+    def test_visiting_tag_registers_authenticated_listener_without_a_vote(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("vote:vote"), self.params())
+        self.assertEqual(response.status_code, 200)
+        presence = ListenerPresence.objects.get(
+            player=self.player, listener=self.listener
+        )
+        active_ids, evidence, _ = _listener_evidence(
+            self.player, self.player.program, timezone.now()
+        )
+        self.assertEqual(active_ids, [self.listener.pk])
+        self.assertEqual(len(evidence), 1)
+        self.assertFalse(Vote.objects.exists())
+
+        ListenerPresence.objects.filter(pk=presence.pk).update(
+            visited_at=timezone.now() - timedelta(minutes=6)
+        )
+        active_ids, _, _ = _listener_evidence(
+            self.player, self.player.program, timezone.now()
+        )
+        self.assertEqual(active_ids, [])
+
+    def test_active_tag_starts_on_playback_with_a_vote_action(self):
+        playing = Prediction.new()
+        playing.add_layer(self.venue_sound.pk)
+        self.player.update(playing)
+        response = self.client.get(reverse("vote:vote"), self.params())
+        html = response.content.decode()
+        self.assertIn('data-vote-active="false"', html)
+        self.assertIn('data-open-vote', html)
+        self.assertIn('x-if="activeVote"', html)
+        self.assertIn('data-vote-prompt-card', html)
 
     def test_missing_invalid_or_unknown_nfc_target_has_no_vote_button(self):
         cases = [

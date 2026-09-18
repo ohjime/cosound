@@ -17,6 +17,7 @@ from vote.utils import (
     build_vote_page_context,
     get_throttle_seconds_left,
     local_discussion_context,
+    record_listener_presence,
     resolve_vote_attribution,
     serialize_player_for_carousel,
     serialize_recent_votes,
@@ -142,6 +143,8 @@ def submit_vote(request):
             )
             response["HX-Trigger"] = "auth-required"
             return response
+
+    record_listener_presence(player, request.user)
 
     should_awaken = False
     awaken_listener = None

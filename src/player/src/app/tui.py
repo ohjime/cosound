@@ -664,12 +664,13 @@ class CosoundPlayerApp(App):
 
     @staticmethod
     def _signature_of(info: dict) -> tuple:
-        return tuple(
+        layers = tuple(
             sorted(
                 (str(layer["sound_id"]), round(float(layer.get("gain", 1.0)), 4))
                 for layer in info.get("layers", [])
             )
         )
+        return (info.get("program_id"), layers)
 
     def refresh_cosound(self) -> None:
         """Request a refresh, coalescing requests that arrive during one."""
@@ -723,6 +724,12 @@ class CosoundPlayerApp(App):
         # as soon as the authoritative snapshot arrives so a missing or corrupt
         # layer cannot indefinitely delay a changed fallback poll interval.
         self.call_from_thread(self._sync_state_refresh_interval, info)
+        # Program changes can bring a new chime even when a sound download
+        # fails. Install it independently of the layer transition.
+        try:
+            self._sync_vote_chime(info)
+        except Exception as error:
+            self.log(f"Vote chime refresh failed: {error}")
         manifest = dict(self.manifest)
 
         # Same cosound as last time: leave audio and the history list alone.
@@ -741,15 +748,6 @@ class CosoundPlayerApp(App):
             # latest coalesced request is fetched and applied.
             self.manifest.update(manifest)
             _queue_manifest_layers(self.manifest, layers, self.player)
-
-        # Chime identity is independent of the layer signature.  A Player admin
-        # edit therefore updates the one-shot without forcing a mix transition.
-        # It is optional audio: a bad upload or transient media failure must not
-        # prevent the authoritative player/mix snapshot from being applied.
-        try:
-            self._sync_vote_chime(info)
-        except Exception as error:
-            self.log(f"Vote chime refresh failed: {error}")
 
         # Textual waits for this UI callback to finish, so the worker cannot
         # begin a newer refresh until this state is visible.

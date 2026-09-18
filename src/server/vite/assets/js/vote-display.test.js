@@ -2,6 +2,17 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { voteDisplay } from "./vote-display.js";
 
+test("vote card opens from playback and stays closed during cooldown", () => {
+    const display = voteDisplay([{ sound_id: 1, sound_gain: 1 }]);
+    display.$el = { dataset: { voteChoice: "1" } };
+    display.openVoteCard();
+    assert.equal(display.activeVote, true);
+    display.activeVote = false;
+    display.secondsLeft = 30;
+    display.openVoteCard();
+    assert.equal(display.activeVote, false);
+});
+
 const layers = [
     { sound_id: 11, sound_title: "Rain", sound_artist: "Artist", sound_gain: 0.35, saved: false },
     { sound_id: 22, sound_title: "Bells", sound_gain: 0, saved: false },

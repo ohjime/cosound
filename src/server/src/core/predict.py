@@ -10,7 +10,7 @@ from django.tasks import task
 from django.utils import timezone
 from django.utils.module_loading import import_string
 
-from core.models import PlaybackExposure, Player, Prediction, Sound
+from core.models import Listener, ListenerPresence, PlaybackExposure, Player, Prediction, Sound
 from vote.models import Vote
 
 
@@ -103,7 +103,11 @@ def _predict_for_player(player_id: int, *, intent: str = REFRESH_INTENT) -> int:
                 player,
                 minutes=int(activity_window.total_seconds() // 60),
             )
-            if not recent_votes:
+            recent_visits = ListenerPresence.objects.filter(
+                player=player,
+                visited_at__gte=timezone.now() - activity_window,
+            )
+            if not recent_votes and not recent_visits.exists():
                 decision_time = timezone.now()
                 sleep_cutoff = decision_time - timedelta(
                     minutes=program.algorithm_sleep_after_minutes
@@ -117,17 +121,19 @@ def _predict_for_player(player_id: int, *, intent: str = REFRESH_INTENT) -> int:
                     created_at__gte=sleep_cutoff,
                     created_at__lte=decision_time,
                 ).exists()
-                if player.playing and (recently_activated or recently_voted):
+                recently_visited = ListenerPresence.objects.filter(
+                    player=player, visited_at__gte=sleep_cutoff,
+                ).exists()
+                if player.playing and (recently_activated or recently_voted or recently_visited):
                     return 0
                 _end_current_exposure(player, decision_time)
                 player.playing = Prediction.new()
                 player.save(update_fields=["playing", "current_exposure"])
                 return 0
 
-            active_listeners = sorted(
-                Vote.get_listeners(recent_votes),
-                key=lambda listener: listener.pk,
-            )
+            active_ids = {vote.voter_id for vote in recent_votes}
+            active_ids.update(recent_visits.values_list("listener_id", flat=True))
+            active_listeners = Listener.objects.filter(pk__in=active_ids).order_by("pk")
             next_prediction = Prediction.new()
             selected_sound_ids: set[int] = set()
 

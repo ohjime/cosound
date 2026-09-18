@@ -34,6 +34,14 @@ class FakePlayer:
 
 
 class ManifestRefreshTests(unittest.TestCase):
+    def test_program_switch_is_a_new_playback_state_even_with_same_layers(self):
+        first = {"program_id": 1, "layers": [{"sound_id": 7, "gain": 1.0}]}
+        second = {"program_id": 2, "layers": [{"sound_id": 7, "gain": 1.0}]}
+        self.assertNotEqual(
+            tui.CosoundPlayerApp._signature_of(first),
+            tui.CosoundPlayerApp._signature_of(second),
+        )
+
     def test_known_layers_keep_existing_manifest_and_skip_network_work(self):
         manifest = {"1": "/conditioned/1.wav"}
         layers = [{"sound_id": 1, "gain": 0.75}]
@@ -302,6 +310,28 @@ class ManifestRefreshTests(unittest.TestCase):
         self.assertEqual(app._state_refresh_interval_seconds, 15)
         old_timer.stop.assert_called_once_with()
         self.assertIs(app._state_refresh_timer, new_timer)
+
+    def test_new_program_chime_updates_even_when_its_sound_is_unavailable(self):
+        player = FakePlayer()
+        app = tui.CosoundPlayerApp("player-key", {}, player)
+        app._vote_chime_version = "old-version"
+        info = {
+            "program_id": 2,
+            "layers": [{"sound_id": 2, "gain": 1.0}],
+            "chime": {"url": "", "version": "", "volume": 0.4},
+        }
+        with (
+            patch.object(tui, "get_player_info", return_value=info),
+            patch.object(tui, "get_latest_manifest", side_effect=OSError("offline")),
+            patch.object(tui, "prune_vote_chimes"),
+            patch.object(app, "call_from_thread"),
+        ):
+            with self.assertRaisesRegex(OSError, "offline"):
+                app._run_refresh()
+
+        self.assertEqual(player.vote_chimes, [None])
+        self.assertEqual(player.vote_chime_volumes, [0.4])
+        self.assertIsNone(app._vote_chime_version)
 
     def test_slow_refresh_finishes_before_latest_coalesced_state(self):
         manifest = {"1": "/conditioned/1.wav"}

@@ -64,6 +64,16 @@ admin.site.unregister(Group)
 @admin.register(User)
 class UserAdmin(BaseUserAdmin, ModelAdmin):
     inlines = [ManagerInline, ArtistInline, ListenerInline]
+    add_fieldsets = (
+        (
+            None,
+            {
+                "fields": (
+                    "username", "email", "usable_password", "password1", "password2"
+                )
+            },
+        ),
+    )
 
     class Meta:
         model = User
@@ -322,13 +332,24 @@ class PlayerAdmin(ModelAdmin):
 
     def save_model(self, request, obj, form, change):
         sleeping_changed = "sleeping" in form.changed_data
+        program_changed = change and "program" in form.changed_data
+        if program_changed:
+            # A prediction belongs to the previous program's sound library.
+            # Clear it before saving so the new program cannot appear to be
+            # playing sounds it never selected.
+            from core.predict import _end_current_exposure
+            from django.utils import timezone
+
+            _end_current_exposure(obj, timezone.now())
+            obj.playing = Prediction.new()
+            obj.activated_at = None
         if sleeping_changed and form.cleaned_data["sleeping"]:
             obj.playing = Prediction.new()
             obj.activated_at = None
 
         super().save_model(request, obj, form, change)
 
-        if sleeping_changed and not form.cleaned_data["sleeping"]:
+        if (sleeping_changed or program_changed) and not form.cleaned_data["sleeping"]:
             from core.predict import Algorithm
 
             def awaken_after_commit():

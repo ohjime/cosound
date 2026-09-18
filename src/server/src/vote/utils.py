@@ -6,7 +6,7 @@ from django.db.models import Max
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import Listener, Player, Sound
+from core.models import Listener, ListenerPresence, Player, Sound
 
 VOTE_THROTTLE_WINDOW = timedelta(seconds=getattr(settings, "VOTE_THROTTLE_SECONDS", 60))
 
@@ -165,6 +165,8 @@ def build_vote_page_context(request):
 
     context = build_vote_context(request)
     player = context["player"]
+    if player and request.user.is_authenticated:
+        record_listener_presence(player, request.user)
     program = (
         player.program
         if player and player.program.post.publication_date
@@ -177,6 +179,18 @@ def build_vote_page_context(request):
     if program:
         context.update(local_discussion_context(request, program))
     return context
+
+
+def record_listener_presence(player, user):
+    """Keep one bounded activity timestamp per visitor and player."""
+    if not user.is_authenticated:
+        return None
+    listener, _ = Listener.objects.get_or_create(user=user)
+    ListenerPresence.objects.update_or_create(
+        player=player, listener=listener,
+        defaults={"visited_at": timezone.now()},
+    )
+    return listener
 
 
 def get_throttle_seconds_left(listener, window: timedelta = VOTE_THROTTLE_WINDOW):

@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.urls import resolve, reverse
 
 from core.discussion import build_discussion_context
-from core.models import Comment, PlayerProgram, Manager, Player, Sound, Post
+from core.models import Comment, PlayerProgram, Manager, Player, Sound, Post, Prediction
 
 
 class PlayerProgramAdminTests(TestCase):
@@ -159,6 +159,35 @@ class PlayerProgramAdminTests(TestCase):
         self.assertEqual(self.player.program, replacement)
         self.assertTrue(PlayerProgram.objects.filter(pk=original_id).exists())
 
+    def test_switching_an_awake_player_wakes_the_new_program(self):
+        self.player.program.collection.add(self.sound)
+        old_mix = Prediction.new()
+        old_mix.add_layer(self.sound.pk)
+        self.player.update(old_mix)
+        next_sound = Sound.objects.create(
+            file="sounds/new-room.wav", title="New room", embeddings=[0] * 5
+        )
+        replacement = PlayerProgram.objects.create(
+            post=Post.objects.create(title="New room", composer=self.admin),
+            baseline=next_sound,
+        )
+        replacement.collection.add(next_sound)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("admin:core_player_change", args=[self.player.pk]),
+                self.player_fields(program=replacement.pk, sleeping=""),
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.player.refresh_from_db()
+        self.assertEqual(self.player.program, replacement)
+        self.assertFalse(self.player.sleeping)
+        self.assertEqual(
+            [layer.sound_id for layer in self.player.playing.layers],
+            [next_sound.pk],
+        )
+
     def test_upload_forms_render_and_post_to_this_host_on_the_admin_subdomain(self):
         # django-file-form reverses its upload route while building the form,
         # against the per-request urlconf. When admin.cosound.ca served a
@@ -184,6 +213,37 @@ class PlayerProgramAdminTests(TestCase):
                 resolve(reverse("tus_upload_chunks", args=["resource"])).func.__name__,
                 "handle_upload",
             )
+
+
+class UserAdminAddTests(TestCase):
+    def test_add_form_includes_required_email_and_creates_user(self):
+        admin = get_user_model().objects.create_superuser(
+            username="user-admin", email="user-admin@example.com", password="pw"
+        )
+        self.client.force_login(admin)
+        url = reverse("admin:core_user_add")
+        page = self.client.get(url)
+        self.assertContains(page, 'id="id_email"')
+        data = {
+            "username": "new-listener",
+            "email": "new-listener@example.com",
+            "usable_password": "true",
+            "password1": "a secure test password 123",
+            "password2": "a secure test password 123",
+        }
+        for formset in page.context["inline_admin_formsets"]:
+            prefix = formset.formset.prefix
+            data.update({
+                f"{prefix}-TOTAL_FORMS": "0",
+                f"{prefix}-INITIAL_FORMS": "0",
+                f"{prefix}-MIN_NUM_FORMS": "0",
+                f"{prefix}-MAX_NUM_FORMS": "1000",
+            })
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(
+            get_user_model().objects.filter(email="new-listener@example.com").exists()
+        )
 
 
 class SharedDiscussionContextTests(TestCase):

@@ -5,6 +5,9 @@ export function voteDisplay(initialLayers = [], initialSleeping = false) {
         currentIndex: 0,
         title: "",
         pleasant: 1,
+        voteSlider: 1,
+        voteSliderDragging: false,
+        voteAnonymously: true,
         playerSleeping: Boolean(initialSleeping),
         activationMode: Boolean(initialSleeping),
         renderedActivationCard: Boolean(initialSleeping),
@@ -27,6 +30,7 @@ export function voteDisplay(initialLayers = [], initialSleeping = false) {
             }
             this.title = this.$el?.dataset.postTitle || "";
             this.pleasant = this.$el?.dataset.voteChoice === "0" ? 0 : 1;
+            this.voteSlider = this.pleasant;
             this.playerSleeping = this.$el?.dataset.playerSleeping === "true";
             this.activationMode = this.playerSleeping;
             this.renderedActivationCard = this.activationMode;
@@ -56,6 +60,7 @@ export function voteDisplay(initialLayers = [], initialSleeping = false) {
         get voteLabel() { return this.activationMode ? "ACTIVATE" : this.isUpvote ? "UPVOTE" : "DOWNVOTE"; },
         get votePastLabel() { return this.isUpvote ? "Upvoted" : "Downvoted"; },
         get pleasantPayload() { return JSON.stringify({ pleasant: this.pleasant }); },
+        get submissionPayload() { return JSON.stringify({ pleasant: this.pleasant, ...(this.$el?.dataset.authenticated !== "true" && this.voteAnonymously ? { anonymous: "1" } : {}) }); },
         get isFirst() { return this.currentIndex === 0; },
         get isLast() { return this.currentIndex >= this.carouselSlides.length - 1; },
         get gainPercent() { return Math.round(Math.max(0, Math.min(1, Number(this.currentLayer?.sound_gain) || 0)) * 100); },
@@ -81,6 +86,23 @@ export function voteDisplay(initialLayers = [], initialSleeping = false) {
             if (this.timer) clearInterval(this.timer);
             this.timer = null;
             this.secondsLeft = 0;
+            this.$el?.querySelector("[data-vote-prompt-card]")?.closest("[data-core-card]")?.dispatchEvent(new CustomEvent("card:remove", { bubbles: true }));
+        },
+
+        setVoteChoice(value) {
+            this.pleasant = value;
+            this.voteSlider = value;
+        },
+
+        updateVoteSlider(value) {
+            this.voteSlider = Math.max(0, Math.min(1, Number(value) || 0));
+            this.pleasant = this.voteSlider >= 0.5 ? 1 : 0;
+        },
+
+        snapVoteSlider(input) {
+            this.voteSliderDragging = false;
+            this.setVoteChoice(this.voteSlider >= 0.5 ? 1 : 0);
+            if (input) input.value = String(this.pleasant);
         },
 
         handlePlayerActivated(detail) {
@@ -126,6 +148,7 @@ export function voteDisplay(initialLayers = [], initialSleeping = false) {
         handleThrottle(seconds) {
             this.secondsLeft = Number(seconds) || 60;
             this.startTimer();
+            this.$el?.querySelector("[data-vote-prompt-card]")?.closest("[data-core-card]")?.dispatchEvent(new CustomEvent("card:remove", { bubbles: true }));
         },
 
         select(index) {

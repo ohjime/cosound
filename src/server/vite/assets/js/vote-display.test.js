@@ -104,6 +104,31 @@ test("choice URLs preset Pleasant while the slider can reverse the vote", () => 
     }
 });
 
+test("vote slider moves continuously and snaps to the nearest end on release", () => {
+    const display = voteDisplay();
+    const input = { value: "0.38" };
+    display.updateVoteSlider(input.value);
+    assert.equal(display.voteSlider, 0.38);
+    display.snapVoteSlider(input);
+    assert.equal(display.pleasant, 0);
+    assert.equal(input.value, "0");
+    display.updateVoteSlider(0.67);
+    display.snapVoteSlider(input);
+    assert.equal(display.pleasant, 1);
+    assert.equal(input.value, "1");
+});
+
+test("vote submission includes the chosen direction and guest identity", () => {
+    const display = voteDisplay();
+    display.$el = { dataset: { authenticated: "false" } };
+    display.setVoteChoice(0);
+    assert.deepEqual(JSON.parse(display.submissionPayload), { pleasant: 0, anonymous: "1" });
+    display.voteAnonymously = false;
+    assert.deepEqual(JSON.parse(display.submissionPayload), { pleasant: 0 });
+    display.$el.dataset.authenticated = "true";
+    assert.deepEqual(JSON.parse(display.submissionPayload), { pleasant: 0 });
+});
+
 test("empty and malformed predictions remain safe to render", () => {
     const display = voteDisplay();
     display.$el = { dataset: {}, querySelector: () => ({ textContent: "invalid" }) };

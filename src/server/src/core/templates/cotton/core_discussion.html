@@ -22,6 +22,37 @@
             </p>
         </div>
     </div>
+    <ul class="list" aria-label="Comments">
+        {% for comment in comments_page %}
+            <li class="list-row items-start gap-3 sm:gap-4">
+                <c-core-avatar size="size-10" image_url="{{ comment.user.avatar_url }}" alt="{{ comment.user.username }}" />
+                <div class="min-w-0">
+                    <p class="truncate font-semibold">{{ comment.user.username }}</p>
+                    <time datetime="{{ comment.created_at|date:'c' }}" class="text-xs uppercase tracking-wide text-base-content/50">{{ comment.created_at|date:"M j, Y · g:i A" }}</time>
+                </div>
+                <p class="list-col-wrap whitespace-pre-line text-sm leading-relaxed text-base-content/80">{{ comment.body }}</p>
+            </li>
+        {% empty %}
+            <li class="p-8 text-center">
+                <p class="font-semibold">No comments yet</p>
+                <p class="mt-1 text-sm text-base-content/60">Be the first listener to respond.</p>
+            </li>
+        {% endfor %}
+    </ul>
+    {% if comments_page.has_other_pages %}
+        <nav aria-label="Comment pages" class="flex justify-center">
+            <div class="join">
+                {% for item in pagination_items %}
+                    {% if item.ellipsis %}
+                        <button type="button" class="join-item btn btn-disabled" aria-hidden="true">…</button>
+                    {% else %}
+                        <button type="button" class="join-item btn {% if item.current %}btn-active{% endif %}" {% if item.current %}aria-current="page"{% endif %} hx-get="{{ item.url }}" hx-target="#{{ dom_id }}" hx-swap="outerHTML">{{ item.number }}</button>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </nav>
+    {% endif %}
+    <div class="divider my-0" aria-hidden="true"></div>
     {% if request.user.is_authenticated and not has_commented %}
         <form method="post"
               action="{{ comment_url }}"
@@ -91,45 +122,5 @@
                         hx-swap="none">Sign in to comment</button>
             </div>
         </div>
-    {% endif %}
-    <ul class="list rounded-box bg-base-100 shadow-md" aria-label="Comments">
-        {% for comment in comments_page %}
-            <li class="list-row items-start gap-3 sm:gap-4">
-                <c-core-avatar size="size-10"
-                               image_url="{{ comment.user.avatar_url }}"
-                               alt="{{ comment.user.username }}" />
-                <div class="min-w-0">
-                    <p class="truncate font-semibold">{{ comment.user.username }}</p>
-                    <time datetime="{{ comment.created_at|date:'c' }}"
-                          class="text-xs uppercase tracking-wide text-base-content/50">
-                        {{ comment.created_at|date:"M j, Y · g:i A" }}
-                    </time>
-                </div>
-                <p class="list-col-wrap whitespace-pre-line text-sm leading-relaxed text-base-content/80">{{ comment.body }}</p>
-            </li>
-        {% empty %}
-            <li class="p-8 text-center">
-                <p class="font-semibold">No comments yet</p>
-                <p class="mt-1 text-sm text-base-content/60">Be the first listener to respond.</p>
-            </li>
-        {% endfor %}
-    </ul>
-    {% if comments_page.has_other_pages %}
-        <nav aria-label="Comment pages" class="flex justify-center">
-            <div class="join">
-                {% for item in pagination_items %}
-                    {% if item.ellipsis %}
-                        <button type="button" class="join-item btn btn-disabled" aria-hidden="true">…</button>
-                    {% else %}
-                        <button type="button"
-                                class="join-item btn {% if item.current %}btn-active{% endif %}"
-                                {% if item.current %}aria-current="page"{% endif %}
-                                hx-get="{{ item.url }}"
-                                hx-target="#{{ dom_id }}"
-                                hx-swap="outerHTML">{{ item.number }}</button>
-                    {% endif %}
-                {% endfor %}
-            </div>
-        </nav>
     {% endif %}
 </section>

@@ -249,7 +249,8 @@ class NFCVoteFlowTests(TestCase):
         self.assertGreater(json.loads(response["HX-Trigger"])["vote-throttled"]["seconds_left"], 0)
         page = self.client.get(reverse("vote:vote"), self.params())
         self.assertGreater(page.context["throttle_seconds_left"], 0)
-        self.assertIn("disabled", self.page_button(page))
+        self.assertEqual(self.page_buttons(page), [])
+        self.assertNotIn("data-vote-prompt-card", page.content.decode())
 
     def test_guest_login_allows_the_original_button_post_to_resume_with_rotated_csrf(self):
         client = Client(enforce_csrf_checks=True)

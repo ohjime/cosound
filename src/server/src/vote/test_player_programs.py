@@ -44,10 +44,10 @@ class LocalVotePageTests(TestCase):
             kwargs={"slug": (program or self.player.program).post.slug},
         ) + "?" + urlencode(params or self.params)
 
-    def test_nfc_page_has_two_tabs_and_post_without_audio(self):
+    def test_nfc_page_shows_post_without_tabs_or_audio(self):
         response = self.page()
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "What is this?")
+        self.assertNotContains(response, 'aria-label="Venue sections"')
         self.assertNotContains(response, 'id="user-details"')
         self.assertContains(response, "Listening together")
         self.assertContains(response, "An <strong>article</strong> for this room.")

@@ -3,6 +3,7 @@
      x-data="voteDisplay"
      data-vote-display
      data-vote-choice="{{ choice }}"
+     data-authenticated="{% if request.user.is_authenticated %}true{% else %}false{% endif %}"
      data-player-sleeping="{% if sleeping %}true{% else %}false{% endif %}"
      data-throttle-seconds-left="{{ throttle_seconds_left|default:0 }}"
      data-post-title="{% if program %}{{ program.post.title }}{% endif %}"
@@ -13,8 +14,8 @@
      @player-activation-unavailable.window="handleActivationUnavailable($event.detail)"
      @layer-saved.window="onLayerSaved($event.detail)">
     <div data-vote-layers hidden>{{ layers|json_script:"vote-display-layers" }}</div>
-    <c-core-deck id="deck">
+    <c-core-deck id="deck" depth_translate_y="40">
         <c-vote-card :layers="layers" :sleeping="sleeping" />
-        {% if not sleeping and choice == '1' or not sleeping and choice == '0' %}<c-vote-prompt-card :choice="choice" :throttle_seconds_left="throttle_seconds_left" />{% endif %}
+        {% if not sleeping and not throttle_seconds_left and choice == '1' or not sleeping and not throttle_seconds_left and choice == '0' %}<c-vote-prompt-card :choice="choice" :throttle_seconds_left="throttle_seconds_left" />{% endif %}
     </c-core-deck>
 </div>

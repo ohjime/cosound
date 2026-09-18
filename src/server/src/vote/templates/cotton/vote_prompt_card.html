@@ -1,9 +1,9 @@
 <c-vars choice="" throttle_seconds_left="0" />
-<c-core-card showExit="false" bgColor="bg-[#62566a]" ringColor="ring-[#766a7c]">
+<c-core-card showExit="false" bgColor="bg-[#3a536f]" ringColor="ring-[#5b6f86]">
     <div data-vote-card data-vote-prompt-card class="contents">
         <figure class="relative mx-6 mt-7 overflow-visible rounded-t-md bg-base-300 ring-7 ring-neutral-content/70">
             <c-vote-layer-indicator-dock>
-                <span role="img" :aria-label="isUpvote ? 'Pleasant vote' : 'Unpleasant vote'" class="grid h-7 min-w-9 place-items-center bg-amber-50 text-amber-600">
+                <span role="img" :aria-label="isUpvote ? 'Pleasant vote' : 'Unpleasant vote'" class="grid h-7 min-w-9 place-items-center bg-neutral/50 text-neutral-content">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor" class="size-6" aria-hidden="true"><path d="M760-660q17 0 28.5-11.5T800-700q0-17-11.5-28.5T760-740q-17 0-28.5 11.5T720-700q0 17 11.5 28.5T760-660Zm-160 0q17 0 28.5-11.5T640-700q0-17-11.5-28.5T600-740q-17 0-28.5 11.5T560-700q0 17 11.5 28.5T600-660Zm-20 136h200q0-35-30.5-55.5T680-600q-39 0-69.5 20.5T580-524ZM280-80q-100 0-170-70T40-320v-280h480v280q0 100-70 170T280-80Zm0-80q66 0 113-47t47-113v-200H120v200q0 66 47 113t113 47Zm400-200q-26 0-51.5-5.5T580-382v-94q22 17 47.5 26.5T680-440q66 0 113-47t47-113v-200H520v140h-80v-220h480v280q0 100-70 170t-170 70Zm-480-20q17 0 28.5-11.5T240-420q0-17-11.5-28.5T200-460q-17 0-28.5 11.5T160-420q0 17 11.5 28.5T200-380Zm160 0q17 0 28.5-11.5T400-420q0-17-11.5-28.5T360-460q-17 0-28.5 11.5T320-420q0 17 11.5 28.5T360-380Zm-80 136q39 0 69.5-20.5T380-320H180q0 35 30.5 55.5T280-244Zm0-96Zm400-280Z"/></svg>
                 </span>
             </c-vote-layer-indicator-dock>
@@ -21,7 +21,7 @@
             </button>
         </figure>
         <div class="z-20 flex flex-row items-center justify-center w-full px-5.5 gap-3" role="group" aria-label="Pleasant vote">
-            <button type="button" class="btn btn-xs btn-circle shrink-0 border-none bg-amber-500 text-amber-900" aria-label="Downvote" :aria-pressed="pleasant === 0" @click="setVoteChoice(0)"></button>
+            <button type="button" class="btn btn-xs btn-circle shrink-0 border-none bg-[#8f2f38] text-white" aria-label="Downvote" :aria-pressed="pleasant === 0" @click="setVoteChoice(0)"><span class="material-symbols-outlined text-base" aria-hidden="true">thumb_down</span></button>
             <div class="w-full min-w-0 px-2 py-6 select-none touch-none">
                 <div x-ref="voteTrack" class="relative h-2 w-full rounded-full bg-amber-500 transition-[filter]">
                     <div class="absolute top-1/2 z-10 -translate-y-16 -translate-x-1/2 size-22 scale-y-75 scale-x-125 flex items-center justify-center pointer-events-none duration-300" :class="voteSliderDragging ? '' : 'transition-[left] ease-out'" :style="`left: ${voteSlider * 100}%`">
@@ -33,7 +33,7 @@
                     <input x-ref="voteRange" type="range" min="0" max="1" step="0.01" class="absolute inset-x-0 -top-5 h-12 w-full cursor-pointer opacity-0" aria-label="Pleasant vote: 0 downvote, 1 upvote" :value="voteSlider" @pointerdown="voteSliderDragging = true" @input="updateVoteSlider($event.target.value)" @change="snapVoteSlider($event.target)" @pointerup="snapVoteSlider($event.target)" @pointercancel="snapVoteSlider($event.target)" @keydown.arrow-left.prevent="setVoteChoice(0)" @keydown.arrow-right.prevent="setVoteChoice(1)">
                 </div>
             </div>
-            <button type="button" class="btn btn-xs btn-circle shrink-0 border-none bg-amber-500 text-amber-900" aria-label="Upvote" :aria-pressed="pleasant === 1" @click="setVoteChoice(1)"></button>
+            <button type="button" class="btn btn-xs btn-circle shrink-0 border-none bg-[#155c45] text-white" aria-label="Upvote" :aria-pressed="pleasant === 1" @click="setVoteChoice(1)"><span class="material-symbols-outlined text-base" aria-hidden="true">thumb_up</span></button>
         </div>
         <div class="relative mx-4 mb-4 rounded-xs rounded-b-2xl bg-white/65 text-black ring-5 ring-amber-600/60">
             <div class="h-30 overflow-y-auto px-4 py-2">
@@ -56,7 +56,7 @@
             </div>
             <div class="pointer-events-none absolute inset-x-0 bottom-0 h-6 rounded-b-2xl bg-gradient-to-t from-neutral-content/80 to-transparent"></div>
         </div>
-        <div class="absolute z-10 bottom-0 left-1/2 flex w-52 -translate-x-1/2 justify-center rounded-t-2xl bg-base-100 ring-6 ring-[#514b58]/50 drop-shadow-2xl">
+        <div class="absolute z-10 bottom-0 left-1/2 flex w-52 -translate-x-1/2 justify-center overflow-hidden rounded-t-2xl bg-base-100 ring-6 ring-[#3c526c]/60 drop-shadow-2xl">
             <button type="button" data-nfc-vote data-submit-vote class="btn btn-sm btn-soft h-10 w-full rounded-t-xl" aria-label="Submit vote" hx-post="{% url 'vote:submit_vote' %}?{{ request.GET.urlencode }}" :hx-vals="submissionPayload" hx-swap="none" hx-disabled-elt="this" @htmx:before-request="voteError = ''">SUBMIT VOTE</button>
         </div>
     </div>

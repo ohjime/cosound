@@ -1,4 +1,4 @@
 <div class="join w-full rounded-xl">
     <button type="button" class="btn btn-sm btn-soft join-item h-10 flex-1 gap-2 px-4" aria-label="Save current sounds" :disabled="!currentLayer" hx-post="{% url 'library:save' %}" hx-swap="none" hx-disabled-elt="this" :hx-vals="savePayload()"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor" class="size-5" aria-hidden="true"><path d="M840-680v480q0 33-23.5 56.5T760-120H200q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h480l160 160Zm-80 34L646-760H200v560h560v-446ZM565-275q35-35 35-85t-35-85q-35-35-85-35t-85 35q-35 35-35 85t35 85q35 35 85 35t85-35ZM240-560h360v-160H240v160Z" /></svg><span>SAVE</span></button>
-    <button type="button" class="btn btn-sm btn-soft join-item h-10 flex-1 gap-2 px-4" aria-label="Test (coming soon)" title="Coming soon"><span aria-hidden="true" class="text-lg leading-none">🧠</span><span>TEST</span></button>
+    <button type="button" class="btn btn-sm btn-soft join-item h-10 flex-1 gap-2 px-4" aria-label="Test (coming soon)" title="Coming soon"><span>TEST</span></button>
 </div>

@@ -1,4 +1,4 @@
-<div data-vote-action-layer class="flex h-full w-full flex-col items-center justify-center px-8 text-center transition-colors duration-300" :class="isUpvote ? 'bg-success text-success-content' : 'bg-error text-error-content'">
+<div data-vote-action-layer class="flex h-full w-full flex-col items-center justify-center px-8 text-center transition-colors duration-300" :class="isUpvote ? 'bg-[#155c45] text-white' : 'bg-[#8f2f38] text-white'">
     <span class="font-sans text-4xl font-semibold tracking-tight" x-text="voteLabel"></span>
     <span class="mt-2 text-sm font-medium opacity-75">Choose your vote, then submit it below.</span>
     {% if not request.user.is_authenticated %}

@@ -3,6 +3,7 @@ export function voteCountdown(initialSeconds = 0, initiallySleeping = false) {
     return {
         secondsLeft: Math.max(0, Number(initialSeconds) || 0),
         sleeping: Boolean(initiallySleeping),
+        readyToRefresh: false,
         deadline: 0,
         timer: null,
 
@@ -20,6 +21,7 @@ export function voteCountdown(initialSeconds = 0, initiallySleeping = false) {
         start(seconds) {
             if (this.timer) clearInterval(this.timer);
             this.secondsLeft = Math.max(0, Number(seconds) || 0);
+            this.readyToRefresh = false;
             if (this.secondsLeft === 0) return;
             this.deadline = Date.now() + this.secondsLeft * 1000;
             this.timer = setInterval(() => this.tick(), 250);
@@ -30,10 +32,11 @@ export function voteCountdown(initialSeconds = 0, initiallySleeping = false) {
             if (this.secondsLeft !== 0) return;
             clearInterval(this.timer);
             this.timer = null;
-            const url = this.$el?.dataset.refreshUrl;
-            if (url && globalThis.htmx) {
-                globalThis.htmx.ajax("GET", url, { target: "#vote-tab-content", swap: "innerHTML" });
-            }
+            this.readyToRefresh = true;
+        },
+
+        refresh() {
+            globalThis.location?.reload?.();
         },
 
         onVoteSuccess(detail) {

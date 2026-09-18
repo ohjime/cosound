@@ -1,9 +1,11 @@
 <c-vars choice="" throttle_seconds_left="0" />
-<c-core-card showExit="false" bgColor="bg-[#33263d]" ringColor="ring-[#2d2d2d]">
+<c-core-card showExit="false" bgColor="bg-[#62566a]" ringColor="ring-[#766a7c]">
     <div data-vote-card data-vote-prompt-card class="contents">
         <figure class="relative mx-6 mt-7 overflow-visible rounded-t-md bg-base-300 ring-7 ring-neutral-content/70">
             <c-vote-layer-indicator-dock>
-                <span role="img" :aria-label="isUpvote ? 'Pleasant vote' : 'Unpleasant vote'" class="material-symbols-outlined grid h-7 min-w-8 place-items-center bg-neutral px-1 text-xl leading-none" x-text="isUpvote ? 'sentiment_satisfied' : 'sentiment_dissatisfied'"></span>
+                <span role="img" :aria-label="isUpvote ? 'Pleasant vote' : 'Unpleasant vote'" class="grid h-7 min-w-9 place-items-center bg-amber-50 text-amber-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor" class="size-6" aria-hidden="true"><path d="M760-660q17 0 28.5-11.5T800-700q0-17-11.5-28.5T760-740q-17 0-28.5 11.5T720-700q0 17 11.5 28.5T760-660Zm-160 0q17 0 28.5-11.5T640-700q0-17-11.5-28.5T600-740q-17 0-28.5 11.5T560-700q0 17 11.5 28.5T600-660Zm-20 136h200q0-35-30.5-55.5T680-600q-39 0-69.5 20.5T580-524ZM280-80q-100 0-170-70T40-320v-280h480v280q0 100-70 170T280-80Zm0-80q66 0 113-47t47-113v-200H120v200q0 66 47 113t113 47Zm400-200q-26 0-51.5-5.5T580-382v-94q22 17 47.5 26.5T680-440q66 0 113-47t47-113v-200H520v140h-80v-220h480v280q0 100-70 170t-170 70Zm-480-20q17 0 28.5-11.5T240-420q0-17-11.5-28.5T200-460q-17 0-28.5 11.5T160-420q0 17 11.5 28.5T200-380Zm160 0q17 0 28.5-11.5T400-420q0-17-11.5-28.5T360-460q-17 0-28.5 11.5T320-420q0 17 11.5 28.5T360-380Zm-80 136q39 0 69.5-20.5T380-320H180q0 35 30.5 55.5T280-244Zm0-96Zm400-280Z"/></svg>
+                </span>
             </c-vote-layer-indicator-dock>
             <div class="aspect-square w-full overflow-hidden rounded-t-md">
                 <div class="grid h-full w-full">
@@ -54,7 +56,7 @@
             </div>
             <div class="pointer-events-none absolute inset-x-0 bottom-0 h-6 rounded-b-2xl bg-gradient-to-t from-neutral-content/80 to-transparent"></div>
         </div>
-        <div class="absolute z-10 bottom-0 left-1/2 flex w-52 -translate-x-1/2 justify-center rounded-t-2xl bg-base-100 ring-6 ring-[#2d2d2d]/60 drop-shadow-2xl">
+        <div class="absolute z-10 bottom-0 left-1/2 flex w-52 -translate-x-1/2 justify-center rounded-t-2xl bg-base-100 ring-6 ring-[#514b58]/50 drop-shadow-2xl">
             <button type="button" data-nfc-vote data-submit-vote class="btn btn-sm btn-soft h-10 w-full rounded-t-xl" aria-label="Submit vote" hx-post="{% url 'vote:submit_vote' %}?{{ request.GET.urlencode }}" :hx-vals="submissionPayload" hx-swap="none" hx-disabled-elt="this" @htmx:before-request="voteError = ''">SUBMIT VOTE</button>
         </div>
     </div>

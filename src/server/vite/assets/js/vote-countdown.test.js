@@ -18,20 +18,22 @@ test("vote heading tracks the server cooldown and switches after activation", ()
     countdown.destroy();
 });
 
-test("expired cooldown refreshes the vote section so the card returns", () => {
+test("expired cooldown offers a manual page refresh", () => {
     const countdown = voteCountdown();
-    const originalHtmx = globalThis.htmx;
-    const requests = [];
-    globalThis.htmx = { ajax: (...args) => requests.push(args) };
-    countdown.$el = { dataset: { refreshUrl: "/vote/tab/?player=room" } };
+    const originalLocation = globalThis.location;
+    let reloads = 0;
+    globalThis.location = { reload: () => { reloads += 1; } };
     try {
         countdown.start(1);
         countdown.deadline = Date.now() - 1;
         countdown.tick();
         assert.equal(countdown.secondsLeft, 0);
-        assert.deepEqual(requests, [["GET", "/vote/tab/?player=room", { target: "#vote-tab-content", swap: "innerHTML" }]]);
+        assert.equal(countdown.readyToRefresh, true);
+        assert.equal(reloads, 0);
+        countdown.refresh();
+        assert.equal(reloads, 1);
     } finally {
         countdown.destroy();
-        globalThis.htmx = originalHtmx;
+        globalThis.location = originalLocation;
     }
 });

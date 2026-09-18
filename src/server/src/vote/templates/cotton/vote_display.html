@@ -1,5 +1,5 @@
 <c-vars layers="" program="" choice="" sleeping="" throttle_seconds_left="0" />
-<div class="w-full max-w-80 pt-8"
+<div class="w-full max-w-80 {% if throttle_seconds_left and not sleeping %}pt-0{% else %}pt-8{% endif %}"
      x-data="voteDisplay"
      data-vote-display
      data-vote-choice="{{ choice }}"
@@ -14,7 +14,7 @@
      @player-activation-unavailable.window="handleActivationUnavailable($event.detail)"
      @layer-saved.window="onLayerSaved($event.detail)">
     <div data-vote-layers hidden>{{ layers|json_script:"vote-display-layers" }}</div>
-    <c-core-deck id="deck" depth_translate_y="40">
+    <c-core-deck id="deck" depth_translate_y="28">
         <c-vote-card :layers="layers" :sleeping="sleeping" />
         {% if not sleeping and not throttle_seconds_left and choice == '1' or not sleeping and not throttle_seconds_left and choice == '0' %}<c-vote-prompt-card :choice="choice" :throttle_seconds_left="throttle_seconds_left" />{% endif %}
     </c-core-deck>

@@ -92,8 +92,11 @@
             </div>
         </div>
     {% endif %}
-    <div class="divider my-0" aria-hidden="true"></div>
-    <ul class="list" aria-label="Comments">
+    <div class="pt-4">
+        <div class="divider my-0" aria-hidden="true"></div>
+        <h4 id="{{ dom_id }}-latest-heading" class="mt-5 text-base font-semibold">Latest Comments</h4>
+    </div>
+    <ul class="list" aria-labelledby="{{ dom_id }}-latest-heading">
         {% for comment in comments_page %}
             <li class="list-row items-start gap-3 sm:gap-4">
                 <c-core-avatar size="size-10" image_url="{{ comment.user.avatar_url }}" alt="{{ comment.user.username }}" />

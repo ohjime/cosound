@@ -27,17 +27,22 @@
                     <c-core-post-heading :post="program.post" hideDate="true" />
                     <div class="mx-auto -mt-2 max-w-160 text-center font-sans text-base-content/70"
                          x-data="voteCountdown({{ throttle_seconds_left|default:0 }}, {% if sleeping %}true{% else %}false{% endif %})"
-                         data-refresh-url="{% url 'vote:vote_tab' %}?{{ request.GET.urlencode }}"
                          @vote-success.window="onVoteSuccess($event.detail)"
                          @vote-throttled.window="onThrottle($event.detail)"
                          @player-activated.window="onPlayerActivated()">
                         <p x-show="sleeping" {% if not sleeping %}style="display: none"{% endif %} class="text-sm">Room resting</p>
-                        <p x-show="!sleeping && secondsLeft === 0" {% if sleeping or throttle_seconds_left %}style="display: none"{% endif %} class="text-sm">Now voting</p>
+                        <p x-show="!sleeping && secondsLeft === 0 && !readyToRefresh" {% if sleeping or throttle_seconds_left %}style="display: none"{% endif %} class="text-sm">Now voting</p>
                         <div x-cloak x-show="!sleeping && secondsLeft > 0" {% if sleeping or not throttle_seconds_left %}style="display: none"{% endif %}>
                             <p class="text-sm">Next vote in</p>
                             <div class="mt-1 font-mono text-2xl tabular-nums" role="timer" :aria-label="`Next vote in ${minutes} minutes ${seconds} seconds`">
                                 <span class="countdown"><span :style="`--value:${minutes};--digits:2`" x-text="String(minutes).padStart(2, '0')">00</span></span>:<span class="countdown"><span :style="`--value:${seconds};--digits:2`" x-text="String(seconds).padStart(2, '0')">00</span></span>
                             </div>
+                        </div>
+                        <div x-cloak x-show="!sleeping && readyToRefresh"
+                             x-transition:enter="transition duration-300 ease-out motion-reduce:transition-none"
+                             x-transition:enter-start="translate-y-1 opacity-0"
+                             x-transition:enter-end="translate-y-0 opacity-100">
+                            <button type="button" class="btn btn-sm btn-ghost rounded-full border border-base-content/15 px-5 text-base-content/80 hover:bg-base-content/5" @click="refresh()">Refresh</button>
                         </div>
                     </div>
                 {% endif %}

@@ -18,16 +18,20 @@
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-full w-full" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="M400-280v-400l200 200-200 200Z" stroke-width="40" stroke-linejoin="round" /></svg>
             </button>
         </figure>
-        <div class="z-20 flex w-full items-center gap-3 px-5.5 py-6" role="group" aria-label="Pleasant vote">
-            <button type="button" class="btn btn-xs btn-circle shrink-0 border-none bg-amber-500 text-amber-900" aria-label="Downvote" :aria-pressed="pleasant === 0" @click="setVoteChoice(0)"><span class="material-symbols-outlined text-lg" aria-hidden="true">thumb_down</span></button>
-            <div class="relative h-10 min-w-0 flex-1 touch-none">
-                <div class="absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-amber-500"></div>
-                <div class="pointer-events-none absolute top-1/2 size-12 -translate-x-1/2 -translate-y-[85%]" :class="voteSliderDragging ? '' : 'transition-[left] duration-300 ease-out'" :style="`left: ${voteSlider * 100}%`">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" class="h-full w-full rotate-90 fill-amber-600 stroke-white drop-shadow-md" aria-hidden="true"><path d="M400-280v-400l200 200-200 200Z" stroke-width="40" stroke-linejoin="round" /><ellipse cx="760" cy="-480" rx="120" ry="80" /></svg>
+        <div class="z-20 flex w-full items-center justify-center gap-3 px-5.5" role="group" aria-label="Pleasant vote">
+            <button type="button" class="btn btn-xs btn-circle shrink-0 border-none bg-amber-500 text-amber-900" aria-label="Downvote" :aria-pressed="pleasant === 0" @click="setVoteChoice(0)"></button>
+            <div class="w-full min-w-0 px-2 py-6 select-none touch-none">
+                <div x-ref="voteTrack" class="relative h-2 w-full rounded-full bg-amber-500">
+                    <div class="pointer-events-none absolute top-1/2 z-10 -translate-y-16 -translate-x-1/2 size-22 scale-y-75 scale-x-125 flex items-center justify-center" :class="voteSliderDragging ? '' : 'transition-[left] duration-300 ease-out'" :style="`left: ${voteSlider * 100}%`">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" class="rotate-90 drop-shadow-md pointer-events-auto text-amber-600 stroke-white" fill="currentColor" aria-hidden="true" @pointerdown.stop="beginVoteDrag($event)" @pointermove="moveVoteDrag($event)" @pointerup="endVoteDrag()" @pointercancel="endVoteDrag()">
+                            <path d="M400-280v-400l200 200-200 200Z" stroke-width="40" stroke-linejoin="round" />
+                            <ellipse cx="760" cy="-480" rx="120" ry="80" />
+                        </svg>
+                    </div>
+                    <input x-ref="voteRange" type="range" min="0" max="1" step="0.01" class="absolute inset-x-0 -top-5 h-12 w-full cursor-pointer opacity-0" aria-label="Pleasant vote: 0 downvote, 1 upvote" :value="voteSlider" @pointerdown="voteSliderDragging = true" @input="updateVoteSlider($event.target.value)" @change="snapVoteSlider($event.target)" @pointerup="snapVoteSlider($event.target)" @pointercancel="snapVoteSlider($event.target)" @keydown.arrow-left.prevent="setVoteChoice(0)" @keydown.arrow-right.prevent="setVoteChoice(1)">
                 </div>
-                <input x-ref="voteRange" type="range" min="0" max="1" step="0.01" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label="Pleasant vote: 0 downvote, 1 upvote" :value="voteSlider" @pointerdown="voteSliderDragging = true" @input="updateVoteSlider($event.target.value)" @change="snapVoteSlider($event.target)" @pointerup="snapVoteSlider($event.target)" @pointercancel="snapVoteSlider($event.target)" @keydown.arrow-left.prevent="setVoteChoice(0)" @keydown.arrow-right.prevent="setVoteChoice(1)">
             </div>
-            <button type="button" class="btn btn-xs btn-circle shrink-0 border-none bg-amber-500 text-amber-900" aria-label="Upvote" :aria-pressed="pleasant === 1" @click="setVoteChoice(1)"><span class="material-symbols-outlined text-lg" aria-hidden="true">thumb_up</span></button>
+            <button type="button" class="btn btn-xs btn-circle shrink-0 border-none bg-amber-500 text-amber-900" aria-label="Upvote" :aria-pressed="pleasant === 1" @click="setVoteChoice(1)"></button>
         </div>
         <div class="relative mx-4 mb-4 rounded-xs rounded-b-2xl bg-white/65 text-black ring-5 ring-amber-600/60">
             <div class="h-30 overflow-y-auto px-4 py-2">

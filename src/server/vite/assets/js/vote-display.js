@@ -105,6 +105,21 @@ export function voteDisplay(initialLayers = [], initialSleeping = false) {
             if (input) input.value = String(this.pleasant);
         },
 
+        beginVoteDrag(event) {
+            this.voteSliderDragging = true;
+            event.currentTarget.setPointerCapture?.(event.pointerId);
+        },
+
+        moveVoteDrag(event) {
+            if (!this.voteSliderDragging) return;
+            const rect = this.$refs.voteTrack.getBoundingClientRect();
+            this.updateVoteSlider((event.clientX - rect.left) / rect.width);
+        },
+
+        endVoteDrag() {
+            if (this.voteSliderDragging) this.snapVoteSlider(this.$refs.voteRange);
+        },
+
         handlePlayerActivated(detail) {
             if (Array.isArray(detail?.layers)) {
                 this.layers = detail.layers.map((layer) => ({ ...layer }));

@@ -22,7 +22,7 @@
          :style="`padding-top: ${activeVote ? 44 : 0}px`">
         <c-core-deck id="deck" depth_translate_y="34" depth_transition_ms="700">
             <c-vote-card :layers="layers" :sleeping="sleeping" />
-            {% if not sleeping and not throttle_seconds_left and choice == '1' or not sleeping and not throttle_seconds_left and choice == '0' %}
+            {% if not sleeping and not throttle_seconds_left %}
                 <template x-if="activeVote">
                     <c-vote-prompt-card :choice="choice" :throttle_seconds_left="throttle_seconds_left" />
                 </template>

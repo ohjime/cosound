@@ -4,7 +4,6 @@ import { voteDisplay } from "./vote-display.js";
 
 test("vote card opens from playback and stays closed during cooldown", () => {
     const display = voteDisplay([{ sound_id: 1, sound_gain: 1 }]);
-    display.$el = { dataset: { voteChoice: "1" } };
     display.openVoteCard();
     assert.equal(display.activeVote, true);
     display.activeVote = false;

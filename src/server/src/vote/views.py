@@ -109,7 +109,7 @@ def submit_vote(request):
     activation_requested = request.POST.get("activation") == "1"
     anonymous_requested = request.POST.get("anonymous") == "1"
 
-    if player is None or choice not in ("0", "1") or pleasant not in ("0", "1"):
+    if player is None or pleasant not in ("0", "1"):
         response = HttpResponse("")
         response["HX-Trigger"] = json.dumps(
             {"vote-throttled": {"seconds_left": 60}}

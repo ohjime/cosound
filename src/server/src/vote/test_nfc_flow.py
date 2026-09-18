@@ -166,12 +166,30 @@ class NFCVoteFlowTests(TestCase):
         self.assertIn('x-if="activeVote"', html)
         self.assertIn('data-vote-prompt-card', html)
 
+    def test_player_only_check_in_url_can_open_and_submit_a_vote(self):
+        self.client.force_login(self.user)
+        playing = Prediction.new()
+        playing.add_layer(self.venue_sound.pk)
+        self.player.update(playing)
+        params = {"player": self.player.token}
+        page = self.client.get(reverse("vote:vote"), params)
+        html = page.content.decode()
+        self.assertIn('data-vote-choice="1"', html)
+        self.assertIn('data-open-vote', html)
+        self.assertIn('x-if="activeVote"', html)
+        self.assertIn(
+            ':disabled="voted || secondsLeft > 0 || playerSleeping"', html
+        )
+        response = self.client.post(
+            reverse("vote:submit_vote") + "?" + urlencode(params),
+            {"pleasant": "1"},
+            HTTP_HX_REQUEST="true",
+        )
+        self.assertIn("vote-success", json.loads(response["HX-Trigger"]))
+        self.assertEqual(Vote.objects.count(), 1)
+
     def test_missing_invalid_or_unknown_nfc_target_has_no_vote_button(self):
         cases = [
-            {"player": self.player.token},
-            self.params(""),
-            self.params("-1"),
-            self.params("yes"),
             {"player": "unknown", "choice": "1"},
             {"choice": "1"},
         ]

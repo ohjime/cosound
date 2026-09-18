@@ -66,6 +66,8 @@ def build_vote_context(request):
     token = request.GET.get("player")
     section = request.GET.get("section") or None
     choice = request.GET.get("choice")
+    if choice not in ("0", "1"):
+        choice = "1"
 
     player = None
     if token:

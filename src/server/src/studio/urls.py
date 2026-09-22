@@ -6,6 +6,7 @@ from studio.views import (
     studio_initial,
     studio_library,
     studio_library_search,
+    studio_tag_search,
 )
 
 app_name = "studio"
@@ -19,6 +20,7 @@ htmx_urlpatterns = [
     path("htmx/library", studio_library, name="library"),
     path("htmx/library/search", studio_library_search, name="library_search"),
     path("htmx/carousel", studio_carousel, name="carousel"),
+    path("htmx/tags", studio_tag_search, name="tag_search"),
 ]
 
 urlpatterns += htmx_urlpatterns

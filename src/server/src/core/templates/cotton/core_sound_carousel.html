@@ -62,7 +62,22 @@ file is the wiring and the caption.
          immediately reflect whichever layer the carousel selects. -->
     <div
         class="pointer-events-none absolute inset-0 z-20 p-3 pt-8 font-serif italic flex flex-col justify-between text-white font-thin text-shadow-lg">
-        <div class="text-left text-lg leading-tight pr-12" x-text="$store.{{ name }}.currentLayer?.sound_title"></div>
+        <div class="text-left text-lg leading-tight pr-12" x-show="!$store.{{ name }}.currentLayer?.isNew" x-text="$store.{{ name }}.currentLayer?.sound_title"></div>
+        <!-- A new sound (the STUDIO tab's Create) is the artist's to name, so
+             its title and artist are fields rather than a caption. Dark on the
+             whitened galaxy, and without the caption's shadow, which only
+             muddies dark text. `layer` here is the one being written — only a
+             blank layer can be new, and it is always the selected one. -->
+        <template x-if="$store.{{ name }}.currentLayer?.isNew">
+            <input type="text"
+                   class="pointer-events-auto w-full bg-transparent pr-12 font-serif text-lg leading-tight italic text-neutral-800 text-shadow-none outline-none border-b border-neutral-800/20 focus:border-neutral-800/60 placeholder:text-neutral-500"
+                   aria-label="Sound title"
+                   maxlength="255"
+                   placeholder="Title"
+                   spellcheck="false"
+                   :value="$store.{{ name }}.currentLayer.sound_title"
+                   @input="$store.{{ name }}.updateLayer($store.{{ name }}.currentIndex, { sound_title: $event.target.value })" />
+        </template>
         <!-- Blank and browser-local layers have no Sound row for the collection
              endpoint to save. Keeping the control out of the tree also avoids
              presenting an action that can only fail. -->
@@ -110,9 +125,21 @@ file is the wiring and the caption.
             :title="`Visit ${$store.{{ name }}.currentLayer?.sound_artist}'s page`"
             x-text="$store.{{ name }}.currentLayer?.sound_artist"></a>
         <div class="self-end pb-1 pr-1 text-right text-sm opacity-90"
-            x-show="!$store.{{ name }}.currentLayer?.artist_url"
+            x-show="!$store.{{ name }}.currentLayer?.artist_url && !$store.{{ name }}.currentLayer?.isNew"
             x-text="$store.{{ name }}.currentLayer?.sound_artist">
         </div>
+        <!-- Opens on the signed-in artist's name (createSound stamps it), but a
+             sound can be credited to someone else, so it is a field too. -->
+        <template x-if="$store.{{ name }}.currentLayer?.isNew">
+            <input type="text"
+                   class="pointer-events-auto mb-1 mr-1 w-2/3 self-end bg-transparent text-right text-sm italic text-neutral-800 text-shadow-none outline-none border-b border-neutral-800/20 focus:border-neutral-800/60 placeholder:text-neutral-500"
+                   aria-label="Artist"
+                   maxlength="255"
+                   placeholder="Artist"
+                   spellcheck="false"
+                   :value="$store.{{ name }}.currentLayer.sound_artist"
+                   @input="$store.{{ name }}.updateLayer($store.{{ name }}.currentIndex, { sound_artist: $event.target.value })" />
+        </template>
     </div>
 
 </div>

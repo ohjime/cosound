@@ -1,0 +1,29 @@
+<c-vars target="#tab_content" oob="" />
+{% load studio_extras %}
+<!--
+The home tab bar's STUDIO tab, drawn only for a signed-in user with an Artist
+profile. Everyone else gets an empty, hidden placeholder under the same id —
+that is what lets signing in add the tab without a reload: login's post_login
+partial renders this again with `oob`, and htmx swaps the real tab over the
+placeholder. Signing out reloads the page, which takes it away again.
+
+The url is taken with `as` because login renders this on every host, and the
+studio subdomain does not mount `app:` — there the tab is simply left out.
+-->
+{% studio_artist as artist %}
+{% url 'app:home_tab_studio' as studio_tab_url %}
+{% if artist and studio_tab_url %}
+    <input type="radio"
+           id="home-tab-studio"
+           name="home_tabs"
+           class="tab w-auto"
+           aria-label="STUDIO"
+           aria-controls="tab_content"
+           {% if oob %}hx-swap-oob="outerHTML"{% endif %}
+           hx-get="{{ studio_tab_url }}"
+           hx-target="{{ target }}"
+           hx-sync="{{ target }}:replace"
+           hx-swap="innerHTML" />
+{% else %}
+    <span id="home-tab-studio" hidden {% if oob %}hx-swap-oob="outerHTML"{% endif %}></span>
+{% endif %}

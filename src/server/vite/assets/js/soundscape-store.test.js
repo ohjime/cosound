@@ -542,3 +542,54 @@ test("removing a layer from a full mix makes room again", async () => {
     assert.notEqual(await store.addLayer(makeDraftLayer()), null);
     assert.equal(store.layers.length, MAX_LAYERS);
 });
+
+test("Create turns a blank layer into a new sound that is still left out of a save", async () => {
+    const store = await startedStore([seededBlankLayer()], {
+        allowCreate: true,
+        artistName: "Some Artist",
+    });
+    store.layers[0].sound_artist = "";
+
+    store.createSound(0);
+
+    const layer = store.layers[0];
+    assert.equal(layer.isNew, true);
+    assert.equal(layer.isDraft, true);
+    assert.equal(layer.sound_title, "New Sound");
+    assert.equal(layer.sound_artist, "Some Artist");
+    assert.equal(layer.flavor, "");
+    assert.deepEqual(layer.tag_list, []);
+    // No audio behind it yet, so there is still nothing to save.
+    assert.equal(store.canSave, false);
+});
+
+test("Create is refused without allowCreate, and on a layer that has a sound", async () => {
+    const plain = await startedStore([seededBlankLayer()]);
+    plain.createSound(0);
+    assert.equal(plain.layers[0].isNew, false);
+
+    const filled = await startedStore([soundLayer()], { allowCreate: true });
+    filled.createSound(0);
+    assert.equal(filled.layers[0].isNew, false);
+    assert.equal(filled.layers[0].sound_title, "Rain");
+});
+
+test("a new sound's tags keep the list and the card's string in step", async () => {
+    const store = await startedStore([seededBlankLayer()], { allowCreate: true });
+    store.createSound(0);
+
+    store.setTags(0, ["rain", "night", "rain"]);
+
+    assert.deepEqual(store.layers[0].tag_list, ["rain", "night"]);
+    assert.equal(store.layers[0].tags, "rain / night");
+});
+
+test("filling a new sound from the library makes it an ordinary layer again", async () => {
+    const store = await startedStore([seededBlankLayer()], { allowCreate: true });
+    store.createSound(0);
+
+    await store.replaceLayer(0, soundLayer());
+
+    assert.equal(store.layers[0].isNew, false);
+    assert.equal(store.layers[0].isDraft, false);
+});

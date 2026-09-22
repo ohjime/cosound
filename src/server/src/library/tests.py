@@ -464,7 +464,9 @@ class LibraryCarouselTests(TestCase):
         )
         self.assertContains(response, 'target="_blank"')
         self.assertContains(
-            response, 'x-show="!$store.soundLayers.currentLayer?.artist_url"'
+            response,
+            'x-show="!$store.soundLayers.currentLayer?.artist_url'
+            ' && !$store.soundLayers.currentLayer?.isNew"',
         )
         # Nothing opens a modal over a credit any more.
         self.assertNotContains(response, "artist/details")

@@ -115,6 +115,12 @@ function normalizeUiLayer(layer) {
         // silent voice so the index mapping between store.layers and the
         // engine's voices stays one-to-one.
         isDraft: Boolean(layer.is_draft ?? layer.isDraft),
+        // A blank layer the artist chose to make a new sound out of, rather
+        // than fill from the library. It is still a draft — there is no audio
+        // behind it yet — but its words are the artist's to write, so the card
+        // shows them as fields. Anything that replaces the layer drops it.
+        isNew: Boolean(layer.is_new ?? layer.isNew),
+        tag_list: Array.isArray(layer.tag_list) ? [...layer.tag_list] : [],
     };
 }
 
@@ -168,10 +174,12 @@ function emit(name, detail = {}) {
  * @param {object}   [options]
  * @param {boolean}  [options.allowAdd]   may this mix grow at all
  * @param {string}   [options.artistName] stamped onto blank layers made here
+ * @param {boolean}  [options.allowCreate] may a blank layer become a new sound
  * @param {Function} [options.settleProgress] waits for the loading-ring finish
  */
 export function createSoundLayersStore(rawLayers, {
     allowAdd = true,
+    allowCreate = false,
     artistName = "",
     settleProgress = settleLoadingProgress,
 } = {}) {
@@ -188,6 +196,10 @@ export function createSoundLayersStore(rawLayers, {
         // The name a blank layer is stamped with, so one made from the `+`
         // carries the artist the way a dropped track does.
         artistName,
+        // Whether a blank layer offers "Create" beside "Library". Only the
+        // home page's STUDIO tab switches it on; the empty card reads it, so
+        // the same card component serves both tabs.
+        allowCreate,
         // Where the settings pane's loudness toggle switches a layer on to, so
         // the panel does not have to hard-code a number the engine owns.
         loudnessDefault: DEFAULT_LOUDNESS_TARGET,
@@ -515,6 +527,34 @@ export function createSoundLayersStore(rawLayers, {
             if (!layer) return;
             Object.assign(layer, patch);
             emit("update", { index, layer });
+        },
+
+        /**
+         * Turn a blank layer into a new sound the artist is writing up. The
+         * layer stays a draft — nothing has audio yet, so it is still left out
+         * of a save — but it now carries a working title, the artist's name
+         * and an empty story for the card's fields to edit.
+         */
+        createSound(index) {
+            const layer = this.layers[index];
+            if (!this.allowCreate || !layer?.isDraft || layer.isNew) return;
+            this.updateLayer(index, {
+                isNew: true,
+                sound_title: "New Sound",
+                sound_artist: this.artistName,
+                flavor: "",
+                tags: "",
+                tag_list: [],
+            });
+        },
+
+        /**
+         * Set a new sound's tags. `tags` is the " / " string every card
+         * reads; `tag_list` is the same thing kept as names for the editor.
+         */
+        setTags(index, names) {
+            const unique = [...new Set(names)];
+            this.updateLayer(index, { tag_list: unique, tags: unique.join(" / ") });
         },
 
         /**

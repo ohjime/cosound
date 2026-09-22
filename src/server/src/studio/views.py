@@ -2,7 +2,7 @@ from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import render
 
-from core.models import Listener
+from core.models import Listener, Sound
 from library.utils import serialize_sounds
 from studio.utils import get_artist
 
@@ -131,3 +131,50 @@ def studio_carousel(request):
     if not request.htmx:
         return HttpResponse("Request Denied.")
     return render(request, "studio/index.html#default_view")
+
+
+# How many existing tags a search in the new-sound panel offers at once. The
+# panel is a few lines tall, so a handful of chips is what fits.
+TAG_SUGGESTION_LIMIT = 6
+
+
+def studio_tag_search(request):
+    """Existing tags matching what the artist typed into a new sound's tag box.
+
+    A new sound may only carry tags cosound already has, so this is the one way
+    a tag gets onto one: only Sound tags are offered, and the panel adds nothing
+    that did not come from here. `chosen` (newline-separated) is what the layer
+    already carries, left out of the answer. When no tag matches at all, the
+    fragment offers to ask cosound to add it instead. `exact` keeps that offer
+    away from a tag the layer already carries.
+    """
+    if not request.htmx:
+        return HttpResponse("Request Denied.")
+    if get_artist(request.user) is None:
+        return HttpResponse("Request Denied.", status=403)
+
+    from django.contrib.contenttypes.models import ContentType
+    from taggit.models import Tag
+
+    query = (request.GET.get("q") or "").strip()
+    if not query:
+        return HttpResponse("")
+    chosen = {n.strip().lower() for n in (request.GET.get("chosen") or "").split("\n") if n.strip()}
+
+    sound_tags = Tag.objects.filter(
+        taggit_taggeditem_items__content_type=ContentType.objects.get_for_model(Sound)
+    ).distinct()
+    exact = sound_tags.filter(name__iexact=query).exists()
+    names = [
+        name
+        for name in sound_tags.filter(name__icontains=query)
+        .order_by("name")
+        .values_list("name", flat=True)
+        if name.lower() not in chosen
+    ][:TAG_SUGGESTION_LIMIT]
+
+    return render(
+        request,
+        "studio/index.html#tag_suggestions",
+        {"query": query, "tags": names, "exact": exact},
+    )

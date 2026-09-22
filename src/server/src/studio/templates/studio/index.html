@@ -82,6 +82,34 @@ something to fill in rather than an empty canvas.
     <c-studio-library-list-items :sounds="sounds" />
 {% endpartialdef %}
 
+<!--
+Existing tags for a new sound's tag box (c-studio-new-sound-details). Each
+chip carries its name in data-tag, not in the click expression, so a tag with a
+quote in it cannot break the handler. `add` belongs to the panel's x-data,
+which these chips land inside.
+
+When nothing matches, the line below offers to ask cosound for the tag. It
+waits for no matches rather than no exact match, so it does not pop up under
+every half-typed word that is on its way to an existing tag. The link is a
+placeholder: nothing is sent yet.
+-->
+{% partialdef tag_suggestions %}
+    <div class="flex flex-wrap items-center gap-1 pb-1">
+        {% for name in tags %}
+            <button type="button"
+                    class="badge badge-xs badge-outline cursor-pointer font-serif hover:badge-neutral"
+                    data-tag="{{ name }}"
+                    @click="add($el.dataset.tag)">+ {{ name }}</button>
+        {% endfor %}
+    </div>
+    {% if not tags and not exact %}
+        <p class="pb-1 font-serif text-[8pt] italic opacity-70">
+            No tag matches “{{ query }}”.
+            <a href="#" class="link not-italic" @click.prevent>Ask cosound to add it</a>
+        </p>
+    {% endif %}
+{% endpartialdef %}
+
 <!-- Closing the picker: put the carousel and the flavor panel back. -->
 {% partialdef default_view %}
     <c-core-sound-card-figure hx-swap-oob="outerHTML">

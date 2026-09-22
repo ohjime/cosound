@@ -1,0 +1,74 @@
+<!--
+The flavor panel of a new sound — what c-library-layer-details shows once the
+artist has pressed Create on a blank layer in the home page's STUDIO tab. The
+title and artist are fields on the artwork above (c-core-sound-carousel); the
+tags and the story are fields here, in the same places the card reads them from
+on a finished sound.
+
+Tags can only be ones cosound already has. The box is a search, not free text:
+typing asks `studio:tag_search` for existing tags that match, and the only way
+onto the layer is pressing one of those. Enter takes the first. A search with no
+exact match also offers a link to ask cosound to add the tag — a placeholder for
+now; it does not send anything yet.
+
+The search is a plain fetch from Alpine rather than hx-get. This panel is
+created by an Alpine x-if, which htmx never sees, and asking htmx to process
+it from x-init turned out to race the card's own swaps — sometimes the box was
+wired, sometimes it was dead. The answer is still the server's HTML fragment;
+Alpine initialises the chips' @click handlers as they land.
+
+No `//` comments inside the x-data below: Alpine splices it onto one line, and
+a line comment would swallow the rest of the object (see studio_builder.html).
+-->
+<!-- djlint:off -->
+<div class="flex flex-col gap-1 font-serif text-[8pt] font-extralight font-stretch-95%"
+     x-data="{
+         get store() { return this.$store.soundLayers },
+         get chosen() { return this.store.currentLayer?.tag_list || [] },
+         async search(query) {
+             const params = new URLSearchParams({ q: query, chosen: this.chosen.join('\n') });
+             const response = await fetch('{% url 'studio:tag_search' %}?' + params, { headers: { 'HX-Request': 'true' } });
+             if (response.ok && this.$refs.tagInput.value.trim() === query) this.$refs.suggestions.innerHTML = await response.text();
+         },
+         add(name) {
+             if (!name) return;
+             this.store.setTags(this.store.currentIndex, [...this.chosen, name]);
+             this.$refs.tagInput.value = '';
+             this.$refs.suggestions.innerHTML = '';
+             this.$refs.tagInput.focus();
+         },
+         remove(name) {
+             this.store.setTags(this.store.currentIndex, this.chosen.filter(n => n !== name));
+         },
+     }">
+<!-- djlint:on -->
+    <div class="flex flex-wrap items-center gap-1 py-1 not-italic">
+        <template x-for="name in chosen" :key="name">
+            <button type="button"
+                    class="badge badge-xs badge-neutral cursor-pointer gap-1 font-serif font-bold"
+                    :aria-label="'Remove tag ' + name"
+                    @click="remove(name)">
+                <span x-text="name"></span>
+                <span aria-hidden="true">×</span>
+            </button>
+        </template>
+        <input type="search"
+               x-ref="tagInput"
+               name="q"
+               autocomplete="off"
+               spellcheck="false"
+               aria-label="Add a tag"
+               placeholder="Add a tag"
+               class="min-w-20 flex-1 bg-transparent font-serif text-xs font-bold outline-none placeholder:font-normal placeholder:italic placeholder:text-black/40"
+               @input.debounce.250ms="search($el.value.trim())"
+               @keydown.enter.prevent="$refs.suggestions.querySelector('[data-tag]')?.click()"
+               @keydown.escape="$el.value = ''; $refs.suggestions.innerHTML = ''" />
+    </div>
+    <div id="new-sound-tag-suggestions" x-ref="suggestions" class="not-italic"></div>
+    <textarea class="h-16 w-full resize-none bg-transparent font-serif text-[8pt] italic outline-none placeholder:text-black/40"
+              aria-label="Story"
+              maxlength="500"
+              placeholder="Type a story for this sound"
+              :value="store.currentLayer?.flavor"
+              @input="store.updateLayer(store.currentIndex, { flavor: $event.target.value })"></textarea>
+</div>

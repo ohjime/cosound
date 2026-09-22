@@ -4,7 +4,8 @@ from unittest.mock import patch
 
 from django.contrib.auth.models import AnonymousUser
 from django.template.loader import render_to_string
-from django.test import RequestFactory, SimpleTestCase
+from django.contrib.auth import get_user_model
+from django.test import RequestFactory, SimpleTestCase, TestCase
 
 from login.views import (
     check_email,
@@ -65,10 +66,13 @@ class LoginModalTests(SimpleTestCase):
             avatar_url="/media/test-avatar.png",
         )
 
-        rendered = render_to_string(
-            "login/index.html#post_login",
-            request=request,
-        )
+        # The fake user is not a row, so the STUDIO tab's artist lookup is
+        # answered here rather than by the database.
+        with patch("studio.templatetags.studio_extras.get_artist", return_value=None):
+            rendered = render_to_string(
+                "login/index.html#post_login",
+                request=request,
+            )
 
         self.assertIn('id="core-header"', rendered)
         self.assertIn('hx-swap-oob="outerHTML"', rendered)
@@ -311,3 +315,22 @@ class DeadEndRecoveryTests(SimpleTestCase):
         self.assertContains(response, "Invalid code.")
         self.assertContains(response, 'name="code"')
         self.assertNotIn("HX-Trigger", response)
+
+
+class PostLoginStudioTabTests(TestCase):
+    def test_post_login_adds_the_studio_tab_for_an_artist(self):
+        from core.models import Artist
+
+        user = get_user_model().objects.create_user(
+            username="post-login-artist",
+            email="post-login-artist@example.com",
+            password="pw",
+        )
+        Artist.objects.create(user=user, name="Post Login Artist")
+        request = RequestFactory().get("/")
+        request.user = user
+
+        rendered = render_to_string("login/index.html#post_login", request=request)
+
+        self.assertIn('id="home-tab-studio"', rendered)
+        self.assertIn('aria-label="STUDIO"', rendered)

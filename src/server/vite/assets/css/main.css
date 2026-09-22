@@ -125,6 +125,18 @@
     background:
         radial-gradient(circle at 50% 50%, #000 0 7%, #050817 10%, transparent 24%),
         radial-gradient(circle at 50% 46%, #14163d 0, #070817 42%, #010207 78%);
+    transition: filter 1.4s ease-in-out;
+}
+
+/*
+ * A blank layer the artist has started writing up as a new sound (the STUDIO
+ * tab's Create). Draining the colour and inverting turns the dark galaxy into
+ * a white field with grey arms. It is done with a filter because gradients do
+ * not interpolate and filters do, so the change fades in over the transition
+ * above while the arms keep turning.
+ */
+.empty-layer-galaxy--new {
+    filter: grayscale(1) invert(0.92) contrast(0.85);
 }
 
 .empty-layer-galaxy::before {

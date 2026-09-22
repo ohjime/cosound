@@ -21,11 +21,7 @@
         <div class="relative ring-5 ring-amber-600/60 mx-4 mb-4 rounded-xs rounded-b-2xl bg-white/65 text-black">
             <div class="h-30 overflow-y-auto py-2 px-4">
                 <c-core-sound-card-body>
-                    <div class="italic font-serif font-extralight text-[8pt] font-stretch-95%">
-                        <p class="py-1 not-italic font-bold font-serif text-xs font-stretch-95%"
-                           x-text="'[ ' + $store.soundLayers.currentLayer.tags + ' ]'"></p>
-                        <span x-text="$store.soundLayers.currentLayer.flavor"></span>
-                    </div>
+                    <c-library-layer-details />
                 </c-core-sound-card-body>
             </div>
             <div class="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-neutral-content/80 to-transparent rounded-b-2xl">
@@ -41,11 +37,7 @@
         <c-core-sound-carousel swap_url="{% url 'library:swap' %}" />
     </c-core-sound-card-figure>
     <c-core-sound-card-body hx-swap-oob="outerHTML">
-        <div class="italic font-serif font-extralight text-[8pt] font-stretch-95%">
-            <p class="py-1 not-italic font-bold font-serif text-xs font-stretch-95%"
-               x-text="'[ ' + $store.soundLayers.currentLayer.tags + ' ]'"></p>
-            <span x-text="$store.soundLayers.currentLayer.flavor"></span>
-        </div>
+        <c-library-layer-details />
     </c-core-sound-card-body>
 {% endpartialdef %}
 {% partialdef swap_view %}

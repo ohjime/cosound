@@ -5,6 +5,7 @@ from core.models import Listener
 from explore.renderer import get_explore_context
 from library.models import SoundMix
 from library.utils import get_empty_layer
+from studio.utils import get_artist
 
 
 def example_card_page(request):
@@ -91,6 +92,26 @@ def home_tab_library(request):
             "liked_sound_count": liked_sound_count,
             "saved_mix_count": saved_mix_count,
         },
+    )
+
+
+def home_tab_studio(request):
+    """Render the STUDIO tab: the library's card over one blank layer, where
+    the blank layer can be filled from the library or created as a new sound.
+
+    Artists only — the tab is not drawn for anyone else, and this refuses them
+    too rather than trusting that.
+    """
+    if not request.htmx:
+        return HttpResponse("Request Denied.")
+    artist = get_artist(request.user)
+    if artist is None:
+        return HttpResponse("Request Denied.", status=403)
+
+    return render(
+        request,
+        "app/home.html#tab_studio",
+        {"sounds": [get_empty_layer()], "artist": artist},
     )
 
 

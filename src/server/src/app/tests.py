@@ -101,3 +101,65 @@ class AppTabBodyTests(TestCase):
             content.index("Sound, chosen by the room"),
             content.index("Two sensors, two different signals"),
         )
+
+
+class AppStudioTabTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        from core.models import Artist
+
+        cls.artist_user = User.objects.create_user(
+            username="tab-artist", email="tab-artist@example.com", password="pw"
+        )
+        Artist.objects.create(user=cls.artist_user, name="Tab Artist")
+        cls.listener_user = User.objects.create_user(
+            username="tab-listener", email="tab-listener@example.com", password="pw"
+        )
+
+    def home(self):
+        return self.client.get(reverse("app:home_initial"), HTTP_HX_REQUEST="true")
+
+    def test_studio_tab_is_hidden_when_signed_out(self):
+        response = self.home()
+        self.assertNotContains(response, 'aria-label="STUDIO"')
+        self.assertNotContains(response, reverse("app:home_tab_studio"))
+        # The placeholder login swaps the real tab over.
+        self.assertContains(response, 'id="home-tab-studio"')
+
+    def test_studio_tab_is_hidden_from_a_listener_without_an_artist(self):
+        self.client.force_login(self.listener_user)
+        self.assertNotContains(self.home(), 'aria-label="STUDIO"')
+
+    def test_studio_tab_is_the_fourth_tab_for_an_artist(self):
+        self.client.force_login(self.artist_user)
+        content = self.home().content.decode()
+        self.assertIn(reverse("app:home_tab_studio"), content)
+        self.assertLess(
+            content.index('aria-label="LIBRARY"'), content.index('aria-label="STUDIO"')
+        )
+
+    def test_studio_tab_body_refuses_non_artists(self):
+        url = reverse("app:home_tab_studio")
+        self.assertEqual(self.client.get(url, HTTP_HX_REQUEST="true").status_code, 403)
+        self.client.force_login(self.listener_user)
+        self.assertEqual(self.client.get(url, HTTP_HX_REQUEST="true").status_code, 403)
+
+    def test_studio_tab_body_mounts_the_library_card_with_create(self):
+        self.client.force_login(self.artist_user)
+        response = self.client.get(
+            reverse("app:home_tab_studio"), HTTP_HX_REQUEST="true"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-cosound-mixer-root")
+        self.assertContains(response, "allowCreate: true")
+        self.assertContains(response, "artistName: 'Tab Artist'")
+        self.assertContains(response, '"is_draft": true')
+        self.assertContains(response, "Create a new sound")
+        self.assertContains(response, "Use a sound from your library")
+        self.assertContains(response, "Type a story for this sound")
+
+    def test_library_tab_does_not_allow_create(self):
+        response = self.client.get(
+            reverse("app:home_tab_library"), HTTP_HX_REQUEST="true"
+        )
+        self.assertContains(response, "allowCreate: false")

@@ -53,6 +53,24 @@ choosing LIBRARY again mounts a fresh empty layer.
     </div>
 {% endpartialdef %}
 <!--
+The STUDIO tab, for artists. It is the LIBRARY tab's card on purpose — same
+deck, same carousel, same picker — opening on the same single empty layer. What
+differs is the mix it mounts: `allow_create` makes the empty layer ask whether
+to fill it from the library or create a new sound, and `artist_name` is what a
+new sound is credited to until the artist types another name. There are no
+stats here; those are about a listener's collection, not an artist's work.
+-->
+{% partialdef tab_studio %}
+    <div class="flex w-full flex-col items-center gap-10 pt-4">
+        <c-core-sound-player :sounds="sounds" artist_name="{{ artist.name }}" allow_create />
+        <div>
+            <c-core-deck id="deck">
+                {% include "library/index.html#library" %}
+            </c-core-deck>
+        </div>
+    </div>
+{% endpartialdef %}
+<!--
 The ABOUT tab: cosound's own write-up — what the project is, how the server and
 venue player work, and the open recommendation problem. See
 cotton/app_about_article.html.

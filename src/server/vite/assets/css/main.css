@@ -125,18 +125,23 @@
     background:
         radial-gradient(circle at 50% 50%, #000 0 7%, #050817 10%, transparent 24%),
         radial-gradient(circle at 50% 46%, #14163d 0, #070817 42%, #010207 78%);
-    transition: filter 1.4s ease-in-out;
+    transition: filter 0.35s ease-out;
 }
 
 /*
- * A blank layer the artist has started writing up as a new sound (the STUDIO
- * tab's Create). Draining the colour and inverting turns the dark galaxy into
- * a white field with grey arms. It is done with a filter because gradients do
- * not interpolate and filters do, so the change fades in over the transition
- * above while the arms keep turning.
+ * A blank layer the artist has started writing up as a new sound (Create on
+ * the LIBRARY tab). Draining the colour and inverting turns the dark galaxy
+ * into a white field with grey arms. It is done with a filter because
+ * gradients do not interpolate and filters do, so the change fades in over the
+ * transition above while the arms keep turning. The inverted stars come out
+ * dark, so they are faded back to a light speckle.
  */
 .empty-layer-galaxy--new {
     filter: grayscale(1) invert(0.92) contrast(0.85);
+}
+
+.empty-layer-galaxy--new::before {
+    opacity: 0.25;
 }
 
 .empty-layer-galaxy::before {
@@ -150,6 +155,7 @@
         radial-gradient(circle, #c6b7ff 0 0.8px, transparent 1.3px);
     background-position: 4px 9px, 21px 35px, 44px 17px;
     background-size: 53px 59px, 71px 67px, 89px 83px;
+    transition: opacity 0.35s ease-out;
     animation: empty-layer-stars 32s linear infinite;
 }
 

@@ -17,7 +17,7 @@ from studio.utils import get_artist
 # hand over the library the artist can pull from.
 
 
-def _blank_layer(artist, index=1):
+def _blank_layer(index=1):
     """One empty layer for the builder to open on.
 
     The studio never shows an empty canvas — it starts you on a blank layer to
@@ -34,7 +34,8 @@ def _blank_layer(artist, index=1):
         "sound_id": f"draft-{index}",
         "sound_file": "",
         "sound_title": "",
-        "sound_artist": artist.name if artist else "",
+        # No one owns the void; a new sound is credited when it is created.
+        "sound_artist": "",
         "artwork_url": "",
         "gain": 50,
         "mute": False,
@@ -73,11 +74,10 @@ def studio_initial(request):
     """
     if not request.htmx:
         return HttpResponse("Request Denied.")
-    artist = get_artist(request.user)
     return render(
         request,
         "studio/index.html#initial",
-        {"seed_layers": [_blank_layer(artist)]},
+        {"seed_layers": [_blank_layer()]},
     )
 
 

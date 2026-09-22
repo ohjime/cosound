@@ -66,8 +66,8 @@ class LoginModalTests(SimpleTestCase):
             avatar_url="/media/test-avatar.png",
         )
 
-        # The fake user is not a row, so the STUDIO tab's artist lookup is
-        # answered here rather than by the database.
+        # The fake user is not a row, so the library Create's artist lookup
+        # is answered here rather than by the database.
         with patch("studio.templatetags.studio_extras.get_artist", return_value=None):
             rendered = render_to_string(
                 "login/index.html#post_login",
@@ -317,8 +317,13 @@ class DeadEndRecoveryTests(SimpleTestCase):
         self.assertNotIn("HX-Trigger", response)
 
 
-class PostLoginStudioTabTests(TestCase):
-    def test_post_login_adds_the_studio_tab_for_an_artist(self):
+class PostLoginLibraryCreateTests(TestCase):
+    def post_login(self, user):
+        request = RequestFactory().get("/")
+        request.user = user
+        return render_to_string("login/index.html#post_login", request=request)
+
+    def test_post_login_switches_create_on_for_an_artist(self):
         from core.models import Artist
 
         user = get_user_model().objects.create_user(
@@ -327,10 +332,21 @@ class PostLoginStudioTabTests(TestCase):
             password="pw",
         )
         Artist.objects.create(user=user, name="Post Login Artist")
-        request = RequestFactory().get("/")
-        request.user = user
 
-        rendered = render_to_string("login/index.html#post_login", request=request)
+        rendered = self.post_login(user)
 
-        self.assertIn('id="home-tab-studio"', rendered)
-        self.assertIn('aria-label="STUDIO"', rendered)
+        self.assertIn('id="home-library-create"', rendered)
+        self.assertIn("allowCreate: true", rendered)
+        self.assertIn("artistName: 'Post Login Artist'", rendered)
+
+    def test_post_login_leaves_create_off_for_a_listener(self):
+        user = get_user_model().objects.create_user(
+            username="post-login-listener",
+            email="post-login-listener@example.com",
+            password="pw",
+        )
+
+        rendered = self.post_login(user)
+
+        self.assertIn('id="home-library-create"', rendered)
+        self.assertNotIn("allowCreate", rendered)

@@ -10,7 +10,6 @@ from app.views import (
     home_page,
     home_initial,
     home_tab_library,
-    home_tab_studio,
     home_tab_about,
 )
 
@@ -67,11 +66,6 @@ htmx_urlpatterns = [
         "htmx/home/tab/library",
         home_tab_library,
         name="home_tab_library",
-    ),
-    path(
-        "htmx/home/tab/studio",
-        home_tab_studio,
-        name="home_tab_studio",
     ),
     path(
         "htmx/home/tab/about",

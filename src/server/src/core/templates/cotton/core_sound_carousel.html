@@ -34,16 +34,16 @@ file is the wiring and the caption.
     <div x-ref="carousel" @scroll.debounce.5ms="updateActive()" @pointerdown="release()" @touchstart.passive="release()"
         @wheel.passive="release()" class="carousel w-full h-full">
         <!-- A blank layer has no artwork to show, so it gets its own face
-             instead. Both branches are x-if rather than x-show: c-core-image
+             instead. So does a new sound, whose face holds its uploads. Both branches are x-if rather than x-show: c-core-image
              would otherwise start loading a placeholder nobody sees, and the
              empty card's htmx attributes would sit armed behind it. -->
         <template x-for="(layer, index) in $store.{{ name }}.layers" :key="layer.sound_id">
             <div class="carousel-item relative h-full w-full transition-[filter] duration-300 ease-out"
                 :style="`filter: grayscale(${$store.{{ name }}.grayscaleFor(layer)}%)`">
-                <template x-if="layer.isDraft">
+                <template x-if="layer.isDraft || layer.isNew">
                     <c-core-sound-empty-layer swap_url="{{ swap_url }}" />
                 </template>
-                <template x-if="!layer.isDraft">
+                <template x-if="!layer.isDraft && !layer.isNew">
                     <div class="contents">
                         <c-core-image bind_src="layer.artwork_url" bind_alt="layer.sound_title" class="w-full" />
                         <div
@@ -63,11 +63,10 @@ file is the wiring and the caption.
     <div
         class="pointer-events-none absolute inset-0 z-20 p-3 pt-8 font-serif italic flex flex-col justify-between text-white font-thin text-shadow-lg">
         <div class="text-left text-lg leading-tight pr-12" x-show="!$store.{{ name }}.currentLayer?.isNew" x-text="$store.{{ name }}.currentLayer?.sound_title"></div>
-        <!-- A new sound (the STUDIO tab's Create) is the artist's to name, so
+        <!-- A new sound (an artist's Create on the LIBRARY tab) is the artist's to name, so
              its title and artist are fields rather than a caption. Dark on the
              whitened galaxy, and without the caption's shadow, which only
-             muddies dark text. `layer` here is the one being written — only a
-             blank layer can be new, and it is always the selected one. -->
+             muddies dark text. -->
         <template x-if="$store.{{ name }}.currentLayer?.isNew">
             <input type="text"
                    class="pointer-events-auto w-full bg-transparent pr-12 font-serif text-lg leading-tight italic text-neutral-800 text-shadow-none outline-none border-b border-neutral-800/20 focus:border-neutral-800/60 placeholder:text-neutral-500"

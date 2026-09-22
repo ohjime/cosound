@@ -173,7 +173,7 @@ function emit(name, detail = {}) {
  * @param {object[]} rawLayers  the mix this store opens on
  * @param {object}   [options]
  * @param {boolean}  [options.allowAdd]   may this mix grow at all
- * @param {string}   [options.artistName] stamped onto blank layers made here
+ * @param {string}   [options.artistName] credited on a new sound (createSound)
  * @param {boolean}  [options.allowCreate] may a blank layer become a new sound
  * @param {Function} [options.settleProgress] waits for the loading-ring finish
  */
@@ -193,12 +193,12 @@ export function createSoundLayersStore(rawLayers, {
         // so does every path that appends, so switching it off closes all of
         // them at once instead of only hiding the obvious button.
         allowAdd,
-        // The name a blank layer is stamped with, so one made from the `+`
-        // carries the artist the way a dropped track does.
+        // Who a new sound is credited to when the artist presses Create. A
+        // blank layer is not stamped with it: no one owns the void.
         artistName,
         // Whether a blank layer offers "Create" beside "Library". Only the
-        // home page's STUDIO tab switches it on; the empty card reads it, so
-        // the same card component serves both tabs.
+        // home page's LIBRARY tab switches it on, and only for a signed-in
+        // artist; the empty card reads it, so one card serves both cases.
         allowCreate,
         // Where the settings pane's loudness toggle switches a layer on to, so
         // the panel does not have to hard-code a number the engine owns.
@@ -497,7 +497,7 @@ export function createSoundLayersStore(rawLayers, {
          * Resolves to the new layer, or to null when the mix cannot take one.
          */
         addBlankLayer() {
-            return this.addLayer(makeDraftLayer({ artistName: this.artistName }));
+            return this.addLayer(makeDraftLayer());
         },
 
         /**
@@ -546,6 +546,44 @@ export function createSoundLayersStore(rawLayers, {
                 tags: "",
                 tag_list: [],
             });
+        },
+
+        /**
+         * Give a new sound its audio from a file the artist picked. Picking
+         * again swaps the file; the words, artwork and fader stay. The file
+         * never leaves the tab — like a dropped track it is a blob: URL, so
+         * the layer is local and kept out of a save.
+         */
+        async uploadSound(index, file) {
+            if (!this.layers[index]?.isNew || !file) return null;
+            const url = URL.createObjectURL(file);
+            try {
+                return await this.setLayerSource(index, {
+                    sound_file: url,
+                    sound_file_name: file.name,
+                    is_local: true,
+                });
+            } catch (error) {
+                URL.revokeObjectURL(url);
+                throw error;
+            }
+        },
+
+        /**
+         * Give a new sound its artwork from a file the artist picked. Only the
+         * picture changes, so the voice is left alone.
+         */
+        setArtwork(index, file) {
+            const layer = this.layers[index];
+            if (!layer?.isNew || !file) return;
+            const previous = layer.artwork_url;
+            this.updateLayer(index, {
+                artwork_url: URL.createObjectURL(file),
+                artwork_file_name: file.name,
+            });
+            if (typeof previous === "string" && previous.startsWith("blob:")) {
+                URL.revokeObjectURL(previous);
+            }
         },
 
         /**
@@ -770,13 +808,14 @@ export function makeLocalLayer({ file, artworkFile = null, artistName = "" }) {
  * It carries no audio, so the engine gives it a silent voice; the layer becomes
  * real once setLayerSource points it at a file or a library sound.
  */
-export function makeDraftLayer({ artistName = "" } = {}) {
+export function makeDraftLayer() {
     const title = "";
     return {
         sound_id: nextLocalId("draft"),
         sound_file: "",
         sound_title: title,
-        sound_artist: artistName,
+        // No one owns the void.
+        sound_artist: "",
         artwork_url: placeholderArtwork(title),
         gain: 50,
         mute: false,

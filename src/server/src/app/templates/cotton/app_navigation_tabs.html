@@ -1,13 +1,10 @@
 <c-vars target="#tab_content" />
 <!--
-The home page's tab bar: daisyUI radio tabs that decide what the main
+The home page's tab bar: three daisyUI radio tabs that decide what the main
 body region shows. Each radio carries its own hx-get and swaps the fetched
 fragment into `target` (app/home.html's #tab_content) on change — a radio only
 fires change when it becomes checked, so re-clicking the active tab fetches
 nothing.
-
-The fourth, STUDIO, is only drawn for a signed-in artist; see
-c-app-navigation-studio-tab.
 
 Each response replaces #tab_content directly. Tab changes have no content-level
 transition or delayed swap.
@@ -46,5 +43,4 @@ transition or delayed swap.
            hx-target="{{ target }}"
            hx-sync="{{ target }}:replace"
            hx-swap="innerHTML" />
-    <c-app-navigation-studio-tab target="{{ target }}" />
 </div>

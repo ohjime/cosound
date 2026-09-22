@@ -2,7 +2,8 @@
 <!--
 The face of a blank layer — one the `+` button made room for, before a sound has
 been chosen for it. c-core-sound-carousel draws this in place of the artwork
-whenever `layer.isDraft`.
+whenever `layer.isDraft`, and for a new sound (`layer.isNew`) for as long as
+the artist is writing it up, audio or not.
 
 `swap_url` is what the card does when it is pressed, and it is the one thing the
 two surfaces disagree about:
@@ -21,13 +22,14 @@ Inert is `disabled` on the same button rather than a second element, so the two
 states cannot drift apart. Nothing here binds a sound id — a blank layer has
 none — so there is no request to guard beyond the button itself.
 
-A mix mounted with `allow_create` (the home page's STUDIO tab) asks a second
-question instead of opening the picker on a press: fill this layer from the
-library, or create a new sound here. Library is the same request the library's
-face makes. Create turns the layer into a new sound (`createSound` in
-soundscape-store.js) — still blank underneath, but with fields on the card for
-its title, artist, story and tags — and the galaxy fades to white and grey to
-say the layer has stopped being empty and started being written. That fade is
+A mix mounted with `allow_create` (the home page's LIBRARY tab, for a signed-in
+artist) asks a second question instead of opening the picker on a press: fill
+this layer from the library, or create a new sound here. Library is the same
+request the library's face makes. Create turns the layer into a new sound
+(`createSound` in soundscape-store.js) with fields on the card for its title,
+artist, story and tags; the circle becomes New Layer, the two buttons become
+the sound file and the artwork uploads, and the galaxy fades to white and grey
+to say the layer has stopped being empty and started being written. That fade is
 a `filter` transition on the galaxy rather than a second set of gradients:
 gradients do not interpolate, a filter does, so the swirl keeps turning while
 its colour drains out.
@@ -66,32 +68,70 @@ its colour drains out.
             </span>
         </button>
     </template>
-    <!-- Create mode. x-show rather than x-if on the new-sound state so the
-         choices fade out alongside the galaxy instead of vanishing under it. -->
+    <!-- A new sound's artwork, once the artist has picked one, covers the
+         galaxy. It is a blob: URL from setArtwork, so it is already loaded.
+         The light washes keep the dark title and artist fields readable over
+         whatever the picture is. -->
+    <template x-if="layer.isNew && layer.artwork_file_name">
+        <div class="pointer-events-none absolute inset-0 motion-preset-fade motion-duration-150">
+            <img :src="layer.artwork_url" alt="" class="size-full object-cover" />
+            <div class="absolute inset-x-0 top-0 h-1/4 bg-gradient-to-b from-white/80 to-transparent"></div>
+            <div class="absolute inset-x-0 bottom-0 h-1/6 bg-gradient-to-t from-white/80 to-transparent"></div>
+        </div>
+    </template>
+    <!-- Create mode. The circle and the buttons stay put and change what they
+         say: Empty Layer offers the library or Create; New Layer offers the
+         sound file and, beneath it, the artwork. Each pair is stacked in one
+         grid cell and crossfaded, so nothing jumps while the galaxy whitens.
+
+         The uploads are labels around visually hidden file inputs, so a press
+         opens the picker natively — including a second press on a button that
+         already shows a file name, which picks a replacement. The input is
+         cleared after each pick, or choosing the same file again would not
+         fire change. -->
     <template x-if="$store.soundLayers.allowCreate">
-        <div class="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center text-white"
-             x-show="!layer.isNew"
-             x-transition:leave="transition-opacity duration-500"
-             x-transition:leave-start="opacity-100"
-             x-transition:leave-end="opacity-0">
-            <span class="flex size-20 items-center justify-center rounded-full border-2 border-current bg-black/35 px-2 text-base leading-tight opacity-90 shadow-lg backdrop-blur-sm">
-                Empty Layer
+        <div class="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center">
+            <span class="grid size-20 place-items-center rounded-full border-2 px-2 text-base leading-tight opacity-90 shadow-lg backdrop-blur-sm transition-colors duration-150"
+                  :class="layer.isNew ? 'border-neutral-800 bg-white/60 text-neutral-800' : 'border-white bg-black/35 text-white'">
+                <span class="col-start-1 row-start-1 transition-opacity duration-150" :class="layer.isNew && 'opacity-0'">Empty Layer</span>
+                <span class="col-start-1 row-start-1 transition-opacity duration-150" :class="!layer.isNew && 'opacity-0'">New Layer</span>
             </span>
-            <div class="flex flex-col items-stretch gap-2">
-                <button type="button"
-                        class="btn btn-sm rounded-full border-white/40 bg-black/40 text-white shadow-md backdrop-blur-sm hover:border-amber-300 hover:text-amber-300"
-                        hx-get="{{ swap_url }}"
-                        hx-swap="none swap:300ms"
-                        x-init="$nextTick(() => htmx.process($el))"
-                        hx-on:htmx:before-swap="document.querySelectorAll('#card-figure, #card-body').forEach(el => el.classList.add('htmx-swapping'))"
-                        @click="$store.soundLayers.currentIndex = index; $store.soundLayers.swappingLayer = true">
-                    Use a sound from your library
-                </button>
-                <button type="button"
-                        class="btn btn-sm rounded-full border-white/40 bg-white/85 text-neutral-900 shadow-md backdrop-blur-sm hover:bg-white"
-                        @click="$store.soundLayers.currentIndex = index; $store.soundLayers.createSound(index)">
-                    Create a new sound
-                </button>
+            <div class="grid">
+                <div class="col-start-1 row-start-1 flex flex-col items-stretch gap-2 transition-opacity duration-150"
+                     :class="layer.isNew && 'pointer-events-none opacity-0'"
+                     :inert="layer.isNew">
+                    <button type="button"
+                            class="btn btn-sm rounded-full border-white/40 bg-black/40 text-white shadow-md backdrop-blur-sm hover:border-amber-300 hover:text-amber-300"
+                            hx-get="{{ swap_url }}"
+                            hx-swap="none swap:300ms"
+                            x-init="$nextTick(() => htmx.process($el))"
+                            hx-on:htmx:before-swap="document.querySelectorAll('#card-figure, #card-body').forEach(el => el.classList.add('htmx-swapping'))"
+                            @click="$store.soundLayers.currentIndex = index; $store.soundLayers.swappingLayer = true">
+                        Use a sound from your library
+                    </button>
+                    <button type="button"
+                            class="btn btn-sm rounded-full border-white/40 bg-white/85 text-neutral-900 shadow-md backdrop-blur-sm hover:bg-white"
+                            @click="$store.soundLayers.currentIndex = index; $store.soundLayers.createSound(index)">
+                        Create a new sound
+                    </button>
+                </div>
+                <div class="col-start-1 row-start-1 flex flex-col items-stretch gap-2 transition-opacity duration-150"
+                     :class="!layer.isNew && 'pointer-events-none opacity-0'"
+                     :inert="!layer.isNew">
+                    <label class="btn btn-sm max-w-56 rounded-full border-neutral-900 bg-neutral-900 text-white shadow-md hover:bg-neutral-700 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-neutral-900"
+                           :title="layer.sound_file_name ? `${layer.sound_file_name} — press to choose another` : 'Upload a sound file'">
+                        <input type="file" accept="audio/*" class="sr-only"
+                               @change="const file = $event.target.files[0]; $event.target.value = ''; $store.soundLayers.uploadSound(index, file).catch(() => {})" />
+                        <span class="truncate" x-text="layer.sound_file_name || 'Upload sound'"></span>
+                    </label>
+                    <label class="btn btn-sm max-w-56 rounded-full border-neutral-800/30 bg-white/80 text-neutral-900 shadow-md backdrop-blur-sm hover:bg-white focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-neutral-900"
+                           :title="layer.artwork_file_name ? `${layer.artwork_file_name} — press to choose another` : 'Upload artwork'">
+                        <input type="file" accept="image/*" class="sr-only"
+                               @change="const file = $event.target.files[0]; $event.target.value = ''; $store.soundLayers.setArtwork(index, file)" />
+                        <span class="truncate" x-text="layer.artwork_file_name || 'Upload artwork'"></span>
+                    </label>
+                    <p class="max-w-56 text-xs text-error" x-show="layer.isNew && $store.soundLayers.loadError" x-text="$store.soundLayers.loadError"></p>
+                </div>
             </div>
         </div>
     </template>

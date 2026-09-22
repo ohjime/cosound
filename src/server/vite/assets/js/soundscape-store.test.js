@@ -98,7 +98,7 @@ function seededBlankLayer() {
         sound_id: "draft-1",
         sound_file: "",
         sound_title: "",
-        sound_artist: "Some Artist",
+        sound_artist: "",
         artwork_url: "",
         gain: 50,
         mute: false,
@@ -216,7 +216,7 @@ test("a loaded mix keeps its name through edits", async () => {
     // The name is what the save dialog opens on, and it has to survive the
     // editing it is there for: tweak a loaded Cosound and keeping the name is
     // what saves over it.
-    await store.addLayer(makeDraftLayer({ artistName: "Some Artist" }));
+    await store.addLayer(makeDraftLayer());
     assert.equal(store.loadedTitle, "Storm");
 });
 
@@ -232,7 +232,7 @@ test("a mix that was never saved has no name to open the dialog on", async () =>
 
 test("a blank layer added in the browser cannot collide with the seeded one", async () => {
     const store = await startedStore();
-    await store.addLayer(makeDraftLayer({ artistName: "Some Artist" }));
+    await store.addLayer(makeDraftLayer());
 
     assert.equal(store.layers.length, 2);
     // Both x-for loops that render layers — the tab strip and the carousel —
@@ -269,7 +269,7 @@ test("a mix stops at MAX_LAYERS", async () => {
     assert.equal(store.layers.length, MAX_LAYERS);
 });
 
-test("the + button's blank layer arrives selected, silent and marked", async () => {
+test("the + button's blank layer arrives selected, silent, marked and unowned", async () => {
     const store = await startedStore([], { artistName: "Some Artist" });
     const layer = await store.addBlankLayer();
 
@@ -278,7 +278,8 @@ test("the + button's blank layer arrives selected, silent and marked", async () 
     assert.equal(store.currentLayer, layer);
     assert.equal(layer.isDraft, true);
     assert.equal(layer.sound_file, "");
-    assert.equal(layer.sound_artist, "Some Artist");
+    // No one owns the void.
+    assert.equal(layer.sound_artist, "");
     // What every per-layer control reads to take itself out of service.
     assert.equal(store.currentIsDraft, true);
 });
@@ -548,7 +549,6 @@ test("Create turns a blank layer into a new sound that is still left out of a sa
         allowCreate: true,
         artistName: "Some Artist",
     });
-    store.layers[0].sound_artist = "";
 
     store.createSound(0);
 
@@ -592,4 +592,58 @@ test("filling a new sound from the library makes it an ordinary layer again", as
 
     assert.equal(store.layers[0].isNew, false);
     assert.equal(store.layers[0].isDraft, false);
+});
+
+test("uploading a sound gives a new sound audio and keeps its words", async () => {
+    const store = await startedStore([seededBlankLayer()], {
+        allowCreate: true,
+        artistName: "Some Artist",
+    });
+    store.createSound(0);
+    store.updateLayer(0, { sound_title: "Harbour" });
+
+    await store.uploadSound(0, new File(["x"], "harbour-at-dawn.wav"));
+
+    const layer = store.layers[0];
+    assert.equal(layer.isNew, true);
+    assert.equal(layer.isDraft, false);
+    assert.equal(layer.isLocal, true);
+    assert.ok(layer.sound_file.startsWith("blob:"));
+    assert.equal(layer.sound_file_name, "harbour-at-dawn.wav");
+    assert.equal(layer.sound_title, "Harbour");
+    assert.equal(layer.sound_artist, "Some Artist");
+    // The file stays on this device, so the mix cannot be saved with it.
+    assert.equal(store.canSave, false);
+
+    const first = layer.sound_file;
+    await store.uploadSound(0, new File(["y"], "second-take.wav"));
+    assert.equal(store.layers[0].sound_file_name, "second-take.wav");
+    assert.notEqual(store.layers[0].sound_file, first);
+});
+
+test("uploads are refused on a layer that is not a new sound", async () => {
+    const store = await startedStore([seededBlankLayer()], { allowCreate: true });
+
+    assert.equal(await store.uploadSound(0, new File(["x"], "a.wav")), null);
+    store.setArtwork(0, new File(["x"], "a.png"));
+
+    assert.equal(store.layers[0].isDraft, true);
+    assert.equal(store.layers[0].sound_file_name, undefined);
+    assert.equal(store.layers[0].artwork_file_name, undefined);
+});
+
+test("artwork on a new sound is swapped without touching its audio", async () => {
+    const store = await startedStore([seededBlankLayer()], { allowCreate: true });
+    store.createSound(0);
+    await store.uploadSound(0, new File(["x"], "take.wav"));
+    const sound = store.layers[0].sound_file;
+
+    store.setArtwork(0, new File(["x"], "cover.png"));
+    const cover = store.layers[0].artwork_url;
+    store.setArtwork(0, new File(["y"], "cover-2.png"));
+
+    assert.ok(cover.startsWith("blob:"));
+    assert.notEqual(store.layers[0].artwork_url, cover);
+    assert.equal(store.layers[0].artwork_file_name, "cover-2.png");
+    assert.equal(store.layers[0].sound_file, sound);
 });

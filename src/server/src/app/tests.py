@@ -103,7 +103,7 @@ class AppTabBodyTests(TestCase):
         )
 
 
-class AppStudioTabTests(TestCase):
+class AppLibraryCreateTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         from core.models import Artist
@@ -116,39 +116,28 @@ class AppStudioTabTests(TestCase):
             username="tab-listener", email="tab-listener@example.com", password="pw"
         )
 
-    def home(self):
-        return self.client.get(reverse("app:home_initial"), HTTP_HX_REQUEST="true")
+    def library(self):
+        return self.client.get(reverse("app:home_tab_library"), HTTP_HX_REQUEST="true")
 
-    def test_studio_tab_is_hidden_when_signed_out(self):
-        response = self.home()
+    def test_there_is_no_separate_studio_tab(self):
+        self.client.force_login(self.artist_user)
+        response = self.client.get(reverse("app:home_initial"), HTTP_HX_REQUEST="true")
         self.assertNotContains(response, 'aria-label="STUDIO"')
-        self.assertNotContains(response, reverse("app:home_tab_studio"))
-        # The placeholder login swaps the real tab over.
-        self.assertContains(response, 'id="home-tab-studio"')
 
-    def test_studio_tab_is_hidden_from_a_listener_without_an_artist(self):
+    def test_library_does_not_allow_create_when_signed_out(self):
+        response = self.library()
+        self.assertContains(response, "allowCreate: false")
+        self.assertContains(response, "artistName: ''")
+        # The placeholder login swaps Create over.
+        self.assertContains(response, 'id="home-library-create"')
+
+    def test_library_does_not_allow_create_for_a_listener_without_an_artist(self):
         self.client.force_login(self.listener_user)
-        self.assertNotContains(self.home(), 'aria-label="STUDIO"')
+        self.assertContains(self.library(), "allowCreate: false")
 
-    def test_studio_tab_is_the_fourth_tab_for_an_artist(self):
+    def test_library_allows_create_for_an_artist(self):
         self.client.force_login(self.artist_user)
-        content = self.home().content.decode()
-        self.assertIn(reverse("app:home_tab_studio"), content)
-        self.assertLess(
-            content.index('aria-label="LIBRARY"'), content.index('aria-label="STUDIO"')
-        )
-
-    def test_studio_tab_body_refuses_non_artists(self):
-        url = reverse("app:home_tab_studio")
-        self.assertEqual(self.client.get(url, HTTP_HX_REQUEST="true").status_code, 403)
-        self.client.force_login(self.listener_user)
-        self.assertEqual(self.client.get(url, HTTP_HX_REQUEST="true").status_code, 403)
-
-    def test_studio_tab_body_mounts_the_library_card_with_create(self):
-        self.client.force_login(self.artist_user)
-        response = self.client.get(
-            reverse("app:home_tab_studio"), HTTP_HX_REQUEST="true"
-        )
+        response = self.library()
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "data-cosound-mixer-root")
         self.assertContains(response, "allowCreate: true")
@@ -157,9 +146,11 @@ class AppStudioTabTests(TestCase):
         self.assertContains(response, "Create a new sound")
         self.assertContains(response, "Use a sound from your library")
         self.assertContains(response, "Type a story for this sound")
-
-    def test_library_tab_does_not_allow_create(self):
-        response = self.client.get(
-            reverse("app:home_tab_library"), HTTP_HX_REQUEST="true"
-        )
-        self.assertContains(response, "allowCreate: false")
+        # After Create, the same circle and buttons become the uploads.
+        self.assertContains(response, "New Layer")
+        self.assertContains(response, 'accept="audio/*"')
+        self.assertContains(response, "Upload sound")
+        self.assertContains(response, 'accept="image/*"')
+        self.assertContains(response, "Upload artwork")
+        # It is still the library: the collection stats stay.
+        self.assertContains(response, "Favourited Sounds")

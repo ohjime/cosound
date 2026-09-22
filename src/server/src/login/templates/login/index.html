@@ -165,10 +165,10 @@
     </c-core-modal>
 {% endpartialdef %}
 
-<!-- The STUDIO tab rides along so an artist signing in on the home page gets
-     it straight away. Off the home page there is no #home-tab-studio, and htmx
-     drops the swap. -->
+<!-- Create rides along so an artist signing in on the home page's LIBRARY
+     tab gets it straight away. Anywhere else there is no #home-library-create,
+     and htmx drops the swap. -->
 {% partialdef post_login %}
     <c-core-header oob="true" />
-    <c-app-navigation-studio-tab oob="true" />
+    <c-app-library-create oob="true" />
 {% endpartialdef %}

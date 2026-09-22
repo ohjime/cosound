@@ -20,9 +20,10 @@ This is also where a page settles two things about the mix it is mounting:
   disable_add — pass it (bare, no value) to mount a mix that cannot grow. The
                 `+` on the layer indicator disappears and every path that
                 appends refuses, because both read the same store flag.
-  allow_create — pass it (bare) to let a blank layer become a new sound. The
+  allow_create — pass it truthy to let a blank layer become a new sound. The
                 empty card then offers Library and Create instead of opening
-                the picker on a press. Only the home page's STUDIO tab does.
+                the picker on a press. Only the home page's LIBRARY tab does,
+                and only for a signed-in artist.
 
 They belong here rather than on the card or the deck because a page can stack
 several cards over one mix — `Alpine.store('soundLayers')` is global — and this

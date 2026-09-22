@@ -72,7 +72,12 @@ def home_initial(request):
 
 
 def home_tab_library(request):
-    """Render the LIBRARY tab over a fresh empty layer."""
+    """Render the LIBRARY tab over a fresh empty layer.
+
+    A signed-in artist also gets Create on that empty layer: the mix is mounted
+    with `allow_create`, and a new sound is credited to their Artist name until
+    they type another. Everyone else gets the plain library.
+    """
     if not request.htmx:
         return HttpResponse("Request Denied.")
 
@@ -91,27 +96,8 @@ def home_tab_library(request):
             "sounds": [get_empty_layer()],
             "liked_sound_count": liked_sound_count,
             "saved_mix_count": saved_mix_count,
+            "artist": get_artist(request.user),
         },
-    )
-
-
-def home_tab_studio(request):
-    """Render the STUDIO tab: the library's card over one blank layer, where
-    the blank layer can be filled from the library or created as a new sound.
-
-    Artists only — the tab is not drawn for anyone else, and this refuses them
-    too rather than trusting that.
-    """
-    if not request.htmx:
-        return HttpResponse("Request Denied.")
-    artist = get_artist(request.user)
-    if artist is None:
-        return HttpResponse("Request Denied.", status=403)
-
-    return render(
-        request,
-        "app/home.html#tab_studio",
-        {"sounds": [get_empty_layer()], "artist": artist},
     )
 
 

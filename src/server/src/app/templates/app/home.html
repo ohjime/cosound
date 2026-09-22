@@ -37,6 +37,13 @@ The LIBRARY tab. The player lives inside the swapped region on purpose: it is
 what mounts the soundLayers store over this tab's mix, so choosing another tab
 unmounts it (the htmx cleanup hook in soundscape-store.js stops the audio) and
 choosing LIBRARY again mounts a fresh empty layer.
+
+For a signed-in artist the same card is also where a new sound starts:
+`allow_create` makes the empty layer ask whether to fill it from the library or
+create a new sound, and `artist_name` is what a new sound is credited to until
+the artist types another name. `artist` is None for everyone else, so both stay
+off. c-app-library-create is how an artist who signs in while on this tab gets
+Create without losing the mix.
 -->
 {% partialdef tab_library %}
     <div class="flex w-full flex-col items-center gap-10 pt-4">
@@ -44,25 +51,8 @@ choosing LIBRARY again mounts a fresh empty layer.
                          like_limit="10"
                          saved_count="{{ saved_mix_count }}"
                          saved_limit="5" />
-        <c-core-sound-player :sounds="sounds" />
-        <div>
-            <c-core-deck id="deck">
-                {% include "library/index.html#library" %}
-            </c-core-deck>
-        </div>
-    </div>
-{% endpartialdef %}
-<!--
-The STUDIO tab, for artists. It is the LIBRARY tab's card on purpose — same
-deck, same carousel, same picker — opening on the same single empty layer. What
-differs is the mix it mounts: `allow_create` makes the empty layer ask whether
-to fill it from the library or create a new sound, and `artist_name` is what a
-new sound is credited to until the artist types another name. There are no
-stats here; those are about a listener's collection, not an artist's work.
--->
-{% partialdef tab_studio %}
-    <div class="flex w-full flex-col items-center gap-10 pt-4">
-        <c-core-sound-player :sounds="sounds" artist_name="{{ artist.name }}" allow_create />
+        <c-core-sound-player :sounds="sounds" artist_name="{{ artist.name }}" :allow_create="artist" />
+        <c-app-library-create />
         <div>
             <c-core-deck id="deck">
                 {% include "library/index.html#library" %}

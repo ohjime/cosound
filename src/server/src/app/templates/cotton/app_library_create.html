@@ -1,0 +1,17 @@
+<c-vars oob="" />
+{% load studio_extras %}
+<!--
+Create, for an artist who signs in while the home page's LIBRARY tab is open.
+The tab renders this as an empty, hidden placeholder; login's post_login
+partial renders it again with `oob`, and htmx swaps it over the placeholder.
+For an artist that swapped-in copy switches Create on in the mix that is
+already mounted — the same two store fields the tab would have mounted with —
+rather than refetching the tab, which would throw the listener's layers away.
+Off the LIBRARY tab there is no #home-library-create, and htmx drops the swap.
+Signing out reloads the page, which takes Create away again.
+-->
+{% studio_artist as artist %}
+<span id="home-library-create"
+      hidden
+      {% if oob %}hx-swap-oob="outerHTML"{% endif %}
+      {% if oob and artist %}x-data x-init="if ($store.soundLayers) Object.assign($store.soundLayers, { allowCreate: true, artistName: '{{ artist.name|escapejs }}' })"{% endif %}></span>

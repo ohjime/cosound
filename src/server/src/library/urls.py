@@ -10,6 +10,8 @@ from library.views import (
     library_swap,
     library_search,
     library_carousel,
+    library_create_sound,
+    library_tag_search,
 )
 
 app_name = "library"
@@ -24,4 +26,6 @@ urlpatterns = [
     path("swap/", library_swap, name="swap"),
     path("search/", library_search, name="search"),
     path("carousel/", library_carousel, name="carousel"),
+    path("sounds/create/", library_create_sound, name="create_sound"),
+    path("tags/", library_tag_search, name="tag_search"),
 ]

@@ -14,9 +14,13 @@ import {
  *
  *   <div x-data="trimTrack()"
  *        x-effect="load({ src, duration, start, end, index, gainDb })"
- *        @trim-commit="retime($event.detail)"></div>
+ *        @trim-commit="retime($event.detail)"
+ *        @trim-seek="seek($event.detail.position)"></div>
  *
- * `load` is the whole input and `trim-commit` the whole output. Driving it from
+ * `load` is the whole input, and `trim-commit` and `trim-seek` the whole output.
+ * The markers are dragged by grabbing them; a press anywhere else on the wave is
+ * a seek, `{ position }` in seconds into the file, sent on the press and again
+ * where a drag lets go. Driving it from
  * `x-effect` rather than from `x-data` arguments is what makes it follow the
  * layer being edited: the effect re-runs whenever anything it read changed —
  * switching tabs, the Reset button, or the engine writing a corrected crop back
@@ -164,6 +168,11 @@ export function trimTrack({ buckets = DEFAULT_PEAK_BUCKETS } = {}) {
     // guard that stops `load` yanking a marker out from under a drag when the
     // store changes for some other reason mid-gesture.
     let dragging = null;
+    // A press on the wave rather than on a marker is a seek: where it is aimed,
+    // and whether it has been dragged since it was first sent.
+    let seeking = false;
+    let seekTo = 0;
+    let seekMoved = false;
     let request = 0;
     let observer = null;
     let dom = null;
@@ -176,6 +185,21 @@ export function trimTrack({ buckets = DEFAULT_PEAK_BUCKETS } = {}) {
         const box = dom.screen.getBoundingClientRect();
         if (!box.width) return 0;
         return clamp((clientX - box.left) / box.width, 0, 1) * duration;
+    }
+
+    /**
+     * Where a seek at `clientX` lands: inside the kept region, because that is
+     * all a pass plays, and a hair short of its end so there is something left
+     * to hear.
+     */
+    function seekTime(clientX) {
+        return clamp(timeAt(clientX), start, Math.max(start, end - 0.01));
+    }
+
+    /** The seek cursor follows the finger for as long as it is down. */
+    function showSeek() {
+        dom.cursor.style.display = seeking ? "" : "none";
+        dom.cursor.style.left = `${clamp(seekTo / (duration || 1), 0, 1) * 100}%`;
     }
 
     /** Move one marker, keeping the pair a playable region apart. */
@@ -346,25 +370,48 @@ export function trimTrack({ buckets = DEFAULT_PEAK_BUCKETS } = {}) {
 
     return {
         init() {
+            const seek = () => this.$dispatch("trim-seek", { position: Number(seekTo.toFixed(3)) });
             dom = build(this.$el, {
                 down: (event) => {
-                    if (!duration || event.button > 0) return;
-                    const grabbed = event.target.closest?.("[data-trim-handle]");
-                    const time = timeAt(event.clientX);
-                    dragging = grabbed?.dataset.trimHandle
-                        ?? (Math.abs(time - start) <= Math.abs(time - end) ? "start" : "end");
-                    // Pressing empty track sends the nearer marker there; pressing
-                    // a marker picks it up where it already is, so it does not
-                    // jump out from under the finger that grabbed it.
-                    if (!grabbed) moveTo(dragging, time);
+                    // A panel not laid out yet has nowhere to aim a press.
+                    if (!duration || event.button > 0 || !dom.screen.clientWidth) return;
                     event.preventDefault();
                     dom.screen.setPointerCapture(event.pointerId);
-                    dom.handles[dragging].focus({ preventScroll: true });
+                    // A marker is picked up where it already is, so it does
+                    // not jump out from under the finger that grabbed it.
+                    const grabbed = event.target.closest?.("[data-trim-handle]");
+                    if (grabbed) {
+                        dragging = grabbed.dataset.trimHandle;
+                        dom.handles[dragging].focus({ preventScroll: true });
+                        return;
+                    }
+                    // Anywhere else on the wave plays from there, at once, so
+                    // any moment of the loop — its seam above all — can be
+                    // heard without waiting for it to come round.
+                    seeking = true;
+                    seekMoved = false;
+                    seekTo = seekTime(event.clientX);
+                    showSeek();
+                    seek();
                 },
                 move: (event) => {
-                    if (dragging) moveTo(dragging, timeAt(event.clientX));
+                    if (dragging) {
+                        moveTo(dragging, timeAt(event.clientX));
+                    } else if (seeking) {
+                        seekTo = seekTime(event.clientX);
+                        seekMoved = true;
+                        showSeek();
+                    }
                 },
+                // A dragged seek is sent again where it is let go, not on
+                // every move: each one rebuilds the voice.
                 up: () => {
+                    if (seeking) {
+                        seeking = false;
+                        showSeek();
+                        if (seekMoved) seek();
+                        return;
+                    }
                     if (!dragging) return;
                     dragging = null;
                     this.commit();
@@ -484,7 +531,13 @@ function build(root, on) {
     note.className = "pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2"
         + " text-center font-mono text-[7pt] text-white/40";
 
-    screen.append(canvas, shadeHead, shadeTail, note);
+    // Where a seek will land while the finger is still down on the wave.
+    const cursor = document.createElement("div");
+    cursor.className = "pointer-events-none absolute inset-y-0 left-0 w-0.5 -translate-x-1/2"
+        + " rounded-full bg-amber-300/90";
+    cursor.style.display = "none";
+
+    screen.append(canvas, shadeHead, shadeTail, note, cursor);
 
     // The playheads. Short and centred on the axis so they read as a position
     // rather than as a third thing to drag, and dimmer than the crop markers,
@@ -556,5 +609,5 @@ function build(root, on) {
     ruler.append(head, total);
 
     root.append(screen, ruler);
-    return { screen, canvas, shadeHead, shadeTail, note, handles, labels, playheads, total };
+    return { screen, canvas, shadeHead, shadeTail, note, cursor, handles, labels, playheads, total };
 }

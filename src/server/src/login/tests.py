@@ -28,19 +28,17 @@ class LoginModalTests(SimpleTestCase):
         return request
 
     def test_login_uses_the_shared_modal(self):
-        request = self._htmx_request(
-            "/login/?from=studio",
-        )
+        request = self._htmx_request("/login/")
+        request.session["post_login_partial"] = "vote/index.html#post_login"
 
         response = login_modal(request)
 
         self.assertEqual(response["HX-Retarget"], "#core_modal_content")
         self.assertEqual(response["HX-Reswap"], "innerHTML")
         self.assertEqual(response["HX-Trigger-After-Swap"], "show-modal")
-        self.assertEqual(
-            request.session["post_login_partial"],
-            "studio/index.html#post_login",
-        )
+        # Off the vote page, login lands on the default post-login swap, so a
+        # partial left over from an earlier visit is dropped.
+        self.assertNotIn("post_login_partial", request.session)
         self.assertContains(response, "Login")
         self.assertNotContains(response, "data-core-card")
 
@@ -68,7 +66,7 @@ class LoginModalTests(SimpleTestCase):
 
         # The fake user is not a row, so the library Create's artist lookup
         # is answered here rather than by the database.
-        with patch("studio.templatetags.studio_extras.get_artist", return_value=None):
+        with patch("core.templatetags.core_extras.get_artist", return_value=None):
             rendered = render_to_string(
                 "login/index.html#post_login",
                 request=request,

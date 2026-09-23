@@ -3,9 +3,15 @@ from urllib.parse import quote
 
 from django.db.models import Q
 
+from core.layers import LayerSpec
+
 
 def parse_layers(raw):
-    """Split a posted mix into its raw form and the (sound_id, gain) pairs.
+    """Split a posted mix into its raw form and its layers, as LayerSpecs.
+
+    Each layer is its sound, its level and its timing (core.layers). Timing is
+    optional — a missing value is its default and an out-of-range one is
+    clamped — so a post from before layers had timing still saves as it did.
 
     Layers whose id is not a Sound's are dropped rather than raised on. Two
     kinds never have one: a blank layer the `+` button made room for, and a
@@ -19,14 +25,14 @@ def parse_layers(raw):
         layer_data = json.loads(raw or "[]")
     except (json.JSONDecodeError, ValueError):
         return None, None
+    if not isinstance(layer_data, list):
+        return None, None
     layers = []
     for layer in layer_data:
         try:
-            sound_id = int(layer["sound_id"])
-        except (KeyError, TypeError, ValueError):
+            layers.append(LayerSpec.from_post(layer))
+        except (AttributeError, KeyError, TypeError, ValueError):
             continue
-        gain = max(0.0, min(1.0, float(layer.get("sound_gain", 1.0))))
-        layers.append((sound_id, gain))
     return layer_data, layers
 
 

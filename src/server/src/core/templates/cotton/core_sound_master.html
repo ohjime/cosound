@@ -5,8 +5,7 @@ The transport under the card: master volume, play/pause, and save.
 `save_title` is the name to open the save dialog on when this mix has never
 been saved before. An Explore post passes its own title, because the mix under
 it is the post — a listener keeping a copy should not have to name something
-they did not build. The library and the studio pass nothing and the dialog opens
-empty. A mix the listener has already saved keeps the name they gave it either
+they did not build. The library passes nothing and the dialog opens empty. A mix the listener has already saved keeps the name they gave it either
 way; the server only falls back to this one.
 
 A mix loaded from the library is already named, and the store remembers that
@@ -15,8 +14,8 @@ opens on its own title rather than on this fallback. `mix-titled` is the server
 saying what name the mix now answers to, so a rename sticks for the next save.
 
 `library:save` is reversed rather than passed in: every host that renders a
-soundscape card also mounts `library/` (see config/urls_studio.py), and saving is
-the one thing every surface does identically — a list of sound ids and gains.
+soundscape card also mounts `library/`, and saving is the one thing every
+surface does identically — a list of sound ids, gains and timing.
 -->
 <!-- djlint:off -->
 <div id="library-master" class="join rounded-xl"

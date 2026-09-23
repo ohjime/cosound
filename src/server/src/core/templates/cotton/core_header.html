@@ -21,7 +21,6 @@
                     aria-label="Join cosound"
                     title="Join"
                     hx-get="{% url 'login:login_modal' %}"
-                    hx-vals='js:{ from: document.getElementById("studio-stage") ? "studio" : "" }'
                     hx-swap="none"
                     class="absolute inset-0 z-20 cursor-pointer rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
             </button>

@@ -15,7 +15,6 @@ from login.utils import (
     seconds_until_resend_allowed,
     send_login_code,
 )
-from studio.utils import is_studio_url
 
 
 def _code_form(request, **context):
@@ -46,11 +45,6 @@ def login_modal(request):
         is_vote = "/vote" in referer
         if is_vote:
             request.session["post_login_partial"] = "vote/index.html#post_login"
-        elif is_studio_url(referer) or request.GET.get("from") == "studio":
-            # The referer covers /studio/ and studio.*; the query param covers
-            # the studio gate embedded in the home page's STUDIO tab, where the
-            # page URL alone no longer says "studio".
-            request.session["post_login_partial"] = "studio/index.html#post_login"
         else:
             request.session.pop("post_login_partial", None)
         return show_modal(

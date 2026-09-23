@@ -1,13 +1,20 @@
-import { DEFAULT_LOUDNESS_TARGET, SoundscapeMixer } from "./soundscape-mixer.js";
+import {
+    DEFAULT_LOUDNESS_TARGET,
+    LOUDNESS_NUDGE_LU,
+    SoundscapeMixer,
+} from "./soundscape-mixer.js";
 
 /**
  * How many layers one mix may hold.
  *
- * The studio's `+` goes inert at this count and addLayer refuses past it, so a
- * ninth voice never reaches the graph however it was asked for.
+ * The layer indicator's `+` goes inert at this count and addLayer refuses past
+ * it, so a ninth voice never reaches the graph however it was asked for.
  */
 export const MAX_LAYERS = 8;
 const LOADING_PROGRESS_SETTLE_MS = 350;
+
+/** How much of a pass hearSeam plays before its seam starts, in seconds. */
+export const SEAM_LEAD_SECONDS = 2;
 
 /** Let the radial progress paint 100% before its loading view is dismissed. */
 function settleLoadingProgress() {
@@ -71,11 +78,56 @@ function afterNextPaint() {
     });
 }
 
+/**
+ * The timing a new sound is checked with before it is saved, and that a baked
+ * one keeps: one copy, back to back, nothing held back. It is what lets the
+ * artist hear the seam — any gap or second copy would cover it — and it is
+ * how the saved loop then plays: endlessly.
+ */
+const LOOP_CHECK_TIMING = Object.freeze({
+    playback_rate: 1,
+    stretch: 1,
+    second_copy: false,
+    repetitions: 1,
+    cycle_rest: 0,
+    start_delay: 0,
+    phase_step: 0,
+    playback_rate_b: null,
+    take_turns: false,
+    turn_gap: 0,
+});
+
+/**
+ * What a saved mix keeps for each layer — SoundLayer's timing fields — in the
+ * shape library.utils.parse_layers reads back.
+ */
+function layerTiming(layer) {
+    return {
+        playback_rate: Number(layer.playback_rate),
+        stretch: Number(layer.stretch),
+        second_copy: Boolean(layer.second_copy),
+        repetitions: Number(layer.repetitions),
+        cycle_rest: Number(layer.cycle_rest),
+        start_delay: Number(layer.start_delay),
+        phase_step: Number(layer.phase_step),
+        phase_hold: Number(layer.phase_hold),
+        phase_hold_alt: Number(layer.phase_hold_alt),
+        playback_rate_b: layer.playback_rate_b == null ? null : Number(layer.playback_rate_b),
+        take_turns: Boolean(layer.take_turns),
+        turn_gap: Number(layer.turn_gap),
+    };
+}
+
 function normalizeUiLayer(layer) {
+    // A sound baked into a loop starts out as one: back to back, alone. Every
+    // other sound keeps the two drifting copies it has always had. Whatever a
+    // layer already carries — a saved mix's own timing — wins over both.
+    const seamless = Boolean(layer.seamless);
     return {
         ...layer,
-        // A blank layer arrives with no art — including the one the server
-        // seeds the studio with, which cannot call this helper itself.
+        // A blank layer arrives with no art — including the one the LIBRARY
+        // tab opens on (library.utils.get_empty_layer), which cannot call this
+        // helper itself.
         artwork_url: layer.artwork_url || placeholderArtwork(layer.sound_title),
         gain: layer.sound_gain != null
             ? Number(layer.sound_gain) * 100
@@ -83,10 +135,26 @@ function normalizeUiLayer(layer) {
         saved: layer.saved ?? false,
         isolated: false,
         mute: Boolean(layer.mute),
-        // Playback shape, surfaced by the studio's settings pane. Both feed
-        // layerConfig, so changing either re-prepares the voice.
+        // Playback shape, set from the card's settings. All of it feeds
+        // layerConfig, so changing any of it re-prepares the voice.
+        seamless,
         playback_rate: Number(layer.playback_rate ?? 1),
-        stretch: Number(layer.stretch ?? 1.75),
+        stretch: Number(layer.stretch ?? (seamless ? 1 : 1.75)),
+        second_copy: Boolean(layer.second_copy ?? layer.secondCopy ?? !seamless),
+        repetitions: Number(layer.repetitions ?? 1),
+        cycle_rest: Number(layer.cycle_rest ?? 0),
+        start_delay: Number(layer.start_delay ?? 0),
+        phase_step: Number(layer.phase_step ?? 0),
+        phase_hold: Number(layer.phase_hold ?? 4),
+        phase_hold_alt: Number(layer.phase_hold_alt ?? 4),
+        // The second copy's own rate — the layer's second pitch — or null to
+        // play it at the first's. Taking turns keeps the two copies apart,
+        // `turn_gap` seconds of silence between them.
+        playback_rate_b: layer.playback_rate_b == null ? null : Number(layer.playback_rate_b),
+        take_turns: Boolean(layer.take_turns),
+        turn_gap: Number(layer.turn_gap ?? 0),
+        // How often a pass comes round, from the engine (_syncAnalysis).
+        period: Number(layer.period ?? 0),
         // How long each repeat of the layer fades into the next, in seconds.
         // Zero is the hard join; the ceiling below is written by _syncAnalysis,
         // because only the engine knows how long a pass turned out to be.
@@ -107,6 +175,13 @@ function normalizeUiLayer(layer) {
         duration: Number(layer.duration ?? 0),
         loudness: layer.loudness ?? null,
         loudness_gain_db: Number(layer.loudness_gain_db ?? 0),
+        loudness_peak_db: layer.loudness_peak_db ?? null,
+        // "peak" or "gain" when a cap kept the layer off its target.
+        loudness_limit: layer.loudness_limit ?? null,
+        // Whether this layer's settings are open over its artwork. Per layer,
+        // so swiping away and back — or a trip through the picker — finds
+        // them as they were left. Never posted.
+        settingsOpen: Boolean(layer.settingsOpen),
         // A layer the artist dropped in from their own machine. Its audio and
         // artwork are blob: URLs that exist only in this tab, so it has no
         // Sound row behind it and cannot take part in a saved mix.
@@ -152,6 +227,17 @@ function layerConfig(layer) {
         solo: Boolean(layer.isolated),
         playbackRate: Number(layer.playback_rate ?? 1),
         stretch: Number(layer.stretch ?? 1.75),
+        secondCopy: layer.second_copy ?? true,
+        seamless: Boolean(layer.seamless),
+        repetitions: Number(layer.repetitions ?? 1),
+        cycleRest: Number(layer.cycle_rest ?? 0),
+        startDelay: Number(layer.start_delay ?? 0),
+        phaseStep: Number(layer.phase_step ?? 0),
+        phaseHold: Number(layer.phase_hold ?? 4),
+        phaseHoldAlt: Number(layer.phase_hold_alt ?? 4),
+        playbackRateB: layer.playback_rate_b == null ? null : Number(layer.playback_rate_b),
+        takeTurns: Boolean(layer.take_turns),
+        turnGap: Number(layer.turn_gap ?? 0),
         loopCrossfade: Number(layer.loop_crossfade ?? 0),
         trimStart: Number(layer.trim_start ?? 0),
         trimEnd: layer.trim_end == null ? null : Number(layer.trim_end),
@@ -204,9 +290,11 @@ export function createSoundLayersStore(rawLayers, {
         // home page's LIBRARY tab switches it on, and only for a signed-in
         // artist; the empty card reads it, so one card serves both cases.
         allowCreate,
-        // Where the settings pane's loudness toggle switches a layer on to, so
-        // the panel does not have to hard-code a number the engine owns.
+        // The house level a new sound is levelled to, and how far the artist
+        // may nudge it either way — the engine's numbers, so the settings do
+        // not hard-code them.
         loudnessDefault: DEFAULT_LOUDNESS_TARGET,
+        loudnessNudge: LOUDNESS_NUDGE_LU,
         currentIndex: 0,
         tracksLoading: true,
         loadedCount: 0,
@@ -244,6 +332,11 @@ export function createSoundLayersStore(rawLayers, {
         // adding is switched off, so a full mix simply stops offering.
         get canAddLayer() {
             return this.allowAdd && !this.isFull;
+        },
+        // Whether the card offers the settings gear. Artists only, on a mix
+        // they can edit: allowCreate is on exactly for a signed-in artist.
+        get canTune() {
+            return this.allowAdd && this.allowCreate;
         },
         // A layer the artist has made room for but not yet given a sound to.
         // Every per-layer control keys off this: there is nothing to fade,
@@ -283,9 +376,9 @@ export function createSoundLayersStore(rawLayers, {
             return this.savableLayers.some((layer) => layer.isNew);
         },
         // Saving a mix posts sound_ids the server resolves to Sound rows, so a
-        // mix holding a browser-local track has nothing to point at. The studio
-        // uses this to explain why the save button is off rather than failing
-        // the POST.
+        // mix holding a browser-local track has nothing to point at. The
+        // transport uses this to explain why the save button is off rather
+        // than failing the POST.
         get canSave() {
             return this.savableLayers.length > 0
                 && !this.hasLocalLayers
@@ -300,13 +393,14 @@ export function createSoundLayersStore(rawLayers, {
             }
             return this.newSoundBlockedReason;
         },
-        // What the save button posts: each layer's id and level. A new sound
-        // has no id the server knows yet, so it is marked, and the save dialog
-        // creates it before the mix is saved.
+        // What the save button posts: each layer's id, level and timing. A
+        // new sound has no id the server knows yet, so it is marked, and the
+        // save dialog creates it before the mix is saved.
         get saveLayers() {
             return this.savableLayers.map((layer) => ({
                 sound_id: layer.sound_id,
                 sound_gain: this.isSilenced(layer) ? 0 : layer.gain / 100,
+                ...layerTiming(layer),
                 ...(layer.isNew ? { is_new: true } : {}),
             }));
         },
@@ -314,7 +408,11 @@ export function createSoundLayersStore(rawLayers, {
         anyIsolated() {
             return this.layers.some((layer) => layer.isolated);
         },
+        // No layer is not a silenced one. Removing the last layer leaves the
+        // mix empty for the tick it takes its replacement to arrive, and the
+        // fader asks about `currentLayer` all through it.
         isSilenced(layer) {
+            if (!layer) return false;
             return layer.mute || (this.anyIsolated() && !layer.isolated);
         },
         /**
@@ -404,8 +502,11 @@ export function createSoundLayersStore(rawLayers, {
             layer.trim_end = analysis.trimEnd;
             layer.loop_crossfade = analysis.loopCrossfade;
             layer.loop_crossfade_max = analysis.loopCrossfadeMax;
+            layer.period = analysis.period;
             layer.loudness = analysis.loudness;
             layer.loudness_gain_db = analysis.loudnessGainDb;
+            layer.loudness_peak_db = analysis.loudnessPeakDb;
+            layer.loudness_limit = analysis.loudnessLimit;
         },
         _syncAllAnalysis() {
             this.layers.forEach((_, index) => this._syncAnalysis(index));
@@ -506,9 +607,9 @@ export function createSoundLayersStore(rawLayers, {
         },
 
         /**
-         * Append a layer to a running mix. `rawLayer` is either a serialized
-         * library sound or a locally-built layer (see makeLocalLayer); the
-         * engine treats a blob: URL exactly like an S3 one.
+         * Append a layer to a running mix. `rawLayer` is a serialized library
+         * sound or a blank one (makeDraftLayer); the engine treats a blob: URL
+         * exactly like an S3 one.
          */
         async addLayer(rawLayer) {
             if (!this._engine || !this.canAddLayer) return null;
@@ -535,12 +636,10 @@ export function createSoundLayersStore(rawLayers, {
         /**
          * Make room for a sound without choosing one yet.
          *
-         * Both `+` buttons come through here — the studio's tab and the one on
-         * the layer indicator — so a blank layer means the same thing on either
-         * surface. It holds a silent voice, which is what keeps the index
-         * mapping between `layers` and the engine's voices one-to-one, and it
-         * stops being blank the moment setLayerSource or replaceLayer gives it
-         * audio.
+         * The layer indicator's `+` comes through here. A blank layer holds a
+         * silent voice, which is what keeps the index mapping between `layers`
+         * and the engine's voices one-to-one, and it stops being blank the
+         * moment setLayerSource or replaceLayer gives it audio.
          *
          * Resolves to the new layer, or to null when the mix cannot take one.
          */
@@ -566,6 +665,12 @@ export function createSoundLayersStore(rawLayers, {
             emit("remove", { index, layer });
         },
 
+        /** Open or close one layer's settings over its artwork. */
+        toggleSettings(index) {
+            const layer = this.layers[index];
+            if (layer) layer.settingsOpen = !layer.settingsOpen;
+        },
+
         /**
          * Edit a layer's words — title, flavor, tags. Pure metadata, so the
          * audio graph is left alone.
@@ -588,6 +693,11 @@ export function createSoundLayersStore(rawLayers, {
          * card out, the same way a library pick lands behind the swap, and
          * raised `swappingLayer` for the wait. Lowering it here is what hands
          * the card back.
+         *
+         * It also puts the layer into its loop check: one copy, back to back,
+         * nothing held back, levelled to the house loudness from the first
+         * file it is given. That is how the artist hears the seam while they
+         * trim and crossfade it — and, once saved, how the loop plays on.
          */
         createSound(index) {
             const layer = this.layers[index];
@@ -604,6 +714,9 @@ export function createSoundLayersStore(rawLayers, {
                 flavor: "",
                 tags: "",
                 tag_list: [],
+                ...LOOP_CHECK_TIMING,
+                loop_crossfade: 0,
+                loudness_target: this.loudnessDefault,
             });
         },
 
@@ -659,12 +772,19 @@ export function createSoundLayersStore(rawLayers, {
          * before it saves the mix, and uses the answer to swap each new
          * sound's browser-made id in the posted layers for its real one.
          *
-         * The swap keeps the voice that is already playing — the audio was
-         * decoded from the blob, and it is the same audio — along with the
-         * fader, mute, solo and the settings pane's timing. What changes is
-         * that the layer is no longer new: its words stop being fields and
-         * its files are the ones in storage. The server offers no edit, so
-         * from here the sound is fixed.
+         * The post carries the loop check along with the files: the crop, the
+         * crossfade and the loudness target, with the engine's reading of the
+         * cropped region. The server bakes all of them into the file it keeps
+         * (core/audio.py), so the finished layer comes back with none of them
+         * set — the stored file already has them, and setting them again would
+         * crop, fold and level it a second time. It keeps the loop-check
+         * timing, so the sound goes on playing the way it was checked, and is
+         * marked seamless.
+         *
+         * The fader, mute and solo carry over. The voice is then rebuilt from
+         * the stored file in the background, so what keeps playing is the
+         * saved loop rather than the blob it was made from. The server offers
+         * no edit, so from here the sound is fixed.
          *
          * It stops at the first failure and throws the server's reason. The
          * sounds created before it stay created; a retry picks up the rest.
@@ -685,6 +805,13 @@ export function createSoundLayersStore(rawLayers, {
                 body.append("title", current.sound_title ?? "");
                 body.append("flavor", current.flavor ?? "");
                 body.append("tags", (current.tag_list ?? []).join("\n"));
+                body.append("trim_start", String(Number(current.trim_start) || 0));
+                if (current.trim_end != null) body.append("trim_end", String(current.trim_end));
+                body.append("loop_crossfade", String(Number(current.loop_crossfade) || 0));
+                if (current.loudness_target != null) {
+                    body.append("loudness_target", String(current.loudness_target));
+                }
+                if (current.loudness != null) body.append("loudness", String(current.loudness));
                 const response = await fetch(url, {
                     method: "POST",
                     body,
@@ -706,6 +833,14 @@ export function createSoundLayersStore(rawLayers, {
                     isNew: false,
                     is_local: false,
                     isLocal: false,
+                    seamless: true,
+                    trim_start: 0,
+                    trim_end: null,
+                    loop_crossfade: 0,
+                    loudness_target: null,
+                    loudness: null,
+                    loudness_gain_db: 0,
+                    loudness_limit: null,
                 });
                 next.isolated = current.isolated;
                 const index = this.layers.indexOf(current);
@@ -715,8 +850,30 @@ export function createSoundLayersStore(rawLayers, {
                 newSoundFiles.delete(current.sound_id);
                 created[current.sound_id] = next.sound_id;
                 emit("created", { index, layer: next });
+                this._playStoredFile(next);
             }
             return created;
+        },
+
+        /**
+         * Swap a finished sound's voice from the blob it was checked with to
+         * the file the server stored. Not awaited: the save should not wait on
+         * a download, and until it lands the blob — the same audio, cropped,
+         * folded and levelled live — plays on. A failure leaves the blob
+         * playing; the next rebuild of the voice tries the stored file again.
+         */
+        async _playStoredFile(layer) {
+            const engine = this._engine;
+            const index = this.layers.indexOf(layer);
+            if (!engine || index < 0) return;
+            try {
+                await engine.replaceLayer(index, layerConfig(layer));
+            } catch {
+                return;
+            }
+            if (this._engine !== engine) return;
+            const now = this.layers.indexOf(layer);
+            if (now >= 0) this._syncAnalysis(now);
         },
 
         /**
@@ -736,8 +893,10 @@ export function createSoundLayersStore(rawLayers, {
          *
          * The engine bakes all of them into a voice's timing when it is
          * prepared, so there is no live setter — the voice has to be rebuilt.
-         * replaceLayer does that against the same URL, and the engine's buffer
-         * cache means nothing is refetched or re-decoded.
+         * retimeLayer does that against the same URL (the buffer cache means
+         * nothing is refetched or re-decoded) and hands over to it in place:
+         * the layer carries on from where it was, so an edit is heard at once
+         * rather than as the layer fading out and starting again.
          */
         async setTiming(index, changes) {
             const layer = this.layers[index];
@@ -745,7 +904,7 @@ export function createSoundLayersStore(rawLayers, {
             const next = { ...layer, ...changes };
             const engine = this._engine;
             try {
-                await engine.replaceLayer(index, layerConfig(next));
+                await engine.retimeLayer(index, layerConfig(next));
             } catch (error) {
                 if (this._engine !== engine) return;
                 throw error;
@@ -757,6 +916,39 @@ export function createSoundLayersStore(rawLayers, {
             // the engine has just re-measured it.
             this._syncAnalysis(index);
             emit("timing", { index, layer });
+        },
+
+        /**
+         * Play one layer from `position` seconds into its file, straight away
+         * — the trim track's waveform is pressed to do it. The rest of the mix
+         * carries on. A seek is a request to hear something, so it starts a
+         * mix that has not started and resumes a paused one.
+         */
+        async seek(index, position) {
+            if (!this.layers[index] || !this._engine || this.tracksLoading) return;
+            const engine = this._engine;
+            // Before any await: a browser only lets audio start inside the
+            // gesture that asked for it.
+            if (!this.started) await this.playAll();
+            else if (this.paused) await this.resume();
+            if (this._engine !== engine) return;
+            await engine.seekLayer(index, position);
+            emit("seek", { index, position });
+        },
+
+        /**
+         * Jump to just before a layer's seam: `lead` seconds (heard) ahead of
+         * where the end of the pass starts fading into the next one, so the
+         * whole crossfade is heard within a moment of pressing.
+         */
+        hearSeam(index, lead = SEAM_LEAD_SECONDS) {
+            const layer = this.layers[index];
+            if (!layer) return undefined;
+            const rate = Number(layer.playback_rate) || 1;
+            const start = Number(layer.trim_start) || 0;
+            const end = layer.trim_end == null ? Number(layer.duration) || 0 : Number(layer.trim_end);
+            const fade = Number(layer.loop_crossfade) || 0;
+            return this.seek(index, Math.max(start, end - (fade + lead) * rate));
         },
 
         /**
@@ -911,10 +1103,11 @@ let localLayerSequence = 0;
 /**
  * An id for a browser-made layer that no server-made one can collide with.
  *
- * The studio opens on a blank layer the *server* seeded, and it arrives already
- * carrying `draft-1` (studio.views._blank_layer). A bare counter here would hand
- * that exact id to the first blank the artist adds, and both the tab strip and
- * the carousel run `x-for ... :key="l.sound_id"` — Alpine drops a duplicate key
+ * The LIBRARY tab opens on a blank layer the *server* seeded, and it arrives
+ * already carrying `draft-1` (library.utils.get_empty_layer). A bare counter
+ * here would hand that exact id to the first blank the artist adds, and the
+ * carousel and the layer indicator run `x-for ... :key="layer.sound_id"` —
+ * Alpine drops a duplicate key
  * rather than rendering it, so the layer would exist in the store with nothing
  * on screen and `+` would look dead. The timestamp segment keeps the two id
  * spaces apart; the counter keeps ids made within the same millisecond apart.
@@ -925,35 +1118,7 @@ function nextLocalId(prefix) {
 }
 
 /**
- * Build a layer from files the artist picked on their own machine.
- *
- * The blob: URLs handed back are owned by the store from the moment the layer
- * is added — addLayer/removeLayer/destroy revoke them. Nothing here touches the
- * network: the file never leaves the tab, which is why the layer is marked
- * is_local and kept out of saved mixes.
- */
-export function makeLocalLayer({ file, artworkFile = null, artistName = "" }) {
-    if (!file) throw new Error("A local layer needs an audio file.");
-    const title = file.name.replace(/\.[^.]+$/, "");
-    return {
-        sound_id: nextLocalId("local"),
-        sound_file: URL.createObjectURL(file),
-        sound_title: title,
-        sound_artist: artistName,
-        artwork_url: artworkFile
-            ? URL.createObjectURL(artworkFile)
-            : placeholderArtwork(title),
-        gain: 50,
-        mute: false,
-        saved: false,
-        flavor: "",
-        tags: "your track",
-        is_local: true,
-    };
-}
-
-/**
- * An empty layer the artist fills in from the settings pane.
+ * An empty layer, from either `+` button, for the artist to fill.
  *
  * It carries no audio, so the engine gives it a silent voice; the layer becomes
  * real once setLayerSource points it at a file or a library sound.
@@ -1023,7 +1188,6 @@ export function installSoundscapeBridge() {
         SoundscapeMixer,
         createSoundLayersStore,
         mountStore: mountSoundLayersStore,
-        makeLocalLayer,
         makeDraftLayer,
         dispatch(name, detail) {
             document.dispatchEvent(new CustomEvent(`cosound:audio:${name}`, { detail }));

@@ -474,10 +474,13 @@ class LibraryCarouselTests(TestCase):
             response, ':href="$store.soundLayers.currentLayer?.artist_url"'
         )
         self.assertContains(response, 'target="_blank"')
+        # The plain name steps aside for a new sound's artist field, and for
+        # the layer's settings when they are open over the artwork.
         self.assertContains(
             response,
             'x-show="!$store.soundLayers.currentLayer?.artist_url'
-            ' && !$store.soundLayers.currentLayer?.isNew"',
+            ' && !$store.soundLayers.currentLayer?.isNew'
+            ' && !$store.soundLayers.currentLayer?.settingsOpen"',
         )
         # Nothing opens a modal over a credit any more.
         self.assertNotContains(response, "artist/details")

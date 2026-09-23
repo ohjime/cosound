@@ -5,6 +5,10 @@ All three go inert on a blank layer as well as while the picker is open: there
 is no voice to fade, silence or isolate until the layer has a sound in it, and
 the fader's own `_disabled()` already collects every other reason it cannot be
 touched.
+
+Every read of `currentLayer` here is null-safe. Deleting a mix's last layer
+leaves it empty for the tick its replacement blank takes to arrive, and the
+slider has to sit through that on every page that mounts it.
 -->
 <div class="z-20 flex flex-row items-center justify-center w-full px-5.5 gap-3">
     <div class="tooltip tooltip-right z-30 shrink-0"
@@ -83,8 +87,8 @@ touched.
                 this._set(this._pctFromClientX(e.clientX, this.$refs.track.getBoundingClientRect()));
             }
          }"
-         x-init="display = (_disabled()) ? 50 : (($store.soundLayers.currentLayer.gain) ?? 50);"
-         x-effect="_animate(_disabled() ? 50 : (($store.soundLayers.currentLayer.gain) ?? 50))">
+         x-init="display = (_disabled()) ? 50 : (($store.soundLayers.currentLayer?.gain) ?? 50);"
+         x-effect="_animate(_disabled() ? 50 : (($store.soundLayers.currentLayer?.gain) ?? 50))">
         <!-- djlint:on -->
         <div x-ref="track"
              class="relative h-2 w-full rounded-full bg-amber-500 transition-[filter]"
@@ -111,7 +115,7 @@ touched.
                 :disabled="$store.soundLayers.swappingLayer || $store.soundLayers.currentIsDraft"
                 :aria-label="$store.soundLayers.currentLayer?.isolated ? 'Stop isolating this layer' : 'Isolate this layer'"
                 class="btn btn-xs btn-circle border-none focus:outline-none bg-neutral-content text-white disabled:cursor-not-allowed"
-                :class="!$store.soundLayers.swappingLayer && $store.soundLayers.currentLayer.isolated ? '!bg-amber-500 !text-amber-900' : ''"
+                :class="!$store.soundLayers.swappingLayer && $store.soundLayers.currentLayer?.isolated ? '!bg-amber-500 !text-amber-900' : ''"
                 @click="$store.soundLayers.toggleIsolate($store.soundLayers.currentLayer)">
             <svg xmlns="http://www.w3.org/2000/svg"
                  viewBox="0 -960 960 960"

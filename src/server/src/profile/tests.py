@@ -215,9 +215,3 @@ class ProfileFeatureTests(TestCase):
         rendered = render_to_string("cotton/core_header.html", request=request)
         self.assertNotIn(f'hx-get="{self.url}"', rendered)
         self.assertIn(f'hx-get="{reverse("login:login_modal")}"', rendered)
-
-    def test_profile_route_is_available_on_the_studio_urlconf(self):
-        self.assertEqual(
-            reverse("profile:profile_modal", urlconf="config.urls_studio"),
-            "/profile/",
-        )

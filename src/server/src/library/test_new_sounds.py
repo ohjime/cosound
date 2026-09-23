@@ -1,13 +1,16 @@
 """An artist's new sound, from the card to a Sound row, and who may hear it.
 
-A new sound is created by the save dialog (studio:create_sound) and saved into
-a mix straight after. It starts unpublished: its own artist builds with it, and
-nobody else meets it — not in the picker, not in their saved mixes, not on a
-player — until staff publish it from the admin.
+A new sound is created by the save dialog (library:create_sound) and saved
+into a mix straight after. On the way in it is baked: the loop check the artist
+heard — the crop, the crossfade folded into the seam, the loudness — goes into
+the file itself (core.audio). It starts unpublished: its own artist builds with
+it, and nobody else meets it — not in the picker, not in their saved mixes, not
+on a player — until staff publish it from the admin.
 """
 
 import io
 import json
+import math
 from tempfile import TemporaryDirectory
 
 import numpy as np
@@ -16,7 +19,7 @@ from django.contrib.admin.sites import site
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory, TestCase, override_settings
-from django.urls import reverse
+from django.urls import NoReverseMatch, reverse
 from PIL import Image
 
 from app.utils import serialize_mix
@@ -36,6 +39,26 @@ def wav_upload(name="rain.wav"):
     samples = np.sin(np.linspace(0, 440 * 2 * np.pi, 8000)).astype("float32") * 0.2
     sf.write(buffer, samples, 8000, format="WAV")
     return SimpleUploadedFile(name, buffer.getvalue(), content_type="audio/wav")
+
+
+RATE = 8000
+
+
+def tone_upload(seconds=3.0, frequency=441.3, amplitude=0.1, name="tone.wav", format="WAV"):
+    """A steady stereo tone whose period does not fit a whole number of times
+    into any of the crops these tests take — so looped raw, its end would jump
+    to its start, and only a real fold makes the join disappear."""
+    t = np.arange(int(seconds * RATE)) / RATE
+    tone = (amplitude * np.sin(2 * np.pi * frequency * t)).astype("float32")
+    buffer = io.BytesIO()
+    sf.write(buffer, np.stack([tone, tone], axis=1), RATE, format=format)
+    return SimpleUploadedFile(name, buffer.getvalue(), content_type="audio/wav")
+
+
+def stored_audio(sound):
+    with sound.file.open("rb") as stored:
+        data, rate = sf.read(io.BytesIO(stored.read()), dtype="float32", always_2d=True)
+    return data, rate
 
 
 def png_upload(name="art.png"):
@@ -87,7 +110,7 @@ class CreateSoundTests(MediaTestCase):
         }
         data.update(overrides)
         data = {key: value for key, value in data.items() if value is not None}
-        return self.client.post(reverse("studio:create_sound"), data)
+        return self.client.post(reverse("library:create_sound"), data)
 
     def test_signed_out_and_non_artists_are_refused(self):
         self.assertEqual(self.post().status_code, 401)
@@ -147,6 +170,171 @@ class CreateSoundTests(MediaTestCase):
         self.assertContains(saved, "Tin roof")
 
 
+class BakeTests(MediaTestCase):
+    """What the loop check becomes in the stored file."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = get_user_model().objects.create_user(
+            username="baker", email="baker@example.com", password="pw"
+        )
+        Artist.objects.create(user=cls.user, name="Baker")
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.user)
+
+    def create(self, file, **loop_check):
+        data = {"file": file, "art": png_upload(), "title": "Loop", **loop_check}
+        response = self.client.post(reverse("library:create_sound"), data)
+        self.assertEqual(response.status_code, 201, response.content)
+        return Sound.objects.get(pk=response.json()["layer"]["sound_id"])
+
+    def test_the_crop_and_crossfade_are_folded_into_a_seamless_flac(self):
+        sound = self.create(
+            tone_upload(), trim_start=0.2, trim_end=2.8, loop_crossfade=0.4
+        )
+        data, rate = stored_audio(sound)
+
+        self.assertTrue(sound.file.name.endswith(".flac"))
+        # The crop kept 2.6s and the fold took the last 0.4s of it into the head.
+        self.assertEqual(data.shape[0], round((2.6 - 0.4) * RATE))
+        self.assertAlmostEqual(sound.duration, 2.2)
+        self.assertAlmostEqual(sound.trim_start, 0.2)
+        self.assertAlmostEqual(sound.trim_end, 2.8)
+        self.assertAlmostEqual(sound.loop_crossfade, 0.4)
+        self.assertTrue(sound.seamless)
+        # Played back to back, the join is no bigger a step than any other
+        # sample-to-sample step in the file.
+        loop = np.concatenate([data, data])[:, 0]
+        steps = np.abs(np.diff(loop))
+        self.assertLessEqual(steps[data.shape[0] - 1], steps.max() + 1e-6)
+
+    def test_an_unfolded_crop_of_the_same_tone_would_click(self):
+        # The control for the test above: the tone really does jump at a raw
+        # join, so a smooth one means the fold did something.
+        t = np.arange(int(3.0 * RATE)) / RATE
+        tone = 0.1 * np.sin(2 * np.pi * 441.3 * t)
+        region = tone[round(0.2 * RATE):round(2.8 * RATE)]
+        inner = np.abs(np.diff(region)).max()
+        self.assertGreater(abs(region[0] - region[-1]), inner * 1.5)
+
+    def test_the_sound_is_levelled_to_the_target_it_was_checked_at(self):
+        sound = self.create(tone_upload(amplitude=0.1), loudness=-23.0, loudness_target=-20.0)
+        data, _ = stored_audio(sound)
+
+        self.assertAlmostEqual(sound.loudness_gain_db, 3.0, places=3)
+        self.assertAlmostEqual(sound.loudness_lufs, -20.0, places=3)
+        self.assertAlmostEqual(float(np.abs(data).max()), 0.1 * 10 ** (3 / 20), places=3)
+
+    def test_levelling_never_lifts_a_peak_past_the_ceiling(self):
+        # +6 dB asked for, on a tone already peaking at -0.9 dBFS.
+        sound = self.create(tone_upload(amplitude=0.9), loudness=-20.0, loudness_target=-14.0)
+        data, _ = stored_audio(sound)
+
+        self.assertLessEqual(20 * math.log10(float(np.abs(data).max())), -1.0 + 0.01)
+        self.assertLess(sound.loudness_gain_db, 0.0)
+
+    def test_an_untouched_flac_is_stored_as_it_came(self):
+        upload = tone_upload(name="loop.flac", format="FLAC")
+        original = upload.read()
+        upload.seek(0)
+        sound = self.create(upload)
+
+        with sound.file.open("rb") as stored:
+            self.assertEqual(stored.read(), original)
+        self.assertEqual(sound.loudness_gain_db, 0.0)
+        self.assertIsNone(sound.loudness_lufs, "nothing was measured, so nothing is claimed")
+
+    def test_a_loop_check_the_file_cannot_hold_is_refused(self):
+        refused = {
+            "a crop under a quarter second": {"trim_start": 1.0, "trim_end": 1.1},
+            "a crossfade over half the crop": {"trim_start": 0, "trim_end": 2, "loop_crossfade": 1.5},
+            "a target past the nudge": {"loudness_target": -40},
+        }
+        for case, loop_check in refused.items():
+            with self.subTest(case):
+                data = {"file": tone_upload(), "art": png_upload(), "title": "No", **loop_check}
+                response = self.client.post(reverse("library:create_sound"), data)
+                self.assertEqual(response.status_code, 400)
+        self.assertFalse(Sound.objects.filter(title="No").exists())
+
+    def test_the_finished_layer_says_it_is_a_seamless_loop(self):
+        response = self.client.post(
+            reverse("library:create_sound"),
+            {"file": tone_upload(), "art": png_upload(), "title": "Loop", "loudness": -23},
+        )
+        layer = response.json()["layer"]
+
+        self.assertIs(layer["seamless"], True)
+        self.assertAlmostEqual(layer["loudness_lufs"], -20.0, places=3)
+
+
+class TagSearchTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = get_user_model().objects.create_user(
+            username="tag-artist", email="tag-artist@example.com", password="pw"
+        )
+        Artist.objects.create(user=cls.user, name="Tag Artist")
+        sound = make_sound("Tagged", published=True)
+        sound.tags.add("Rain", "Rainforest", "Night")
+
+    def search(self, **params):
+        return self.client.get(
+            reverse("library:tag_search"), params, HTTP_HX_REQUEST="true"
+        )
+
+    def test_only_artists_may_search(self):
+        self.assertEqual(self.search(q="rain").status_code, 403)
+
+    def test_offers_existing_tags_and_no_request_link_on_an_exact_match(self):
+        self.client.force_login(self.user)
+        response = self.search(q="rain")
+        self.assertContains(response, 'data-tag="Rain"')
+        self.assertContains(response, 'data-tag="Rainforest"')
+        self.assertNotContains(response, 'data-tag="Night"')
+        self.assertNotContains(response, "Ask cosound to add")
+
+    def test_leaves_out_tags_the_layer_already_has(self):
+        self.client.force_login(self.user)
+        response = self.search(q="rain", chosen="Rain")
+        self.assertNotContains(response, 'data-tag="Rain"')
+        self.assertContains(response, 'data-tag="Rainforest"')
+
+    def test_an_unknown_tag_offers_to_ask_cosound(self):
+        self.client.force_login(self.user)
+        response = self.search(q="thunder")
+        self.assertNotContains(response, "data-tag=")
+        self.assertContains(response, "No tag matches “thunder”")
+        self.assertContains(response, "Ask cosound to add it")
+
+    def test_a_half_typed_tag_does_not_offer_the_request_link(self):
+        self.client.force_login(self.user)
+        response = self.search(q="nig")
+        self.assertContains(response, 'data-tag="Night"')
+        self.assertNotContains(response, "Ask cosound to add")
+
+    def test_an_empty_query_answers_nothing(self):
+        self.client.force_login(self.user)
+        response = self.search(q="  ")
+        self.assertEqual(response.content, b"")
+
+
+class StudioGoneTests(TestCase):
+    """The studio's builder, routes and host are gone; the LIBRARY card is it."""
+
+    def test_no_studio_route_resolves(self):
+        with self.assertRaises(NoReverseMatch):
+            reverse("studio:index")
+        self.assertEqual(self.client.get("/studio/").status_code, 404)
+
+    @override_settings(ALLOWED_HOSTS=["studio.cosound.ca"])
+    def test_the_studio_host_serves_the_main_site(self):
+        response = self.client.get("/", HTTP_HOST="studio.cosound.ca")
+        self.assertEqual(response.status_code, 200)
+
+
 class SaveWithNewSoundsTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -170,7 +358,7 @@ class SaveWithNewSoundsTests(TestCase):
         self.assertContains(response, "Saving uploads your 1 new sound.")
         self.assertContains(response, "can't be changed")
         self.assertContains(response, 'hx-trigger="sounds-created"')
-        self.assertContains(response, reverse("studio:create_sound"))
+        self.assertContains(response, reverse("library:create_sound"))
 
     def test_a_mix_of_only_new_sounds_still_opens_the_dialog(self):
         layers = [{"sound_id": "draft-1", "sound_gain": 0.5, "is_new": True}]
@@ -267,6 +455,19 @@ class UnpublishedVisibilityTests(TestCase):
 
 
 class SoundAdminPublishTests(TestCase):
+    def test_the_change_page_records_the_loop_check(self):
+        admin_user = get_user_model().objects.create_superuser(
+            username="staff", email="staff@example.com", password="pw"
+        )
+        sound = make_sound("Baked", seamless=True, loudness_lufs=-20.0, loop_crossfade=0.5)
+        self.client.force_login(admin_user)
+
+        response = self.client.get(reverse("admin:core_sound_change", args=[sound.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Loop check")
+        self.assertContains(response, "-20.0")
+
     def test_publish_and_unpublish_actions_flip_the_flag(self):
         sound = make_sound("Review me")
         admin = SoundAdmin(Sound, site)

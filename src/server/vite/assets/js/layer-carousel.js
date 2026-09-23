@@ -11,8 +11,7 @@ export const JUMP_TIMEOUT_MS = 1500;
  * The artwork carousel: which layer is on screen, and every way of changing it.
  *
  * Registered as the `layerCarousel` Alpine component and handed the name of the
- * store it drives, since the library and the studio share this component but not
- * their state:
+ * store it drives, so the component is not tied to the one mix a page mounts:
  *
  *   <div x-data="layerCarousel('soundLayers')"
  *        x-init="$nextTick(() => start())"
@@ -23,17 +22,16 @@ export const JUMP_TIMEOUT_MS = 1500;
  * There are two ways to change layer here, and they are not the same gesture:
  *
  *   - Swiping the artwork *is* the selection. `currentIndex` follows the scroll
- *     position live, so the layer pill and the studio's tab strip track the
- *     drag as it happens.
- *   - Pressing a number on the pill, a studio tab or an arrow is a jump. The
- *     selection lands at once and the artwork catches up to it.
+ *     position live, so the layer pill tracks the drag as it happens.
+ *   - Pressing a number on the pill or an arrow is a jump. The selection lands
+ *     at once and the artwork catches up to it.
  *
  * Telling the two apart is the whole job of this component. A smooth scroll
  * passes over every item between here and the target and the scroll handler
  * takes whichever is nearest, so with nothing to stop it a jump from layer 1 to
  * layer 8 walks the selection through 2…7 on the way: the pill flickers through
- * six numbers, the studio re-checks six tabs, and its settings panel re-renders
- * for six layers nobody asked to see. `jumpingTo` holds the index a jump is
+ * six numbers, and everything that follows the current layer re-renders for six
+ * layers nobody asked to see. `jumpingTo` holds the index a jump is
  * flying to and keeps the scroll handler quiet until it gets there.
  *
  * That wait is given up the moment it stops being true — on arrival, on the

@@ -15,9 +15,9 @@ import { fileURLToPath } from "node:url";
 // the expression and the closing braces Alpine appended: the attribute stops
 // parsing, Alpine logs once and carries on with an undefined scope, and every
 // handler on that element quietly becomes a no-op. No crash, no blank page,
-// just a component that does nothing. c-studio-builder shipped that way — two
-// `//` notes inside its 3.6k-character x-data took out the `+` tab, the drop
-// target and the file inputs together.
+// just a component that does nothing. The old studio builder shipped that way
+// — two `//` notes inside its 3.6k-character x-data took out the `+` tab, the
+// drop target and the file inputs together.
 //
 // The same splice makes any unbalanced brace or stray token fatal in the same
 // silent way, which is what this test is really for. A `//` in a genuinely

@@ -7,7 +7,6 @@ import { layerCarousel } from './layer-carousel.js';
 import { installExploreLayerLinks } from './explore-layer-links.js';
 import { installSoundscapeBridge } from './soundscape-store.js';
 import { installSoundSelectorGuard } from './sound-selector-guard.js';
-import { studioBuilder } from './studio-builder.js';
 import { trimTrack } from './trim-track.js';
 import { voteCountdown } from './vote-countdown.js';
 import { voteDisplay } from './vote-display.js';
@@ -22,7 +21,6 @@ installExploreLayerLinks();
 // them are already past initialisation by the time the name exists.
 Alpine.data('cardDemo', cardDemo);
 Alpine.data('layerCarousel', layerCarousel);
-Alpine.data('studioBuilder', studioBuilder);
 Alpine.data('trimTrack', trimTrack);
 Alpine.data('voteCountdown', voteCountdown);
 Alpine.data('voteDisplay', voteDisplay);

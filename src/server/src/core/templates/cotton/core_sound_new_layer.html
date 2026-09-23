@@ -3,7 +3,7 @@ The face of a new sound — a blank layer the artist pressed Create on (see
 c-core-sound-empty-layer). Create arrives the way a library pick does: the card
 fades out and comes back as this. What makes it the artist's is what sits on
 it: the title and artist are fields in the caption, the tags and story are
-fields in the body (c-studio-new-sound-details), and the picture and sound
+fields in the body (c-library-new-sound-details), and the picture and sound
 buttons beside the trash (c-core-sound-carousel) upload the artwork and the
 sound file.
 
@@ -17,7 +17,7 @@ artist fields read on the dark field without them.
 <div class="contents">
     <template x-if="layer.artwork_file_name">
         <div class="contents">
-            <c-core-image bind_src="layer.artwork_url" bind_alt="layer.sound_title" class="w-full" />
+            <c-core-image bind_src="layer.artwork_url" bind_alt="layer.sound_title" class="h-full w-full" />
             <div
                 class="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-black/80 to-transparent z-10">
             </div>

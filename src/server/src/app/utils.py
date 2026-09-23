@@ -26,6 +26,7 @@ def serialize_mix(sm):
                 "flavor": sl.sound.flavor or "",
                 "tags": " / ".join(sl.sound.tags.names()) or "Unknown",
                 "gain": int(round(gain * 100)),
+                **sl.timing(),
             }
         )
     return {

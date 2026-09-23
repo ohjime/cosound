@@ -170,12 +170,34 @@ def get_random_avatar_url(seed):
     )
 
 
-def generate_layers_string(layers: list[tuple[int, float]], with_gain=True) -> str:
-    string = ""
-    for sid, g in layers:
-        if with_gain:
-            string += f"{sid}@{g}&"
+def generate_layers_string(layers, with_gain=True) -> str:
+    """The key a Cosound is hashed from: `id@gain` per layer, joined by `&`.
+
+    Layers are `(sound_id, gain)` pairs or core.layers.LayerSpecs. A spec whose
+    timing is not the default adds it after its gain (LayerSpec.timing_key);
+    one at the defaults adds nothing, which is what keeps every mix saved
+    before layers had timing hashing exactly as it did. `with_gain=False` is
+    the gain- and timing-blind key Cosound.hashset is made of.
+    """
+    parts = []
+    for layer in layers:
+        if isinstance(layer, tuple):
+            (sid, g), timing = layer, ""
         else:
-            string += f"{sid}@?&"
-    string = string.rstrip("&")
-    return string
+            sid, g, timing = layer.sound_id, layer.gain, layer.timing_key()
+        parts.append(f"{sid}@{g}{timing}" if with_gain else f"{sid}@?")
+    return "&".join(parts)
+
+
+def get_artist(user):
+    """The Artist profile behind a user, or None if they don't have one.
+
+    ``Artist.user`` is a plain FK, so a user can in principle own several
+    artist profiles; everything artist-only works against the earliest one.
+    """
+    if not user or not user.is_authenticated:
+        return None
+
+    from core.models import Artist
+
+    return Artist.objects.filter(user=user).order_by("pk").first()

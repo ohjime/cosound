@@ -177,7 +177,6 @@ INSTALLED_APPS = [
     "vote",
     "library",
     "login",
-    "studio",
     "profile",
     "allauth",
     "allauth.account",

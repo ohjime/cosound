@@ -1,5 +1,5 @@
 <c-vars oob="" />
-{% load studio_extras %}
+{% load core_extras %}
 <!--
 Create, for an artist who signs in while the home page's LIBRARY tab is open.
 The tab renders this as an empty, hidden placeholder; login's post_login
@@ -10,7 +10,7 @@ rather than refetching the tab, which would throw the listener's layers away.
 Off the LIBRARY tab there is no #home-library-create, and htmx drops the swap.
 Signing out reloads the page, which takes Create away again.
 -->
-{% studio_artist as artist %}
+{% artist_profile as artist %}
 <span id="home-library-create"
       hidden
       {% if oob %}hx-swap-oob="outerHTML"{% endif %}

@@ -5,7 +5,7 @@ from core.models import Listener
 from explore.renderer import get_explore_context
 from library.models import SoundMix
 from library.utils import get_empty_layer
-from studio.utils import get_artist
+from core.utils import get_artist
 
 
 def example_card_page(request):

@@ -3,16 +3,23 @@
 The artist named on a layer is read from the layer itself — `artist_url`, the
 artist's own page, off this site. Nothing about the credit is passed in or
 reversed here, which is what lets this component render the same way on every
-host, the studio included.
+host.
 
 `swap_url` is passed in rather than reversed here, because this component is
 shared across urlconfs. The url tag resolves against the *per-request* urlconf
 (see config.middleware.SubdomainURLConf), and not every host mounts every app.
 It reaches c-core-sound-empty-layer,
 which is what a blank layer looks like on the card. The library passes its swap
-route so pressing the empty card opens the sound picker; the studio passes
-nothing, because there the card is a readout and the settings pane fills the
-layer in.
+route so pressing the empty card opens the sound picker; an Explore post passes
+nothing, because its card is a readout.
+
+Each layer's settings open over its own artwork (c-core-sound-layer-settings),
+inside its carousel item rather than over the figure: they slide away with the
+layer as the carousel moves on, and are still there, open, when it comes back.
+The gear that opens them sits above the trash. While they are open the whole
+caption steps aside — the title, which the panel shows as the first line of
+its own list, the heart, the credit and every corner button — and a close
+button takes the heart's place, so the panel has the artwork to itself.
 
 `library:keep_sound` below is reversed rather than passed for the opposite
 reason: `library/` *is* mounted on every host that renders a soundscape card, so
@@ -25,12 +32,12 @@ file is the wiring and the caption.
 <div class="relative w-full h-full" x-data="layerCarousel('{{ name }}')" x-init="$nextTick(() => start())"
     @carousel-prev.window="move(-1)" @carousel-next.window="move(1)" @carousel-goto.window="select($event.detail)"
     @layer-saved.window="applySaved($event.detail)">
-    <!-- Barely debounced on purpose: a swipe *is* the selection, so the pill and
-         the studio's tab strip should track the finger rather than catch up
-         after it. A jump does not walk the layers in between because
-         updateActive() ignores the animation, not because this handler is slow.
-         The three release() handlers are how a hand on the artwork cuts a jump
-         short: whatever it was flying to, the swipe now decides. -->
+    <!-- Barely debounced on purpose: a swipe *is* the selection, so the pill
+         should track the finger rather than catch up after it. A jump does not
+         walk the layers in between because updateActive() ignores the
+         animation, not because this handler is slow. The three release()
+         handlers are how a hand on the artwork cuts a jump short: whatever it
+         was flying to, the swipe now decides. -->
     <div x-ref="carousel" @scroll.debounce.5ms="updateActive()" @pointerdown="release()" @touchstart.passive="release()"
         @wheel.passive="release()" class="carousel w-full h-full">
         <!-- A blank layer has no artwork to show, so it gets its own face
@@ -38,25 +45,35 @@ file is the wiring and the caption.
              on it. All three branches are x-if rather than x-show: c-core-image
              would otherwise start loading a placeholder nobody sees, and the
              empty card's htmx attributes would sit armed behind it. -->
+        <!-- The fader greys the artwork, not the whole item: the settings over
+             it keep their colour however low the layer sits. The artwork is
+             `h-full` because this wrapper is a block, not the carousel item's
+             flex row: without it the image takes its own shape and a picture
+             that is not square leaves a bar under it. -->
         <template x-for="(layer, index) in $store.{{ name }}.layers" :key="layer.sound_id">
-            <div class="carousel-item relative h-full w-full transition-[filter] duration-300 ease-out"
-                :style="`filter: grayscale(${$store.{{ name }}.grayscaleFor(layer)}%)`">
-                <template x-if="layer.isDraft && !layer.isNew">
-                    <c-core-sound-empty-layer swap_url="{{ swap_url }}" />
-                </template>
-                <template x-if="layer.isNew">
-                    <c-core-sound-new-layer />
-                </template>
-                <template x-if="!layer.isDraft && !layer.isNew">
-                    <div class="contents">
-                        <c-core-image bind_src="layer.artwork_url" bind_alt="layer.sound_title" class="w-full" />
-                        <div
-                            class="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-black/80 to-transparent z-10">
+            <div class="carousel-item relative h-full w-full">
+                <div class="absolute inset-0 transition-[filter] duration-300 ease-out"
+                    :style="`filter: grayscale(${$store.{{ name }}.grayscaleFor(layer)}%)`">
+                    <template x-if="layer.isDraft && !layer.isNew">
+                        <c-core-sound-empty-layer swap_url="{{ swap_url }}" />
+                    </template>
+                    <template x-if="layer.isNew">
+                        <c-core-sound-new-layer />
+                    </template>
+                    <template x-if="!layer.isDraft && !layer.isNew">
+                        <div class="contents">
+                            <c-core-image bind_src="layer.artwork_url" bind_alt="layer.sound_title" class="h-full w-full" />
+                            <div
+                                class="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-black/80 to-transparent z-10">
+                            </div>
+                            <div
+                                class="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/60 to-transparent z-10">
+                            </div>
                         </div>
-                        <div
-                            class="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/60 to-transparent z-10">
-                        </div>
-                    </div>
+                    </template>
+                </div>
+                <template x-if="layer.settingsOpen && !layer.isDraft">
+                    <c-core-sound-layer-settings />
                 </template>
             </div>
         </template>
@@ -69,7 +86,8 @@ file is the wiring and the caption.
         <!-- `published` is false only on the artist's own upload awaiting
              review (nobody else is served one), so the badge is theirs alone:
              it says why no one else can hear this layer yet. -->
-        <div class="text-left text-lg leading-tight pr-12" x-show="!$store.{{ name }}.currentLayer?.isNew">
+        <div class="text-left text-lg leading-tight pr-12"
+            x-show="!$store.{{ name }}.currentLayer?.isNew && !$store.{{ name }}.currentLayer?.settingsOpen">
             <span x-text="$store.{{ name }}.currentLayer?.sound_title"></span>
             <span style="display: none" x-show="$store.{{ name }}.currentLayer?.published === false"
                 class="badge badge-warning badge-xs ml-1 align-middle font-sans not-italic text-shadow-none"
@@ -85,7 +103,7 @@ file is the wiring and the caption.
              overlay behind an invisible copy of the placeholder, which is what
              lands it just past the words rather than at the far end of the
              field; it goes as soon as there is a title. -->
-        <template x-if="$store.{{ name }}.currentLayer?.isNew">
+        <template x-if="$store.{{ name }}.currentLayer?.isNew && !$store.{{ name }}.currentLayer.settingsOpen">
             <div class="relative pr-12">
                 <input type="text"
                     class="pointer-events-auto w-full bg-transparent font-serif text-lg leading-tight italic text-white outline-none placeholder:text-white/60"
@@ -103,7 +121,7 @@ file is the wiring and the caption.
              endpoint to save. Keeping the control out of the tree also avoids
              presenting an action that can only fail. -->
         <button type="button"
-            x-show="$store.{{ name }}.currentLayer && !$store.{{ name }}.currentLayer.isDraft && !$store.{{ name }}.currentLayer.isLocal"
+            x-show="$store.{{ name }}.currentLayer && !$store.{{ name }}.currentLayer.isDraft && !$store.{{ name }}.currentLayer.isLocal && !$store.{{ name }}.currentLayer.settingsOpen"
             x-cloak
             class="pointer-events-auto absolute top-6.5 right-3 grid size-8 place-items-center rounded-full bg-black/25 text-white shadow-md backdrop-blur-sm transition hover:scale-105 hover:bg-black/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:pointer-events-none disabled:opacity-60"
             :aria-label="$store.{{ name }}.currentLayer?.saved ? 'Remove from favourite sounds' : 'Add to favourite sounds'"
@@ -118,26 +136,63 @@ file is the wiring and the caption.
                     d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z" />
             </svg>
         </button>
-        <div class="absolute bottom-3 left-3 flex flex-col-reverse items-center gap-2">
-            <!-- `allowAdd` is the editability switch. Do not use `canAddLayer`
-                 here: a full mix cannot add a ninth layer, but it is still an
-                 editable mix and must be able to remove one.
+        <!-- Closes the layer's settings, from where the heart sits: the one
+             control left on the card while they are open. Edits are live, so
+             there is nothing to confirm or throw away — this only closes. -->
+        <div class="tooltip tooltip-left absolute top-6.5 right-3" style="display: none"
+            x-show="$store.{{ name }}.currentLayer?.settingsOpen">
+            <div class="tooltip-content whitespace-nowrap font-sans text-xs font-normal not-italic text-shadow-none">Close settings</div>
+            <button type="button"
+                class="pointer-events-auto grid size-8 place-items-center rounded-full bg-black/40 text-white shadow-md backdrop-blur-sm transition hover:scale-105 hover:bg-black/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                aria-label="Close layer settings"
+                @click="$store.{{ name }}.toggleSettings($store.{{ name }}.currentIndex)">
+                <svg class="size-4 drop-shadow-md" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2.4" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+        <!-- The corner column, one button above another, reading up from the
+             trash in the corner: the trash, the settings gear, then a new
+             sound's sound file and artwork. The column is reversed, so the
+             trash keeps the corner whatever else is showing. It all steps
+             aside while the layer's settings are open — the close button in
+             the heart's place is the way back.
 
-                 Every button in this stack says what it does in a tooltip to
-                 its right, open on hover and on keyboard focus. The tooltip is
-                 a .tooltip-content element rather than data-tip so it can shed
-                 the caption's serif italics and shadow, and so a file name
-                 with no spaces breaks anywhere and is shown whole. -->
+             `allowAdd` is the editability switch. Do not use `canAddLayer`
+             here: a full mix cannot add a ninth layer, but it is still an
+             editable mix and must be able to remove one. The gear is
+             `canTune` — an artist's, on a mix they can edit — and only once
+             the layer has a sound to tune.
+
+             Every button says what it does in a tooltip to its right, open on
+             hover and on keyboard focus. Nothing sits to the right of a
+             button in a column, so no tooltip covers another control, and
+             the whole width of the artwork is there for it. The tooltip is a
+             .tooltip-content element rather than data-tip so it can shed the
+             caption's serif italics and shadow, and so a file name with no
+             spaces breaks anywhere and is shown whole. -->
+        <div class="absolute bottom-3 left-3 flex flex-col-reverse items-start gap-2"
+            x-show="!$store.{{ name }}.currentLayer?.settingsOpen">
             <div class="tooltip tooltip-right" x-show="$store.{{ name }}.allowAdd" x-cloak>
-                <div class="tooltip-content max-w-60 font-sans text-xs font-normal not-italic text-left text-shadow-none [overflow-wrap:anywhere]">Remove current layer</div>
+                <div class="tooltip-content whitespace-nowrap font-sans text-xs font-normal not-italic text-shadow-none">Remove current layer</div>
                 <button type="button"
                     class="pointer-events-auto grid size-8 place-items-center rounded-full bg-black/25 text-white/80 shadow-md backdrop-blur-sm transition hover:scale-105 hover:bg-error/70 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                     aria-label="Remove current layer" @click="removeCurrent()">
                     <c-icons.trash class="size-4" />
                 </button>
             </div>
-            <!-- A new sound's uploads, stacked above the trash (the column is
-                 reversed, so the trash keeps its corner): the sound file, then
+            <div class="tooltip tooltip-right" style="display: none"
+                x-show="$store.{{ name }}.canTune && $store.{{ name }}.currentLayer && !$store.{{ name }}.currentLayer.isDraft && !$store.{{ name }}.swappingLayer">
+                <div class="tooltip-content whitespace-nowrap font-sans text-xs font-normal not-italic text-shadow-none">Layer settings</div>
+                <button type="button"
+                    class="pointer-events-auto grid size-8 place-items-center rounded-full bg-black/25 text-white/80 shadow-md backdrop-blur-sm transition hover:scale-105 hover:bg-black/40 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                    aria-label="Open layer settings"
+                    @click="$store.{{ name }}.toggleSettings($store.{{ name }}.currentIndex)">
+                    <c-icons.settings class="size-4" aria-hidden="true" />
+                </button>
+            </div>
+            <!-- A new sound's uploads, above the gear: the sound file, then
                  the artwork on top. A missing one is tinted red and flagged
                  with a small warning triangle; once picked it takes a
                  faint green tint and a green check on a white disc (the tick is
@@ -211,18 +266,18 @@ file is the wiring and the caption.
              picks one. x-show clears that inline display itself when it
              decides the link is the one to show, and the plain name paints
              first so the credit is never missing from the card. -->
-        <a style="display: none" x-show="$store.{{ name }}.currentLayer?.artist_url"
+        <a style="display: none" x-show="$store.{{ name }}.currentLayer?.artist_url && !$store.{{ name }}.currentLayer.settingsOpen"
             :href="$store.{{ name }}.currentLayer?.artist_url" target="_blank" rel="noopener"
             class="pointer-events-auto self-end text-right pb-1 pr-1 text-sm opacity-90 transition hover:cursor-pointer hover:opacity-100 hover:underline"
             :title="`Visit ${$store.{{ name }}.currentLayer?.sound_artist}'s page`"
             x-text="$store.{{ name }}.currentLayer?.sound_artist"></a>
         <div class="self-end pb-1 pr-1 text-right text-sm opacity-90"
-            x-show="!$store.{{ name }}.currentLayer?.artist_url && !$store.{{ name }}.currentLayer?.isNew"
+            x-show="!$store.{{ name }}.currentLayer?.artist_url && !$store.{{ name }}.currentLayer?.isNew && !$store.{{ name }}.currentLayer?.settingsOpen"
             x-text="$store.{{ name }}.currentLayer?.sound_artist">
         </div>
         <!-- Opens on the signed-in artist's name (createSound stamps it), but a
              sound can be credited to someone else, so it is a field too. -->
-        <template x-if="$store.{{ name }}.currentLayer?.isNew">
+        <template x-if="$store.{{ name }}.currentLayer?.isNew && !$store.{{ name }}.currentLayer.settingsOpen">
             <input type="text"
                 class="pointer-events-auto mb-1 mr-1 w-2/3 self-end bg-transparent text-right text-sm italic text-white opacity-90 outline-none focus:opacity-100 placeholder:text-white/50"
                 aria-label="Artist" maxlength="255" placeholder="Artist" spellcheck="false"

@@ -6,7 +6,7 @@ tags and the story are fields here, in the same places the card reads them from
 on a finished sound.
 
 Tags can only be ones cosound already has. The box is a search, not free text:
-typing asks `studio:tag_search` for existing tags that match, and the only way
+typing asks `library:tag_search` for existing tags that match, and the only way
 onto the layer is pressing one of those. Enter takes the first. A search with no
 exact match also offers a link to ask cosound to add the tag — a placeholder for
 now; it does not send anything yet.
@@ -18,7 +18,7 @@ wired, sometimes it was dead. The answer is still the server's HTML fragment;
 Alpine initialises the chips' @click handlers as they land.
 
 No `//` comments inside the x-data below: Alpine splices it onto one line, and
-a line comment would swallow the rest of the object (see studio_builder.html).
+a line comment would swallow the rest of the object with it.
 -->
 <!-- djlint:off -->
 <div class="flex flex-col gap-1 font-serif text-[8pt] font-extralight font-stretch-95%"
@@ -27,7 +27,7 @@ a line comment would swallow the rest of the object (see studio_builder.html).
          get chosen() { return this.store.currentLayer?.tag_list || [] },
          async search(query) {
              const params = new URLSearchParams({ q: query, chosen: this.chosen.join('\n') });
-             const response = await fetch('{% url 'studio:tag_search' %}?' + params, { headers: { 'HX-Request': 'true' } });
+             const response = await fetch('{% url 'library:tag_search' %}?' + params, { headers: { 'HX-Request': 'true' } });
              if (response.ok && this.$refs.tagInput.value.trim() === query) this.$refs.suggestions.innerHTML = await response.text();
          },
          add(name) {

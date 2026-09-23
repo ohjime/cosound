@@ -91,8 +91,9 @@ const { createSoundLayersStore, makeDraftLayer, MAX_LAYERS } = await import(
     "./soundscape-store.js"
 );
 
-// The blank layer studio.views._blank_layer seeds the builder with. Its id is
-// server-made and fixed, which is exactly what the client's ids have to dodge.
+// The blank layer library.utils.get_empty_layer opens the LIBRARY tab on. Its
+// id is server-made and fixed, which is exactly what the client's ids have to
+// dodge.
 function seededBlankLayer() {
     return {
         sound_id: "draft-1",
@@ -368,8 +369,8 @@ test("filling a blank layer puts its controls back", async () => {
 
 test("a layer's artist page travels with its source, never from the layer before", async () => {
     // The carousel sends a press on the artist's name straight to this URL, so
-    // a stale one is a credit pointing at somebody else's site. The studio's
-    // file drop is the case that exposes it: it names no artist at all.
+    // a stale one is a credit pointing at somebody else's site. A new sound's
+    // upload is the case that exposes it: it names no artist at all.
     const store = await startedStore([
         soundLayer({ artist_url: "https://cameron.example/" }),
     ]);
@@ -392,8 +393,8 @@ test("a layer's artist page travels with its source, never from the layer before
 });
 
 test("a mix of nothing but blank layers is an empty one to save", async () => {
-    // The studio opens on a seeded blank layer, so this is what the save button
-    // faces the moment the builder loads.
+    // The LIBRARY tab opens on a seeded blank layer, so this is what the save
+    // button faces the moment the card loads.
     const store = await startedStore();
     await store.addBlankLayer();
 
@@ -588,6 +589,17 @@ test("removing a layer from a full mix makes room again", async () => {
     assert.equal(store.layers.length, MAX_LAYERS);
 });
 
+test("an emptied mix answers the fader's questions instead of throwing", async () => {
+    // Deleting the last layer leaves the mix empty until its replacement blank
+    // arrives, and the fader keeps asking about currentLayer the whole time.
+    const store = await startedStore();
+    store.removeLayer(0);
+
+    assert.equal(store.currentLayer, undefined);
+    assert.equal(store.isSilenced(store.currentLayer), false);
+    assert.equal(store.grayscaleFor(store.currentLayer), 0);
+});
+
 test("Create turns a blank layer into a new sound that is still left out of a save", async () => {
     const store = await startedStore([seededBlankLayer()], {
         allowCreate: true,
@@ -772,20 +784,27 @@ test("createNewSounds posts each new sound and swaps in the finished layer", asy
         };
     };
     try {
-        const created = await store.createNewSounds("/studio/htmx/sounds/create", "token");
+        const created = await store.createNewSounds("/library/sounds/create/", "token");
         assert.deepEqual(created, { [oldId]: 42 });
     } finally {
         globalThis.fetch = original;
     }
 
-    assert.equal(posted.length, 1);
-    assert.equal(posted[0].init.headers["X-CSRFToken"], "token");
-    const body = posted[0].init.body;
+    const posts = posted.filter(({ init }) => init?.method === "POST");
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0].init.headers["X-CSRFToken"], "token");
+    // And the voice moves over to the file that was stored.
+    assert.ok(posted.some(({ url }) => url === "/media/sounds/harbour.wav"));
+    const body = posts[0].init.body;
     assert.equal(body.get("title"), "Harbour");
     assert.equal(body.get("flavor"), "Gulls.");
     assert.equal(body.get("tags"), "sea\nbirds");
     assert.equal(body.get("file").name, "harbour.wav");
     assert.equal(body.get("art").name, "harbour.png");
+    // The loop check rides along, for the server to bake into the file.
+    assert.equal(body.get("trim_start"), "0");
+    assert.equal(body.get("loop_crossfade"), "0");
+    assert.equal(body.get("loudness_target"), "-20");
 
     const layer = store.layers[0];
     assert.equal(layer.sound_id, 42);
@@ -794,7 +813,23 @@ test("createNewSounds posts each new sound and swaps in the finished layer", asy
     assert.equal(layer.published, false);
     // The artist's fader survives; the server's default level does not.
     assert.equal(layer.gain, 80);
-    assert.deepEqual(store.saveLayers, [{ sound_id: 42, sound_gain: 0.8 }]);
+    // It goes on playing the way it was checked: one copy, back to back.
+    assert.deepEqual(store.saveLayers, [{
+        sound_id: 42,
+        sound_gain: 0.8,
+        playback_rate: 1,
+        stretch: 1,
+        second_copy: false,
+        repetitions: 1,
+        cycle_rest: 0,
+        start_delay: 0,
+        phase_step: 0,
+        phase_hold: 4,
+        phase_hold_alt: 4,
+        playback_rate_b: null,
+        take_turns: false,
+        turn_gap: 0,
+    }]);
 });
 
 test("createNewSounds reports the server's reason and leaves the sound new", async () => {
@@ -808,7 +843,7 @@ test("createNewSounds reports the server's reason and leaves the sound new", asy
     });
     try {
         await assert.rejects(
-            store.createNewSounds("/studio/htmx/sounds/create", "token"),
+            store.createNewSounds("/library/sounds/create/", "token"),
             /50 MB/,
         );
     } finally {
@@ -816,4 +851,206 @@ test("createNewSounds reports the server's reason and leaves the sound new", asy
     }
     assert.equal(store.layers[0].isNew, true);
     assert.equal(store.canSave, true);
+});
+
+test("Create puts a new sound into its loop check", async () => {
+    const store = await startedStore([seededBlankLayer()], { allowCreate: true });
+
+    store.createSound(0);
+
+    const layer = store.layers[0];
+    // One copy, back to back, nothing held back — so the seam is what is heard.
+    assert.equal(layer.stretch, 1);
+    assert.equal(layer.second_copy, false);
+    assert.equal(layer.playback_rate, 1);
+    assert.equal(layer.cycle_rest, 0);
+    assert.equal(layer.start_delay, 0);
+    assert.equal(layer.phase_step, 0);
+    assert.equal(layer.loop_crossfade, 0);
+    // Levelled to the house loudness from the first file it is given.
+    assert.equal(layer.loudness_target, store.loudnessDefault);
+    assert.equal(store.loudnessDefault, -20);
+});
+
+test("uploading keeps the loop check the new sound was put into", async () => {
+    const store = await startedStore([seededBlankLayer()], { allowCreate: true });
+    store.createSound(0);
+
+    await store.uploadSound(0, new File(["x"], "harbour.wav"));
+
+    const layer = store.layers[0];
+    assert.equal(layer.stretch, 1);
+    assert.equal(layer.second_copy, false);
+    assert.equal(layer.loudness_target, -20);
+    assert.equal(store._engine.voices[0].config.secondCopy, false);
+});
+
+test("createNewSounds sends the crop, crossfade and loudness, then clears them", async () => {
+    const store = await startedStore([seededBlankLayer()], { allowCreate: true });
+    await readyNewSound(store);
+    await store.setTiming(0, { trim_start: 1, trim_end: 5, loop_crossfade: 0.5 });
+    const reading = store.layers[0].loudness;
+
+    const posted = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = async (url, init) => {
+        posted.push(init);
+        if (init?.method !== "POST") return original(url, init);
+        return {
+            ok: true,
+            json: async () => ({
+                layer: {
+                    sound_id: 42,
+                    sound_file: "/media/sounds/harbour.flac",
+                    sound_title: "Harbour",
+                    artwork_url: "/media/sound_arts/harbour.png",
+                    seamless: true,
+                    loudness_lufs: -20,
+                },
+            }),
+        };
+    };
+    try {
+        await store.createNewSounds("/library/sounds/create/", "token");
+    } finally {
+        globalThis.fetch = original;
+    }
+
+    const body = posted[0].body;
+    assert.equal(body.get("trim_start"), "1");
+    assert.equal(body.get("trim_end"), "5");
+    assert.equal(body.get("loop_crossfade"), "0.5");
+    assert.equal(body.get("loudness"), String(reading));
+
+    const layer = store.layers[0];
+    // The file carries all three now; set again, they would apply twice.
+    assert.equal(layer.trim_start, 0);
+    assert.equal(layer.trim_end, null);
+    assert.equal(layer.loop_crossfade, 0);
+    assert.equal(layer.loudness_target, null);
+    assert.equal(layer.seamless, true);
+    assert.equal(layer.loudness_lufs, -20);
+    // And it plays on as it was checked.
+    assert.equal(layer.stretch, 1);
+    assert.equal(layer.second_copy, false);
+});
+
+test("a seamless sound from the picker starts as one copy, back to back", async () => {
+    const store = await startedStore([
+        soundLayer({ sound_id: 1, seamless: true }),
+        soundLayer({ sound_id: 2 }),
+        soundLayer({ sound_id: 3, seamless: true, stretch: 2, second_copy: true }),
+    ]);
+    const [loop, older, saved] = store.layers;
+
+    assert.equal(loop.stretch, 1);
+    assert.equal(loop.second_copy, false);
+    assert.equal(older.stretch, 1.75, "an unbaked sound keeps its two drifting copies");
+    assert.equal(older.second_copy, true);
+    assert.equal(saved.stretch, 2, "a saved mix's own timing wins");
+    assert.equal(saved.second_copy, true);
+    assert.equal(store._engine.voices[0].config.seamless, true);
+});
+
+test("saveLayers carries each layer's timing, and nothing of the card's", async () => {
+    const store = await startedStore([soundLayer({
+        cycle_rest: 12, repetitions: 3, start_delay: 4,
+        phase_step: 0.125, phase_hold: 2, phase_hold_alt: 5,
+        playback_rate_b: 0.5, take_turns: true, turn_gap: 1.5,
+    })]);
+    store.toggleSettings(0);
+
+    assert.deepEqual(store.saveLayers, [{
+        sound_id: 9,
+        sound_gain: 0.5,
+        playback_rate: 1,
+        stretch: 1.75,
+        second_copy: true,
+        repetitions: 3,
+        cycle_rest: 12,
+        start_delay: 4,
+        phase_step: 0.125,
+        phase_hold: 2,
+        phase_hold_alt: 5,
+        playback_rate_b: 0.5,
+        take_turns: true,
+        turn_gap: 1.5,
+    }]);
+});
+
+test("a layer's settings stay open while the carousel is elsewhere", async () => {
+    const store = await startedStore([soundLayer({ sound_id: 1 }), soundLayer({ sound_id: 2 })]);
+
+    store.toggleSettings(0);
+    store.currentIndex = 1;
+    assert.equal(store.layers[0].settingsOpen, true);
+    assert.equal(store.layers[1].settingsOpen, false);
+    store.currentIndex = 0;
+    assert.equal(store.currentLayer.settingsOpen, true);
+
+    store.toggleSettings(0);
+    assert.equal(store.layers[0].settingsOpen, false);
+});
+
+test("the gear is an artist's, on a mix they can edit", async () => {
+    assert.equal((await startedStore()).canTune, false);
+    assert.equal((await startedStore(undefined, { allowCreate: true })).canTune, true);
+    assert.equal(
+        (await startedStore(undefined, { allowCreate: true, allowAdd: false })).canTune,
+        false,
+    );
+});
+
+test("timing changes hand the layer over in place instead of restarting it", async () => {
+    const store = await startedStore([soundLayer()]);
+    const retimed = [];
+    const restarted = [];
+    const retime = store._engine.retimeLayer.bind(store._engine);
+    store._engine.retimeLayer = (index, config, options) => {
+        retimed.push(config);
+        return retime(index, config, options);
+    };
+    store._engine.replaceLayer = (...args) => restarted.push(args);
+
+    await store.setTiming(0, { stretch: 2 });
+    await store.setTiming(0, { start_delay: 6 });
+
+    assert.deepEqual(retimed.map((config) => [config.stretch, config.startDelay]), [[2, 0], [2, 6]]);
+    assert.deepEqual(restarted, [], "no edit starts the layer over");
+    assert.equal(store.layers[0].start_delay, 6);
+});
+
+test("a seek starts the mix if it has not started, then moves the layer", async () => {
+    const store = await startedStore([soundLayer()], { settleProgress: () => Promise.resolve() });
+    const calls = [];
+    store._engine.play = async () => calls.push("play");
+    store._engine.seekLayer = async (index, position) => calls.push(["seek", index, position]);
+
+    await store.seek(0, 4.5);
+    assert.deepEqual(calls, ["play", ["seek", 0, 4.5]]);
+    assert.equal(store.started, true);
+
+    await store.seek(0, 1);
+    assert.deepEqual(calls.at(-1), ["seek", 0, 1], "a playing mix is not started again");
+    assert.equal(calls.filter((call) => call === "play").length, 1);
+});
+
+test("hear the seam lands just ahead of where the crossfade begins", async () => {
+    const store = await startedStore([soundLayer()], { settleProgress: () => Promise.resolve() });
+    const seeks = [];
+    store.started = true;
+    store._engine.seekLayer = async (index, position) => seeks.push(position);
+
+    // The tone is 12s; a 0.5s fade starts at 11.5, and two seconds before that
+    // is 9.5.
+    await store.setTiming(0, { loop_crossfade: 0.5 });
+    await store.hearSeam(0);
+    // At double speed those two seconds cover twice as much of the file.
+    await store.setTiming(0, { playback_rate: 2 });
+    await store.hearSeam(0);
+    // A crop keeps the jump inside what is kept.
+    await store.setTiming(0, { playback_rate: 1, trim_start: 10, trim_end: 11 });
+    await store.hearSeam(0);
+
+    assert.deepEqual(seeks.map((s) => Math.round(s * 1000) / 1000), [9.5, 7, 10]);
 });

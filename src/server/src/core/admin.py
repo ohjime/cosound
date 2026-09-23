@@ -221,6 +221,32 @@ class SoundAdmin(FileFormAdmin, ModelAdmin, ImportExportModelAdmin):  # type: ig
                 ],
             },
         ),
+        # How an artist's loop check was baked into the file (core.audio). A
+        # record, not settings: the file already carries all of it.
+        (
+            "Loop check",
+            {
+                "classes": ["collapse"],
+                "fields": [
+                    "seamless",
+                    "duration",
+                    "trim_start",
+                    "trim_end",
+                    "loop_crossfade",
+                    "loudness_lufs",
+                    "loudness_gain_db",
+                ],
+            },
+        ),
+    ]
+    readonly_fields = [
+        "seamless",
+        "duration",
+        "trim_start",
+        "trim_end",
+        "loop_crossfade",
+        "loudness_lufs",
+        "loudness_gain_db",
     ]
 
     # One save per sound rather than queryset.update(): the save is what tells

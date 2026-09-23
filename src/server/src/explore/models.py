@@ -41,7 +41,7 @@ class PublicPost(models.Model):
         return f"explore-cosound-{self.pk}"
 
     def get_absolute_url(self):
-        # The admin/studio hosts run their own urlconfs, which don't mount
+        # The admin/api hosts run their own urlconfs, which don't mount
         # `explore` — always reverse against the main-site urlconf.
         return reverse(
             "explore:detail", kwargs={"slug": self.slug}, urlconf="config.urls"

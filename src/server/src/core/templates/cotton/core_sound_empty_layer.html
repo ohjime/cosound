@@ -5,18 +5,16 @@ been chosen for it. c-core-sound-carousel draws this in place of the artwork
 whenever `layer.isDraft` — except a new sound (`layer.isNew`), which has a face
 of its own.
 
-`swap_url` is what the card does when it is pressed, and it is the one thing the
-two surfaces disagree about:
+`swap_url` is what the card does when it is pressed:
 
   library — pass the library's swap route. Pressing the card then does what the
            Swap button does: point currentIndex at this layer, raise
            `swappingLayer`, and fetch the picker over the card. Choosing a sound
            runs the ordinary replacement flow, which clears the blank flag on
            the way through.
-  studio — pass nothing. The card there is a readout, not a control: every
-           change is made in the settings pane on the left, and this layer is
-           already the selected one, so the panel is showing its Add file /
-           Library buttons as the card is read.
+  anywhere else — pass nothing, and the face is a readout. An Explore post's
+           card never holds a blank layer, but if one reached it there would be
+           no picker to open, so the button stays inert rather than offer one.
 
 Inert is `disabled` on the same button rather than a second element, so the two
 states cannot drift apart. Nothing here binds a sound id — a blank layer has
@@ -57,7 +55,7 @@ artist, story and tags.
                 {% if swap_url %}
                 Press here to add a sound
                 {% else %}
-                Choose a sound in the panel
+                No sound here yet
                 {% endif %}
             </span>
         </button>

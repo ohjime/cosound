@@ -2,7 +2,7 @@ import hashlib
 import math
 import secrets
 import uuid
-from decimal import ROUND_UP, Decimal
+from decimal import Decimal
 from typing import List
 
 from django.conf import settings
@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 from taggit.managers import TaggableManager
 
 from core.fonts import article_font_css_stack
+from core.layers import LayerSpec
 from core.utils import (
     _get_sound_classifier,
     _get_sound_dimension,
@@ -105,6 +106,33 @@ class Sound(DjangoDB.Model):
         ),
     )
     embeddings = VectorField(null=True, dimensions=_get_sound_dimension())
+    # What the loop check baked into the file when an artist saved this sound
+    # (core.audio.bake_sound). The file already carries every one of them —
+    # these say how it was made, and nothing reads them back to change it.
+    # All empty on a sound that never went through the check.
+    seamless = DjangoDB.BooleanField(
+        default=False,
+        help_text=(
+            "Baked into a seamless loop when its artist saved it: it plays back "
+            "to back with no join, so a new mix starts it as one copy with no gaps."
+        ),
+    )
+    duration = DjangoDB.FloatField(null=True, blank=True, help_text="Seconds, as stored.")
+    trim_start = DjangoDB.FloatField(
+        null=True, blank=True, help_text="Where the kept audio began in the upload, in seconds."
+    )
+    trim_end = DjangoDB.FloatField(
+        null=True, blank=True, help_text="Where the kept audio ended in the upload, in seconds."
+    )
+    loop_crossfade = DjangoDB.FloatField(
+        null=True, blank=True, help_text="Seconds of the tail folded into the head at the seam."
+    )
+    loudness_lufs = DjangoDB.FloatField(
+        null=True, blank=True, help_text="Integrated loudness of the stored file (LUFS)."
+    )
+    loudness_gain_db = DjangoDB.FloatField(
+        null=True, blank=True, help_text="Gain applied to reach it, in dB."
+    )
     created_at = DjangoDB.DateTimeField(auto_now_add=True)
     updated_at = DjangoDB.DateTimeField(auto_now=True)
 
@@ -140,7 +168,7 @@ class Sound(DjangoDB.Model):
     def asLayer(self, with_gain=1.0):
         # Every surface that mounts a soundscape spreads this dict, so a field
         # added here reaches the library, the explore card, the swap picker and
-        # the studio at once. `artist_url` rides along with the name it belongs
+        # the save dialog at once. `artist_url` rides along with the name it belongs
         # to: the two are one credit, and a layer carrying one without the
         # other is how a name comes to point at the wrong artist's site.
         return {
@@ -153,16 +181,110 @@ class Sound(DjangoDB.Model):
             # Only ever false for the artist who uploaded it — nobody else is
             # served an unpublished sound — so the card can say it is waiting.
             "published": self.published,
+            # A baked loop enters a mix as one copy, back to back (the store's
+            # normalizeUiLayer); its settings say what it was levelled to.
+            "seamless": self.seamless,
+            "loudness_lufs": self.loudness_lufs,
         }
 
 
 class SoundLayer(DjangoDB.Model):
+    """One sound in a Cosound: how loud it sits, and how it plays.
+
+    The timing columns are core.layers.LayerSpec's, and their defaults are the
+    schedule every layer had before they existed — two drifting copies, without
+    end — so every row saved before them plays exactly as it did. The web player
+    reads them (Cosound.as_layers); the venue player plays a layer's sound at its
+    gain and ignores the rest.
+    """
+
     sound = DjangoDB.ForeignKey(Sound, on_delete=DjangoDB.CASCADE)
     mix = DjangoDB.ForeignKey("Cosound", on_delete=DjangoDB.CASCADE)
     gain = DjangoDB.DecimalField(max_digits=3, decimal_places=2)
+    playback_rate = DjangoDB.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=Decimal("1.00"),
+        validators=[MinValueValidator(Decimal("0.25")), MaxValueValidator(Decimal("2.00"))],
+    )
+    stretch = DjangoDB.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=Decimal("1.75"),
+        validators=[MinValueValidator(Decimal("0.50")), MaxValueValidator(Decimal("4.00"))],
+        help_text="Spacing: a pass repeats every length × this. 1 is back to back.",
+    )
+    second_copy = DjangoDB.BooleanField(default=True)
+    repetitions = DjangoDB.PositiveSmallIntegerField(
+        default=1,
+        validators=[MinValueValidator(1), MaxValueValidator(16)],
+        help_text="Periods per cycle.",
+    )
+    cycle_rest = DjangoDB.DecimalField(
+        max_digits=4,
+        decimal_places=1,
+        default=Decimal("0.0"),
+        validators=[MinValueValidator(Decimal("0")), MaxValueValidator(Decimal("300"))],
+        help_text="Seconds of silence after each cycle; 0 plays without end.",
+    )
+    start_delay = DjangoDB.DecimalField(
+        max_digits=4,
+        decimal_places=1,
+        default=Decimal("0.0"),
+        validators=[MinValueValidator(Decimal("0")), MaxValueValidator(Decimal("120"))],
+    )
+    phase_step = DjangoDB.DecimalField(
+        max_digits=4,
+        decimal_places=3,
+        default=Decimal("0.000"),
+        validators=[MinValueValidator(Decimal("0")), MaxValueValidator(Decimal("0.5"))],
+        help_text="How far the second copy slips at each shift, as a fraction of a period.",
+    )
+    phase_hold = DjangoDB.PositiveSmallIntegerField(
+        default=4, validators=[MinValueValidator(1), MaxValueValidator(64)]
+    )
+    phase_hold_alt = DjangoDB.PositiveSmallIntegerField(
+        default=4, validators=[MinValueValidator(1), MaxValueValidator(64)]
+    )
+    playback_rate_b = DjangoDB.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0.25")), MaxValueValidator(Decimal("2.00"))],
+        help_text="The second copy's rate, so the layer alternates two pitches. Empty is the first's.",
+    )
+    take_turns = DjangoDB.BooleanField(
+        default=False,
+        help_text="The copies never overlap: each waits for the other to finish, then the gap.",
+    )
+    turn_gap = DjangoDB.DecimalField(
+        max_digits=3,
+        decimal_places=1,
+        default=Decimal("0.0"),
+        validators=[MinValueValidator(Decimal("0")), MaxValueValidator(Decimal("60"))],
+        help_text="Seconds of silence between the copies' turns.",
+    )
 
     def __str__(self):
         return f"{self.sound.pk}@{self.gain}"
+
+    def timing(self):
+        """The layer's timing, in the shape the web player reads."""
+        return {
+            "playback_rate": float(self.playback_rate),
+            "stretch": float(self.stretch),
+            "second_copy": self.second_copy,
+            "repetitions": self.repetitions,
+            "cycle_rest": float(self.cycle_rest),
+            "start_delay": float(self.start_delay),
+            "phase_step": float(self.phase_step),
+            "phase_hold": self.phase_hold,
+            "phase_hold_alt": self.phase_hold_alt,
+            "playback_rate_b": None if self.playback_rate_b is None else float(self.playback_rate_b),
+            "take_turns": self.take_turns,
+            "turn_gap": float(self.turn_gap),
+        }
 
 
 class Cosound(DjangoDB.Model):
@@ -175,12 +297,14 @@ class Cosound(DjangoDB.Model):
 
     @classmethod
     def normalize_layers(cls, layers):
-        normalized = []
-        for sound_id, gain in layers:
-            gain = Decimal(str(gain))
-            rounded = (gain * 2).quantize(Decimal("0.1"), rounding=ROUND_UP) / 2
-            normalized.append((sound_id, rounded))
-        normalized.sort(key=lambda t: t[0])
+        """The layers as the hash reads them: LayerSpecs, rounded, by sound id.
+
+        Takes LayerSpecs or the `(sound_id, gain)` pairs older callers pass.
+        The sort is on the id alone and stable, as it always was, so a mix
+        holding one sound twice keeps the order it was hashed in.
+        """
+        normalized = [LayerSpec.coerce(layer).normalized() for layer in layers]
+        normalized.sort(key=lambda spec: spec.sound_id)
         return normalized
 
     @staticmethod
@@ -209,8 +333,13 @@ class Cosound(DjangoDB.Model):
             if created:
                 SoundLayer.objects.bulk_create(
                     [
-                        SoundLayer(sound_id=sid, mix=cosound, gain=g)
-                        for sid, g in normalized
+                        SoundLayer(
+                            sound_id=spec.sound_id,
+                            mix=cosound,
+                            gain=spec.gain,
+                            **spec.timing(),
+                        )
+                        for spec in normalized
                     ]
                 )
         return cosound
@@ -256,6 +385,7 @@ class Cosound(DjangoDB.Model):
                 "saved": layer.sound.pk in saved_ids,
                 "flavor": layer.sound.flavor or "",
                 "tags": " / ".join(layer.sound.tags.names()) or "Unknown",
+                **layer.timing(),
             }
             for layer in layers
         ]

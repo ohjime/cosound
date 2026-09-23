@@ -161,19 +161,33 @@ test("a null end means the tail of the file", () => {
     assert.equal(handles.end.getAttribute("aria-valuenow"), "10.000");
 });
 
-test("pressing empty track sends the nearer marker there, and commits on release", () => {
-    const { panel, commits, press, release } = mount();
+test("pressing the wave seeks there at once and leaves the crop alone", () => {
+    const { panel, handles, commits, press, release } = mount();
     panel.load({ src: "", duration: 10, start: 0, end: null });
-    press(100); // a quarter across: 2.5s, nearer the start than the end
-    assert.deepEqual(commits, [], "a press alone must not rebuild the voice");
+    press(100); // a quarter across: 2.5s
+    assert.deepEqual(commits, [{ name: "trim-seek", detail: { position: 2.5 } }]);
     release();
-    assert.deepEqual(lastDetail(commits), { trim_start: 2.5, trim_end: null });
+    assert.equal(commits.length, 1, "a press without a drag seeks once");
+    assertPercent(handles.start.style.left, 0, "start marker");
+});
+
+test("a dragged seek follows the finger and is sent again where it lets go", () => {
+    const { panel, commits, press, moveTo, release } = mount();
+    panel.load({ src: "", duration: 10, start: 2, end: 8 });
+    press(0); // before the start marker: held to the kept region
+    moveTo(120);
+    moveTo(200);
+    release();
+    assert.deepEqual(commits.map(({ name, detail }) => [name, detail.position]), [
+        ["trim-seek", 2],
+        ["trim-seek", 5],
+    ]);
 });
 
 test("a drag is one commit however far it is dragged", () => {
-    const { panel, commits, press, moveTo, release } = mount();
+    const { panel, handles, commits, press, moveTo, release } = mount();
     panel.load({ src: "", duration: 10, start: 0, end: null });
-    press(40);
+    press(0, handles.start);
     moveTo(80);
     moveTo(120);
     moveTo(160);
@@ -183,9 +197,9 @@ test("a drag is one commit however far it is dragged", () => {
 });
 
 test("an end marker off the tail commits a real number", () => {
-    const { panel, commits, press, moveTo, release } = mount();
+    const { panel, handles, commits, press, moveTo, release } = mount();
     panel.load({ src: "", duration: 10, start: 0, end: null });
-    press(320); // 8s, nearer the end
+    press(400, handles.end);
     moveTo(280); // 7s
     release();
     assert.deepEqual(lastDetail(commits), { trim_start: 0, trim_end: 7 });
@@ -231,7 +245,7 @@ test("a key the panel has no use for is left to the page", () => {
 test("the store cannot move a marker out from under a drag", () => {
     const { panel, handles, press, moveTo, release } = mount();
     panel.load({ src: "", duration: 10, start: 0, end: null });
-    press(200);
+    press(0, handles.start);
     moveTo(240);
     // The engine writing an analysis back mid-gesture, which it does whenever
     // anything else about the layer changes.

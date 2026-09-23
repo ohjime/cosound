@@ -1,0 +1,391 @@
+<!--
+One layer's settings, laid over its own artwork — what the gear beside the trash
+opens (c-core-sound-carousel). It sits inside the layer's carousel item and
+reads that item's `layer` and `index`, so it slides away with its artwork when
+the carousel moves on, and is still open, scrolled where it was, on the way
+back. Whether it is open is the layer's own `settingsOpen`, so a trip through
+the picker finds it the same way.
+
+The layer's title heads the list, as its first item rather than pinned over
+it: it scrolls away with the rest, because the artwork has little room to give.
+Nothing else from the caption sits over the panel — the corner buttons and the
+credit step aside, and the close button takes the heart's place
+(c-core-sound-carousel).
+
+A new sound, before it is saved, opens with its loop check. The store has put
+it there (createSound): one copy, back to back, nothing held back — so the seam
+is what is heard, and the artist trims it, crossfades it and levels it until
+the repeat disappears. All three are baked into the file when the mix is saved
+(core/audio.py) and cannot be changed after, which the panel says. Pressing
+the wave plays from there, and "Hear the seam" jumps to just before the
+crossfade, so the join can be checked without waiting for it to come round.
+
+Every layer — a new sound too — then gets its timing in this mix: rate,
+spacing, the second copy (with a second pitch of its own, overlapping or taking
+turns), the cycle and phase shifting. These are SoundLayer's
+columns, saved with the mix, and they change nothing about the file; a new
+sound's are saved with the mix that creates it.
+
+Each edit costs what it costs in the store. Timing, trim and the crossfade all
+rebuild the voice (setTiming), so their sliders commit on `change` and a drag
+rebuilds once. The rebuilt voice carries on from where the old one was, so an
+edit is heard at once, on the sound already playing. Loudness is a factor on
+the voice's gain (setLoudness) and rides on `input`. What comes back from the
+engine — a crop it corrected, a crossfade it capped, a reading — is what the
+controls show, through the same layer.
+
+The range inputs and the trim track are `touch-pan-y`: a horizontal drag on
+them is theirs, and the rest of the panel still swipes the carousel over to
+the next layer.
+
+No `//` comments inside the x-data below: Alpine splices it onto one line, and
+a line comment would swallow the rest of the object with it.
+-->
+<!-- djlint:off -->
+<div class="motion-preset-fade motion-duration-150 absolute inset-0 z-10 bg-black/65 text-white backdrop-blur-[3px]"
+     x-data="{
+         retime(patch) { $store.soundLayers.setTiming(index, patch) },
+         loud(target) { $store.soundLayers.setLoudness(index, target) },
+         get span() { return Number(layer.duration) || 0 },
+         get cropStart() { return Math.min(Number(layer.trim_start) || 0, this.span) },
+         get cropEnd() { return layer.trim_end == null ? this.span : Math.min(Number(layer.trim_end), this.span) },
+         get cropped() { return this.cropStart > 0.001 || this.cropEnd < this.span - 0.001 },
+         get fade() { return Number(layer.loop_crossfade) || 0 },
+         get fadeMax() { return Number(layer.loop_crossfade_max) || 0 },
+         get period() { return Number(layer.period) || 0 },
+         get turns() { return Boolean(layer.second_copy && layer.take_turns) },
+         get rateB() { return layer.playback_rate_b == null ? null : Number(layer.playback_rate_b) },
+         get pass() { return (this.cropEnd - this.cropStart) / (Number(layer.playback_rate) || 1) },
+         get house() { return $store.soundLayers.loudnessDefault },
+         get nudge() { return $store.soundLayers.loudnessNudge },
+         get target() { return layer.loudness_target == null ? this.house : Number(layer.loudness_target) },
+         secs(value) { const v = Math.abs(Number(value) || 0); return (v < 10 ? v.toFixed(2) : v.toFixed(1)) + ' s' },
+         clock(seconds) { const r = Math.round(Math.max(0, Number(seconds) || 0) * 10) / 10; return Math.floor(r / 60) + ':' + (r % 60).toFixed(1).padStart(4, '0') },
+         get spacing() {
+             const gap = this.period - this.pass;
+             if (Math.abs(gap) < 0.01) return 'back to back';
+             return gap > 0 ? this.secs(gap) + ' of silence between' : this.secs(-gap) + ' overlap';
+         },
+         get cycle() {
+             const rest = Number(layer.cycle_rest) || 0;
+             if (!(rest > 0)) return 'Plays without end.';
+             const reps = Number(layer.repetitions) || 1;
+             return reps + ' × ' + this.secs(this.period) + ' + ' + this.secs(rest) + ' rest = ' + this.secs(reps * this.period + rest) + ' a cycle.';
+         },
+         get slip() {
+             const step = Number(layer.phase_step) || 0;
+             if (!(step > 0)) return 'Off: the second copy stays where it starts.';
+             const round = Math.round(1 / step);
+             const even = Math.abs(1 / step - round) < 0.01;
+             const size = even ? '1/' + round : (step * 100).toFixed(1) + '%';
+             const back = even ? 'back round after ' + round + ' slips' : 'never quite repeats';
+             return size + ' of a period · ' + this.secs(step * this.period) + ' · ' + back + '.';
+         },
+         get reading() { return layer.loudness == null ? null : Number(layer.loudness) },
+         get levelled() {
+             if (this.reading == null) return 'Too short or too quiet to measure: it will be saved at its own level.';
+             const gain = Number(layer.loudness_gain_db) || 0;
+             return 'Reads ' + this.reading.toFixed(1) + ' LUFS, plays ' + (gain >= 0 ? '+' : '') + gain.toFixed(1) + ' dB, lands at ' + (this.reading + gain).toFixed(1) + ' LUFS.';
+         },
+         get shortfall() {
+             if (layer.loudness_limit === 'peak') return 'Its peaks stop it there. Export it again through a limiter to reach ' + this.target.toFixed(1) + '.';
+             if (layer.loudness_limit === 'gain') return 'A very quiet recording: it can only be raised 24 dB. Record or export it louder.';
+             return '';
+         },
+     }">
+<!-- djlint:on -->
+    <!-- Only the close button floats over this list now, in the top corner the
+         title leaves room for, so the list runs nearly edge to edge and fades
+         out at both. The title starts where the caption's own sits. -->
+    <div class="flex h-full flex-col gap-4 overflow-y-auto overscroll-contain px-4 pb-6 pt-8 font-mono text-[8pt] [mask-image:linear-gradient(to_bottom,transparent_0,black_1.75rem,black_calc(100%-1.5rem),transparent_100%)]">
+        <h2 class="pr-10 font-serif text-lg font-thin italic leading-tight text-shadow-lg"
+            x-text="layer.sound_title || (layer.isNew ? 'New Sound' : '')"></h2>
+        <!-- The loop check: only a new sound, and only until it is saved. -->
+        <template x-if="layer.isNew">
+            <div class="flex flex-col gap-4">
+                <section class="flex flex-col gap-1.5">
+                    <h3 class="uppercase tracking-widest text-amber-300">Loop check</h3>
+                    <p class="opacity-70">Starts back to back on one copy, so the seam is what you hear. Press the wave to play from there.</p>
+                </section>
+                <!-- Trim. The waveform with its two handles and the playheads
+                     running through it — see vite/assets/js/trim-track.js. The
+                     x-effect keeps it on this layer: everything it reads is
+                     store state, so Reset, or the engine correcting a crop,
+                     re-runs it. `gainDb` scales the drawn wave by the
+                     loudness make-up gain, so levelling grows or shrinks it. -->
+                <section class="flex flex-col gap-1.5" x-show="span > 0">
+                    <div class="flex items-center justify-between">
+                        <h4 class="uppercase tracking-widest opacity-60">Trim</h4>
+                        <button type="button" class="link text-[7pt] uppercase tracking-widest opacity-80" x-show="cropped" @click="retime({ trim_start: 0, trim_end: null })">Reset</button>
+                    </div>
+                    <div class="touch-pan-y"
+                         x-data="trimTrack()"
+                         x-effect="load({ src: layer.sound_file, duration: span, start: cropStart, end: cropEnd, index, gainDb: layer.loudness_gain_db })"
+                         @trim-commit="retime($event.detail)"
+                         @trim-seek="$store.soundLayers.seek(index, $event.detail.position)"></div>
+                    <p class="opacity-60">
+                        Keeping <span x-text="clock(cropEnd - cropStart)"></span> of <span x-text="clock(span)"></span>.
+                    </p>
+                </section>
+                <!-- Crossfade. Heard live: each repeat is pulled in by the fade
+                     and faded across the seam. Saving folds the same tail into
+                     the same head in the file itself. The ceiling is half of
+                     what the trim kept, from the engine (loop_crossfade_max).
+                     "Hear the seam" plays from a moment before it (hearSeam). -->
+                <section class="flex flex-col gap-1.5" x-show="span > 0">
+                    <div class="flex items-center justify-between">
+                        <h4 class="uppercase tracking-widest opacity-60">Crossfade</h4>
+                        <span x-text="fade > 0 ? secs(fade) : 'Off'"></span>
+                    </div>
+                    <input type="range"
+                           class="range range-xs range-warning w-full touch-pan-y"
+                           aria-label="Loop crossfade"
+                           min="0"
+                           :max="fadeMax"
+                           step="0.01"
+                           :value="fade"
+                           @change="retime({ loop_crossfade: Number($event.target.value) })" />
+                    <p class="opacity-60" x-text="fade > 0 ? 'The end fades into the start over ' + secs(fade) + '.' : 'The end cuts straight back to the start.'"></p>
+                    <button type="button"
+                            class="btn btn-xs btn-outline btn-warning self-start rounded-full font-mono text-[7pt] uppercase tracking-widest"
+                            @click="$store.soundLayers.hearSeam(index)">
+                        Hear the seam
+                    </button>
+                </section>
+                <!-- Loudness. Every new sound is levelled to the house level,
+                     so a fader means the same on every sound; the artist may
+                     nudge it. There is no off switch. -->
+                <section class="flex flex-col gap-1.5" x-show="span > 0">
+                    <div class="flex items-center justify-between">
+                        <h4 class="uppercase tracking-widest opacity-60">Loudness</h4>
+                        <span x-text="target.toFixed(1) + ' LUFS'"></span>
+                    </div>
+                    <input type="range"
+                           class="range range-xs range-warning w-full touch-pan-y"
+                           aria-label="Loudness target"
+                           :min="house - nudge"
+                           :max="house + nudge"
+                           step="0.5"
+                           :value="target"
+                           @input="loud(Number($event.target.value))" />
+                    <p class="opacity-60" x-text="levelled"></p>
+                    <p class="text-amber-300" x-show="shortfall" x-text="shortfall"></p>
+                    <button type="button" class="link self-start text-[7pt] uppercase tracking-widest opacity-80" x-show="Math.abs(target - house) > 0.01" @click="loud(house)">
+                        Back to the house level
+                    </button>
+                </section>
+                <p class="border-t border-white/15 pt-3 text-amber-200/90">
+                    Trim, crossfade and loudness are baked into the file when you save. They can't be changed later.
+                    The timing below is saved with the mix, and can be.
+                </p>
+            </div>
+        </template>
+        <!-- Timing in this mix: every layer, a new sound included. -->
+        <div class="flex flex-col gap-4">
+            <section class="flex flex-col gap-2">
+                <h3 class="uppercase tracking-widest text-amber-300">Playback</h3>
+                <div class="flex flex-col gap-1">
+                    <div class="flex items-center justify-between opacity-80">
+                        <span>Rate</span>
+                        <span x-text="Number(layer.playback_rate).toFixed(2) + '×'"></span>
+                    </div>
+                    <input type="range"
+                           class="range range-xs range-warning w-full touch-pan-y"
+                           aria-label="Rate"
+                           min="0.25"
+                           max="2"
+                           step="0.05"
+                           :value="layer.playback_rate"
+                           @change="retime({ playback_rate: Number($event.target.value) })" />
+                    <p class="opacity-50">Pitch and speed together, like tape.</p>
+                </div>
+                <!-- Spacing is `stretch`: a pass comes round every length ×
+                     this, so 1 is back to back and above it is silence. Taking
+                     turns spaces the copies by its own gap instead. -->
+                <div class="flex flex-col gap-1" :class="turns ? 'opacity-40' : ''">
+                    <div class="flex items-center justify-between opacity-80">
+                        <span>Spacing</span>
+                        <span x-text="Number(layer.stretch).toFixed(2) + '×'"></span>
+                    </div>
+                    <input type="range"
+                           class="range range-xs range-warning w-full touch-pan-y"
+                           aria-label="Spacing between repeats"
+                           min="0.5"
+                           max="4"
+                           step="0.05"
+                           :disabled="turns"
+                           :value="layer.stretch"
+                           @change="retime({ stretch: Number($event.target.value) })" />
+                    <p class="opacity-50" x-show="period > 0 && !turns" x-text="'Repeats ' + spacing + '.'"></p>
+                    <p class="opacity-50" x-show="turns">The copies are taking turns, so the gap between turns does the spacing.</p>
+                </div>
+            </section>
+            <!-- The second copy, B: whether there is one, the second pitch it
+                 plays at, and whether the two pitches overlap or take turns.
+                 Taking turns means B waits for A to finish, then the gap, and
+                 A waits the same after B — they never sound together. -->
+            <section class="flex flex-col gap-2">
+                <label class="flex cursor-pointer items-center justify-between">
+                    <span class="uppercase tracking-widest text-amber-300">Second copy</span>
+                    <input type="checkbox"
+                           class="toggle toggle-xs toggle-warning"
+                           aria-label="Second copy"
+                           :checked="layer.second_copy"
+                           @change="retime({ second_copy: $event.target.checked })" />
+                </label>
+                <p class="opacity-50" x-text="!layer.second_copy ? 'One copy of the sound, on its own.' : turns ? 'A second pass plays after each one, never over it.' : 'A second pass trails each one, half a period behind.'"></p>
+                <div class="flex flex-col gap-2" :class="layer.second_copy ? '' : 'opacity-40'">
+                    <div class="flex flex-col gap-1">
+                        <div class="flex items-center justify-between opacity-80">
+                            <span>Its rate</span>
+                            <span x-text="rateB == null ? 'Same as the first' : rateB.toFixed(2) + '×'"></span>
+                        </div>
+                        <input type="range"
+                               class="range range-xs range-warning w-full touch-pan-y"
+                               aria-label="Second copy's rate"
+                               min="0.25"
+                               max="2"
+                               step="0.05"
+                               :disabled="!layer.second_copy"
+                               :value="rateB ?? layer.playback_rate"
+                               @change="retime({ playback_rate_b: Number($event.target.value) })" />
+                        <div class="flex items-center justify-between">
+                            <p class="opacity-50">A second pitch for the layer to alternate with.</p>
+                            <button type="button" class="link text-[7pt] uppercase tracking-widest opacity-80" x-show="rateB != null" @click="retime({ playback_rate_b: null })">Match</button>
+                        </div>
+                    </div>
+                    <label class="flex cursor-pointer items-center justify-between opacity-90">
+                        <span>Take turns</span>
+                        <input type="checkbox"
+                               class="toggle toggle-xs toggle-warning"
+                               aria-label="Take turns"
+                               :disabled="!layer.second_copy"
+                               :checked="layer.take_turns"
+                               @change="retime({ take_turns: $event.target.checked })" />
+                    </label>
+                    <p class="opacity-50" x-text="turns ? 'The two never play over each other: each waits for the other to finish.' : 'The two copies overlap.'"></p>
+                    <div class="flex flex-col gap-1" x-show="turns">
+                        <div class="flex items-center justify-between opacity-80">
+                            <span>Gap between turns</span>
+                            <span x-text="Number(layer.turn_gap) > 0 ? secs(layer.turn_gap) : 'None'"></span>
+                        </div>
+                        <input type="range"
+                               class="range range-xs range-warning w-full touch-pan-y"
+                               aria-label="Gap between turns"
+                               min="0"
+                               max="60"
+                               step="0.1"
+                               :value="layer.turn_gap"
+                               @change="retime({ turn_gap: Number($event.target.value) })" />
+                    </div>
+                </div>
+            </section>
+            <!-- The cycle: `repetitions` periods, then `cycle_rest` of
+                 silence. Repeats mean nothing without a rest, so the slider
+                 waits for one. -->
+            <section class="flex flex-col gap-2">
+                <h3 class="uppercase tracking-widest text-amber-300">Cycle</h3>
+                <div class="flex flex-col gap-1">
+                    <div class="flex items-center justify-between opacity-80">
+                        <span>Start delay</span>
+                        <span x-text="Number(layer.start_delay) > 0 ? secs(layer.start_delay) : 'None'"></span>
+                    </div>
+                    <input type="range"
+                           class="range range-xs range-warning w-full touch-pan-y"
+                           aria-label="Start delay"
+                           min="0"
+                           max="120"
+                           step="0.5"
+                           :value="layer.start_delay"
+                           @change="retime({ start_delay: Number($event.target.value) })" />
+                </div>
+                <div class="flex flex-col gap-1">
+                    <div class="flex items-center justify-between opacity-80">
+                        <span>Rest between cycles</span>
+                        <span x-text="Number(layer.cycle_rest) > 0 ? secs(layer.cycle_rest) : 'None'"></span>
+                    </div>
+                    <input type="range"
+                           class="range range-xs range-warning w-full touch-pan-y"
+                           aria-label="Rest between cycles"
+                           min="0"
+                           max="300"
+                           step="0.5"
+                           :value="layer.cycle_rest"
+                           @change="retime({ cycle_rest: Number($event.target.value) })" />
+                </div>
+                <div class="flex flex-col gap-1" :class="Number(layer.cycle_rest) > 0 ? '' : 'opacity-40'">
+                    <div class="flex items-center justify-between opacity-80">
+                        <span>Repeats per cycle</span>
+                        <span x-text="layer.repetitions"></span>
+                    </div>
+                    <input type="range"
+                           class="range range-xs range-warning w-full touch-pan-y"
+                           aria-label="Repeats per cycle"
+                           min="1"
+                           max="16"
+                           step="1"
+                           :disabled="!(Number(layer.cycle_rest) > 0)"
+                           :value="layer.repetitions"
+                           @change="retime({ repetitions: Number($event.target.value) })" />
+                </div>
+                <p class="opacity-50" x-text="cycle"></p>
+            </section>
+            <!-- Phase shifting: the second copy slips a step later after X
+                 repeats, then after Y, then X again. It needs a second copy
+                 to slip, and a step to hold for. -->
+            <section class="flex flex-col gap-2" :class="layer.second_copy && !turns ? '' : 'opacity-40'">
+                <h3 class="uppercase tracking-widest text-amber-300">Phase</h3>
+                <div class="flex flex-col gap-1">
+                    <div class="flex items-center justify-between opacity-80">
+                        <span>Slip</span>
+                        <span x-text="Number(layer.phase_step) > 0 ? (Number(layer.phase_step) * 100).toFixed(1) + '%' : 'Off'"></span>
+                    </div>
+                    <input type="range"
+                           class="range range-xs range-warning w-full touch-pan-y"
+                           aria-label="Phase slip"
+                           min="0"
+                           max="0.5"
+                           step="0.005"
+                           :disabled="!layer.second_copy || turns"
+                           :value="layer.phase_step"
+                           @change="retime({ phase_step: Number($event.target.value) })" />
+                    <p class="opacity-50" x-text="turns ? 'Taking turns keeps the second copy in its own turn, so it does not slip.' : layer.second_copy ? slip : 'Turn on the second copy to slip it.'"></p>
+                </div>
+                <div class="grid grid-cols-2 gap-3" :class="Number(layer.phase_step) > 0 ? '' : 'opacity-40'">
+                    <div class="flex flex-col gap-1">
+                        <div class="flex items-center justify-between opacity-80">
+                            <span>Hold</span>
+                            <span x-text="layer.phase_hold"></span>
+                        </div>
+                        <input type="range"
+                               class="range range-xs range-warning w-full touch-pan-y"
+                               aria-label="Repeats before a slip"
+                               min="1"
+                               max="64"
+                               step="1"
+                               :disabled="!layer.second_copy || turns || !(Number(layer.phase_step) > 0)"
+                               :value="layer.phase_hold"
+                               @change="retime({ phase_hold: Number($event.target.value) })" />
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <div class="flex items-center justify-between opacity-80">
+                            <span>Then</span>
+                            <span x-text="layer.phase_hold_alt"></span>
+                        </div>
+                        <input type="range"
+                               class="range range-xs range-warning w-full touch-pan-y"
+                               aria-label="Repeats before the next slip"
+                               min="1"
+                               max="64"
+                               step="1"
+                               :disabled="!layer.second_copy || turns || !(Number(layer.phase_step) > 0)"
+                               :value="layer.phase_hold_alt"
+                               @change="retime({ phase_hold_alt: Number($event.target.value) })" />
+                    </div>
+                </div>
+                <p class="opacity-50">Repeats before each slip, alternating.</p>
+            </section>
+            <p class="border-t border-white/15 pt-3 opacity-60" x-show="layer.seamless && !layer.isNew" x-text="layer.loudness_lufs == null ? 'Seamless loop.' : 'Seamless loop, levelled to ' + Number(layer.loudness_lufs).toFixed(1) + ' LUFS.'"></p>
+        </div>
+    </div>
+</div>

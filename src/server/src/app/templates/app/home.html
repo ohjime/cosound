@@ -102,10 +102,10 @@ instead of writing it.
 
 `new_sound_count` is how many of the layers are an artist's new sounds, which
 have no Sound row yet. This dialog is where they get one: Save first creates
-each of them (the store's createNewSounds, one `studio:create_sound` POST
-apiece), swaps their browser-made ids in the hidden `layers` for the real ones,
-and only then lets htmx post the form — `sounds-created` is its trigger rather
-than submit. Before that, the dialog says what saving does to them, because it
+each of them (the store's createNewSounds, one `library:create_sound` POST
+apiece, which bakes the loop check into the file), swaps their browser-made ids
+in the hidden `layers` for the real ones, and only then lets htmx post the form
+— `sounds-created` is its trigger rather than submit. Before that, the dialog says what saving does to them, because it
 is the one moment it can: they are fixed from then on, and nobody else hears
 them until cosound has reviewed them. A failed upload is reported here and
 Save tries again; sounds already created are kept, and `ids` remembers them.
@@ -130,7 +130,7 @@ Save tries again; sounds already created are kept, and `ids` remembers them.
                   this.error = '';
                   try {
                       const token = this.$el.querySelector('[name=csrfmiddlewaretoken]').value;
-                      Object.assign(this.ids, await Alpine.store('soundLayers').createNewSounds('{% url 'studio:create_sound' %}', token));
+                      Object.assign(this.ids, await Alpine.store('soundLayers').createNewSounds('{% url 'library:create_sound' %}', token));
                       const layers = JSON.parse(this.$refs.layers.value).map(({ is_new, ...layer }) => this.ids[layer.sound_id] ? { ...layer, sound_id: this.ids[layer.sound_id] } : { is_new, ...layer });
                       this.$refs.layers.value = JSON.stringify(layers);
                       htmx.trigger(this.$el, 'sounds-created');

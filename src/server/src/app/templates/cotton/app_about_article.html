@@ -293,9 +293,10 @@ before this page goes in front of anyone.
                     a layer queries
                     <em>only</em> the listener's collection, which is where the
                     deck economy is enforced. Saving posts the layer JSON, clamps
-                    each gain into [0, 1], drops any layer whose id isn't a real
-                    <code>Sound</code> (blank slots and local files from the artist
-                    studio both carry browser-made ids), resolves the result to a
+                    each gain into [0, 1] and each layer's timing into its range,
+                    drops any layer whose id isn't a real
+                    <code>Sound</code> (blank slots and an artist's unsaved new
+                    sounds both carry browser-made ids), resolves the result to a
                     <code>Cosound</code>, and attaches a titled
                     <code>SoundMix</code> to the user.
                 </p>

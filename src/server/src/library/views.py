@@ -1,13 +1,17 @@
 import json
 import uuid
 
+from django.db import transaction
 from django.db.models import Q
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
+from django.views.decorators.http import require_POST
+from core.audio import bake_sound
 from core.models import Cosound, Listener, Sound
-from core.utils import add_card, close_modal, show_modal
+from core.utils import add_card, close_modal, get_artist, show_modal
 from app.utils import serialize_mix
 from login.views import login_modal
+from library.forms import NewSoundForm
 from library.models import SoundMix
 from library.utils import (
     count_new_sounds,
@@ -84,7 +88,7 @@ def library_save_confirm(request):
     if not layers:
         return HttpResponse("No layers provided.", status=400)
     # Someone else's unreviewed upload is not a sound this listener can have.
-    sound_ids = {sound_id for sound_id, _ in layers}
+    sound_ids = {layer.sound_id for layer in layers}
     if Sound.objects.visible_to(request.user).filter(pk__in=sound_ids).count() != len(
         sound_ids
     ):
@@ -315,3 +319,114 @@ def library_carousel(request):
     if not request.htmx:
         return HttpResponse("Request Denied.")
     return render(request, "library/index.html#default_view")
+
+
+# How many existing tags a search in the new-sound panel offers at once. The
+# panel is a few lines tall, so a handful of chips is what fits.
+TAG_SUGGESTION_LIMIT = 6
+
+
+def library_tag_search(request):
+    """Existing tags matching what the artist typed into a new sound's tag box.
+
+    A new sound may only carry tags cosound already has, so this is the one way
+    a tag gets onto one: only Sound tags are offered, and the panel adds nothing
+    that did not come from here. `chosen` (newline-separated) is what the layer
+    already carries, left out of the answer. When no tag matches at all, the
+    fragment offers to ask cosound to add it instead. `exact` keeps that offer
+    away from a tag the layer already carries.
+    """
+    if not request.htmx:
+        return HttpResponse("Request Denied.")
+    if get_artist(request.user) is None:
+        return HttpResponse("Request Denied.", status=403)
+
+    from django.contrib.contenttypes.models import ContentType
+    from taggit.models import Tag
+
+    query = (request.GET.get("q") or "").strip()
+    if not query:
+        return HttpResponse("")
+    chosen = {n.strip().lower() for n in (request.GET.get("chosen") or "").split("\n") if n.strip()}
+
+    sound_tags = Tag.objects.filter(
+        taggit_taggeditem_items__content_type=ContentType.objects.get_for_model(Sound)
+    ).distinct()
+    exact = sound_tags.filter(name__iexact=query).exists()
+    names = [
+        name
+        for name in sound_tags.filter(name__icontains=query)
+        .order_by("name")
+        .values_list("name", flat=True)
+        if name.lower() not in chosen
+    ][:TAG_SUGGESTION_LIMIT]
+
+    return render(
+        request,
+        "library/index.html#tag_suggestions",
+        {"query": query, "tags": names, "exact": exact},
+    )
+
+
+@require_POST
+def library_create_sound(request):
+    """Turn a new sound on the artist's card into a Sound row.
+
+    Called by the save dialog, once per new sound, just before the mix itself is
+    saved (soundscape-store's createNewSounds). The upload is baked first —
+    cropped, its seam crossfaded and levelled, as the artist checked it — and
+    the result goes to the default storage (S3) as FLAC, with a record on the
+    row of how it was made. The row is credited to the artist posting it and
+    left unpublished: it plays in this artist's mixes straight away, and reaches
+    anyone else only once staff publish it from the admin.
+
+    There is no matching edit. What the artist saved is what cosound reviews,
+    so a sound is fixed from this moment on; the answer is the finished layer,
+    which the card swaps in for the fields it was showing.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Sign in to save a new sound."}, status=401)
+    artist = get_artist(request.user)
+    if artist is None:
+        return JsonResponse({"error": "Only artists can add sounds."}, status=403)
+
+    form = NewSoundForm(request.POST, request.FILES)
+    if not form.is_valid():
+        field, errors = next(iter(form.errors.items()))
+        label = "" if field == "__all__" else f"{form.fields[field].label or field}: "
+        return JsonResponse({"error": f"{label}{errors[0]}"}, status=400)
+
+    data = form.cleaned_data
+    try:
+        baked = bake_sound(
+            data["file"],
+            trim_start=data["trim_start"],
+            trim_end=data["trim_end"],
+            loop_crossfade=data["loop_crossfade"],
+            loudness=data["loudness"],
+            target=data["loudness_target"],
+        )
+    except (OSError, RuntimeError, ValueError):
+        return JsonResponse({"error": "Your sound could not be prepared. Try another file."}, status=400)
+
+    with transaction.atomic():
+        sound = Sound(
+            title=data["title"].strip(),
+            flavor=data["flavor"].strip(),
+            artist=artist,
+            published=False,
+            seamless=True,
+            duration=baked.duration,
+            trim_start=baked.trim_start,
+            trim_end=baked.trim_end,
+            loop_crossfade=baked.loop_crossfade,
+            loudness_lufs=baked.loudness_lufs,
+            loudness_gain_db=baked.loudness_gain_db,
+        )
+        sound.file.save(baked.content.name, baked.content, save=False)
+        sound.art.save(data["art"].name, data["art"], save=False)
+        sound.save()
+        sound.tags.set(data["tags"])
+
+    [layer] = serialize_sounds([sound], user=request.user)
+    return JsonResponse({"layer": layer}, status=201)

@@ -3,7 +3,7 @@ The card's flavor panel: the layer's tags over its story.
 
 A new sound (an artist's Create on the home page's LIBRARY tab) has no tags or
 story yet — they are the artist's to write — so the panel becomes the fields
-for them instead, c-studio-new-sound-details. Both the card and the picker's
+for them instead, c-library-new-sound-details. Both the card and the picker's
 way back (`library:carousel`, #default_view) render this, which is what keeps
 the fields in place after a trip through the picker.
 -->
@@ -15,5 +15,5 @@ the fields in place after a trip through the picker.
     </div>
 </template>
 <template x-if="$store.soundLayers.currentLayer?.isNew">
-    <c-studio-new-sound-details />
+    <c-library-new-sound-details />
 </template>

@@ -329,12 +329,11 @@ TAG_SUGGESTION_LIMIT = 6
 def library_tag_search(request):
     """Existing tags matching what the artist typed into a new sound's tag box.
 
-    A new sound may only carry tags cosound already has, so this is the one way
-    a tag gets onto one: only Sound tags are offered, and the panel adds nothing
-    that did not come from here. `chosen` (newline-separated) is what the layer
-    already carries, left out of the answer. When no tag matches at all, the
-    fragment offers to ask cosound to add it instead. `exact` keeps that offer
-    away from a tag the layer already carries.
+    Only Sound tags are offered. `chosen` (newline-separated) is what the layer
+    already carries, left out of the answer. When no tag matches exactly, the
+    fragment offers to add what was typed as a new tag, which is created when
+    the mix is saved (NewSoundForm.clean_tags). `exact` keeps that offer away
+    from a tag that already exists, including one the layer already carries.
     """
     if not request.htmx:
         return HttpResponse("Request Denied.")

@@ -5,11 +5,11 @@ title and artist are fields on the artwork above (c-core-sound-carousel); the
 tags and the story are fields here, in the same places the card reads them from
 on a finished sound.
 
-Tags can only be ones cosound already has. The box is a search, not free text:
-typing asks `library:tag_search` for existing tags that match, and the only way
-onto the layer is pressing one of those. Enter takes the first. A search with no
-exact match also offers a link to ask cosound to add the tag — a placeholder for
-now; it does not send anything yet.
+Typing asks `library:tag_search` for existing tags that match, offered as chips
+to press. Enter adds what was typed: an existing tag of the same name
+(whatever its case) if the answer has one, otherwise a new tag. A new tag is
+only a name on the layer until the mix is saved — library_create_sound creates
+it then, with the sound, and reuses an existing tag the server finds by name.
 
 The search is a plain fetch from Alpine rather than hx-get. This panel is
 created by an Alpine x-if, which htmx never sees, and asking htmx to process
@@ -31,11 +31,17 @@ a line comment would swallow the rest of the object with it.
              if (response.ok && this.$refs.tagInput.value.trim() === query) this.$refs.suggestions.innerHTML = await response.text();
          },
          add(name) {
+             name = (name || '').trim();
              if (!name) return;
-             this.store.setTags(this.store.currentIndex, [...this.chosen, name]);
+             if (!this.chosen.some(n => n.toLowerCase() === name.toLowerCase())) this.store.setTags(this.store.currentIndex, [...this.chosen, name]);
              this.$refs.tagInput.value = '';
              this.$refs.suggestions.innerHTML = '';
              this.$refs.tagInput.focus();
+         },
+         enter() {
+             const typed = this.$refs.tagInput.value.trim();
+             const match = [...this.$refs.suggestions.querySelectorAll('[data-tag]')].find(el => el.dataset.tag.toLowerCase() === typed.toLowerCase());
+             this.add(match ? match.dataset.tag : typed);
          },
          remove(name) {
              this.store.setTags(this.store.currentIndex, this.chosen.filter(n => n !== name));
@@ -61,7 +67,8 @@ a line comment would swallow the rest of the object with it.
                placeholder="Add a tag"
                class="min-w-20 flex-1 bg-transparent font-serif text-xs font-bold outline-none placeholder:font-normal placeholder:italic placeholder:text-black/40"
                @input.debounce.250ms="search($el.value.trim())"
-               @keydown.enter.prevent="$refs.suggestions.querySelector('[data-tag]')?.click()"
+               maxlength="100"
+               @keydown.enter.prevent="enter()"
                @keydown.escape="$el.value = ''; $refs.suggestions.innerHTML = ''" />
     </div>
     <div id="new-sound-tag-suggestions" x-ref="suggestions" class="not-italic"></div>

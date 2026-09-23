@@ -1,9 +1,11 @@
+from functools import reduce
+from operator import or_
+
 from django import forms
-from django.contrib.contenttypes.models import ContentType
+from django.db.models import Q
 from taggit.models import Tag
 
 from core.audio import HOUSE_LOUDNESS_LUFS, LOUDNESS_NUDGE_LU, MIN_REGION_SECONDS
-from core.models import Sound
 from core.validators import validate_sound
 
 
@@ -18,9 +20,9 @@ class NewSoundForm(forms.Form):
     into the seam, and the loudness to level to, with the engine's reading of
     the cropped region. core.audio.bake_sound makes the last three permanent.
 
-    Tags arrive one per line and must already exist on some Sound — the card
-    only ever offers those (library_tag_search), so anything else is dropped
-    rather than created behind cosound's back.
+    Tags arrive one per line. A name that matches an existing tag (whatever its
+    case) becomes that tag; any other is a tag the artist typed into the card
+    and pressed Enter on, and is created with the sound when the mix is saved.
     """
 
     file = forms.FileField(validators=[validate_sound])
@@ -45,17 +47,22 @@ class NewSoundForm(forms.Form):
         return art
 
     def clean_tags(self):
-        names = {n.strip() for n in self.cleaned_data["tags"].split("\n") if n.strip()}
+        names = {}
+        for raw in self.cleaned_data["tags"].split("\n"):
+            name = raw.strip()
+            if name:
+                names.setdefault(name.lower(), name)
         if not names:
             return []
-        return list(
-            Tag.objects.filter(
-                taggit_taggeditem_items__content_type=ContentType.objects.get_for_model(Sound),
-                name__in=names,
-            )
-            .distinct()
-            .values_list("name", flat=True)
-        )
+        limit = Tag._meta.get_field("name").max_length
+        if any(len(name) > limit for name in names.values()):
+            raise forms.ValidationError(f"A tag can be at most {limit} characters.")
+        # Reuse the existing spelling so "rain" lands on "Rain" rather than
+        # beside it; taggit creates whatever is left when the sound is tagged.
+        existing = Tag.objects.filter(reduce(or_, (Q(name__iexact=n) for n in names.values())))
+        for tag in existing:
+            names[tag.name.lower()] = tag.name
+        return list(names.values())
 
     def clean(self):
         """The loop check has to describe something the file can hold.

@@ -21,6 +21,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import NoReverseMatch, reverse
 from PIL import Image
+from taggit.models import Tag
 
 from app.utils import serialize_mix
 from core.admin import SoundAdmin
@@ -112,6 +113,19 @@ class CreateSoundTests(MediaTestCase):
         data = {key: value for key, value in data.items() if value is not None}
         return self.client.post(reverse("library:create_sound"), data)
 
+    def test_a_tag_typed_in_another_case_reuses_the_existing_one(self):
+        self.client.force_login(self.artist_user)
+        self.assertEqual(self.post(tags="rain\nThunder\nthunder").status_code, 201)
+
+        sound = Sound.objects.get(title="Tin roof")
+        self.assertCountEqual(sound.tags.names(), ["Rain", "Thunder"])
+        self.assertEqual(Tag.objects.filter(name__iexact="rain").count(), 1)
+
+    def test_an_overlong_tag_is_refused(self):
+        self.client.force_login(self.artist_user)
+        self.assertEqual(self.post(tags="x" * 101).status_code, 400)
+        self.assertFalse(Sound.objects.filter(title="Tin roof").exists())
+
     def test_signed_out_and_non_artists_are_refused(self):
         self.assertEqual(self.post().status_code, 401)
         self.client.force_login(self.listener)
@@ -129,8 +143,8 @@ class CreateSoundTests(MediaTestCase):
         self.assertEqual(sound.flavor, "Rain on the shed.")
         self.assertTrue(sound.file.name.startswith("sounds/"))
         self.assertTrue(sound.art.name.startswith("sound_arts/"))
-        # Only tags cosound already has; the card offers nothing else.
-        self.assertEqual(list(sound.tags.names()), ["Rain"])
+        # An existing tag is reused; a new one is created with the sound.
+        self.assertCountEqual(sound.tags.names(), ["Rain", "Not a tag"])
 
         layer = response.json()["layer"]
         self.assertEqual(layer["sound_id"], sound.pk)
@@ -288,13 +302,13 @@ class TagSearchTests(TestCase):
     def test_only_artists_may_search(self):
         self.assertEqual(self.search(q="rain").status_code, 403)
 
-    def test_offers_existing_tags_and_no_request_link_on_an_exact_match(self):
+    def test_offers_existing_tags_and_no_new_tag_offer_on_an_exact_match(self):
         self.client.force_login(self.user)
         response = self.search(q="rain")
         self.assertContains(response, 'data-tag="Rain"')
         self.assertContains(response, 'data-tag="Rainforest"')
         self.assertNotContains(response, 'data-tag="Night"')
-        self.assertNotContains(response, "Ask cosound to add")
+        self.assertNotContains(response, "data-new-tag=")
 
     def test_leaves_out_tags_the_layer_already_has(self):
         self.client.force_login(self.user)
@@ -302,18 +316,18 @@ class TagSearchTests(TestCase):
         self.assertNotContains(response, 'data-tag="Rain"')
         self.assertContains(response, 'data-tag="Rainforest"')
 
-    def test_an_unknown_tag_offers_to_ask_cosound(self):
+    def test_an_unknown_tag_offers_to_add_it_as_new(self):
         self.client.force_login(self.user)
         response = self.search(q="thunder")
         self.assertNotContains(response, "data-tag=")
         self.assertContains(response, "No tag matches “thunder”")
-        self.assertContains(response, "Ask cosound to add it")
+        self.assertContains(response, 'data-new-tag="thunder"')
 
-    def test_a_half_typed_tag_does_not_offer_the_request_link(self):
+    def test_a_half_typed_tag_offers_matches_and_no_new_tag(self):
         self.client.force_login(self.user)
         response = self.search(q="nig")
         self.assertContains(response, 'data-tag="Night"')
-        self.assertNotContains(response, "Ask cosound to add")
+        self.assertNotContains(response, "data-new-tag=")
 
     def test_an_empty_query_answers_nothing(self):
         self.client.force_login(self.user)

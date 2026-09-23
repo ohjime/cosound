@@ -77,7 +77,8 @@ placeholder: nothing is sent yet.
     {% if not tags and not exact %}
         <p class="pb-1 font-serif text-[8pt] italic opacity-70">
             No tag matches “{{ query }}”.
-            <a href="#" class="link not-italic" @click.prevent>Ask cosound to add it</a>
+            <button type="button" class="link not-italic" data-new-tag="{{ query }}" @click="add($el.dataset.newTag)">Press Enter to add it as a new tag</button>
+            — it is created when you save the mix.
         </p>
     {% endif %}
 {% endpartialdef %}

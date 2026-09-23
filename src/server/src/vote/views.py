@@ -144,8 +144,6 @@ def submit_vote(request):
             response["HX-Trigger"] = "auth-required"
             return response
 
-    record_listener_presence(player, request.user)
-
     should_awaken = False
     awaken_listener = None
 
@@ -199,10 +197,11 @@ def submit_vote(request):
             # treating the room as empty and choosing the Player Program's
             # baseline-or-silence fallback. Look them up without creating
             # anything: a listener we have never seen has no saved sounds, so
-            # they would add no evidence anyway.
+            # they would add no evidence anyway. Their visit is recorded only
+            # once the player has woken, so it cannot shape this wake-up.
             awaken_listener = Listener.objects.filter(user=request.user).first()
         else:
-            listener, _ = Listener.objects.get_or_create(user=request.user)
+            listener = record_listener_presence(player, request.user)
             seconds_left = get_throttle_seconds_left(listener)
             if seconds_left > 0:
                 response = HttpResponse("")
@@ -254,6 +253,7 @@ def submit_vote(request):
                 }
             )
             return response
+        record_listener_presence(player, request.user)
         rendered_layers = serialize_player_for_carousel(
             player,
             request.user,

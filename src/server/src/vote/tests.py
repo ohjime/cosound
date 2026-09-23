@@ -11,6 +11,7 @@ from core.models import (
     Artist,
     Cosound,
     Listener,
+    ListenerPresence,
     Manager,
     PlaybackExposure,
     Player,
@@ -256,6 +257,15 @@ class SleepingActivationTests(TestCase):
             },
         )
 
+    def assert_visit_recorded(self):
+        # A wake-up counts as a visit once the player is awake, never before:
+        # the decision above still saw an empty room.
+        self.assertTrue(
+            ListenerPresence.objects.filter(
+                player=self.player, listener__user=self.user
+            ).exists()
+        )
+
     def test_sleeping_request_wakes_with_the_posts_baseline_without_vote_data(self):
         self.player.program.collection.add(self.first_sound, self.second_sound)
 
@@ -294,7 +304,7 @@ class SleepingActivationTests(TestCase):
             [layer["sound_id"] for layer in self.player.current_exposure.layers],
             expected_sound_ids,
         )
-        self.assertFalse(Listener.objects.filter(user=self.user).exists())
+        self.assert_visit_recorded()
         self.assertFalse(Vote.objects.exists())
         self.assertFalse(Cosound.objects.exists())
         announce.assert_called_once()
@@ -359,7 +369,7 @@ class SleepingActivationTests(TestCase):
         )
         announce.assert_not_called()
         self.assertFalse(Vote.objects.exists())
-        self.assertFalse(Listener.objects.exists())
+        self.assert_visit_recorded()
         self.assertFalse(Cosound.objects.exists())
 
     def test_activation_returns_an_existing_mix_to_the_baseline(self):
@@ -452,7 +462,7 @@ class SleepingActivationTests(TestCase):
         )
         self.assertIsNotNone(self.player.current_exposure)
         self.assertFalse(Vote.objects.exists())
-        self.assertFalse(Listener.objects.exists())
+        self.assert_visit_recorded()
         self.assertFalse(Cosound.objects.exists())
         announce.assert_called_once()
 
@@ -494,7 +504,7 @@ class SleepingActivationTests(TestCase):
         )
         self.assertIsNotNone(self.player.current_exposure)
         self.assertFalse(Vote.objects.exists())
-        self.assertFalse(Listener.objects.exists())
+        self.assert_visit_recorded()
         self.assertFalse(Cosound.objects.exists())
         announce.assert_called_once()
 

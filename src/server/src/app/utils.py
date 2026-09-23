@@ -1,6 +1,20 @@
+def _visible_to_creator(sound, creator_id):
+    """Whether the mix's owner may still hear this layer.
+
+    A sound pulled from publication is gone from every saved mix but those of
+    the artist who uploaded it. Checked in Python rather than with a query so
+    the prefetch the saved list makes still covers it.
+    """
+    if sound.published:
+        return True
+    return sound.artist is not None and sound.artist.user_id == creator_id
+
+
 def serialize_mix(sm):
     layers = []
     for sl in sm.cosound.soundlayer_set.all():
+        if not _visible_to_creator(sl.sound, sm.creator_id):
+            continue
         gain = float(sl.gain)
         layers.append(
             {

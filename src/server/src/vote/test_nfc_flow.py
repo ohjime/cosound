@@ -50,9 +50,11 @@ class NFCVoteFlowTests(TestCase):
         )
         cls.listener = Listener.objects.create(user=cls.user)
         cls.favorite = Sound.objects.create(
+            published=True,
             title="Listener's rain", file="sounds/favorite.wav", embeddings=[0.0] * 5
         )
         cls.venue_sound = Sound.objects.create(
+            published=True,
             title="Venue rain", file="sounds/venue.wav", embeddings=[0.0] * 5
         )
         cls.favorite.tags.add("rain")

@@ -17,9 +17,11 @@ class LocalVotePageTests(TestCase):
         cls.user = User.objects.create_user(username="local-listener", email="local@example.com")
         cls.manager = Manager.objects.create(user=cls.user, name="Room manager")
         cls.sound = Sound.objects.create(
+            published=True,
             title="Rain on the roof", file="sounds/do-not-load.wav", embeddings=[0.0] * 5
         )
         cls.other_sound = Sound.objects.create(
+            published=True,
             title="Unused collection sound", file="sounds/unused.wav", embeddings=[0.0] * 5
         )
         playing = Prediction.new()

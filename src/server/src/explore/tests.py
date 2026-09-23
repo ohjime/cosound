@@ -21,6 +21,7 @@ from explore.renderer import render_markdown
 def make_sound(title, **fields):
     """A Sound with its embedding supplied, so save() skips the classifier."""
     return Sound.objects.create(
+        published=True,
         file=f"sounds/{title.lower().replace(' ', '-')}.wav",
         title=title,
         embeddings=[0, 0, 0, 0, 0],

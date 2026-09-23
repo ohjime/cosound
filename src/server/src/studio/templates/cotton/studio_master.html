@@ -5,8 +5,9 @@ Save posts to the library's own endpoint — a studio mix and a listener's mix a
 the same thing on the server, a list of sound ids and gains. That is also the
 reason it can be off: `canSave` is false while the mix holds a track from the
 artist's machine, because it has no Sound row to point at. A blank layer is not
-part of the mix at all — `savableLayers` is what gets posted, so an unfilled
-slot is left out, and a mix of nothing but blank layers has nothing to save.
+part of the mix at all — `saveLayers` (the savable layers as ids and levels) is
+what gets posted, so an unfilled slot is left out, and a mix of nothing but
+blank layers has nothing to save.
 `saveBlockedReason` is the explanation, carried on the button's own tooltip so
 the card stays clean.
 -->
@@ -34,7 +35,7 @@ the card stays clean.
             :title="$store.soundLayers?.canSave ? 'Save this Cosound' : $store.soundLayers?.saveBlockedReason"
             aria-label="Save this mix" hx-post="{% url 'library:save' %}"
             hx-trigger="click[!document.getElementById('login-card')]" hx-swap="none"
-            hx-vals='js:{ layers: JSON.stringify(Alpine.store("soundLayers").savableLayers.map(l => ({ sound_id: l.sound_id, sound_gain: Alpine.store("soundLayers").isSilenced(l) ? 0 : l.gain / 100 }))), title: Alpine.store("soundLayers")?.loadedTitle || "" }'>
+            hx-vals='js:{ layers: JSON.stringify(Alpine.store("soundLayers").saveLayers), title: Alpine.store("soundLayers")?.loadedTitle || "" }'>
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor" class="size-[2em]">
                 <path
                     d="M840-680v480q0 33-23.5 56.5T760-120H200q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h480l160 160Zm-80 34L646-760H200v560h560v-446ZM565-275q35-35 35-85t-35-85q-35-35-85-35t-85 35q-35 35-35 85t35 85q35 35 85 35t85-35ZM240-560h360v-160H240v160Zm-40-86v446-560 114Z" />

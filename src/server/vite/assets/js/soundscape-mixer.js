@@ -414,6 +414,23 @@ function stopSources(voice, when = 0) {
     voice.activeSources.clear();
 }
 
+/**
+ * Thrown by a load that was still decoding when the mixer was destroyed.
+ *
+ * Decoding is the slow part of preparing a voice, and it is exactly where a
+ * mixer gets torn down: HTMX swaps the card out, or the store starts a fresh
+ * load over the top. By the time the files arrive the AudioContext is closed,
+ * so building the voice's gain node on it would only earn a console warning
+ * per layer. The load stops instead, and its caller can tell this apart from
+ * a file that genuinely failed.
+ */
+export class MixerDestroyedError extends Error {
+    constructor() {
+        super("The mixer was destroyed while it was loading.");
+        this.name = "MixerDestroyedError";
+    }
+}
+
 export class SoundscapeMixer extends EventTarget {
     constructor({
         audioContext,
@@ -544,13 +561,19 @@ export class SoundscapeMixer extends EventTarget {
         return this.context.createBuffer(2, rate, rate);
     }
 
+    _throwIfDestroyed() {
+        if (this.destroyed) throw new MixerDestroyedError();
+    }
+
     async _prepareVoice(layer, index, onFileLoaded) {
         const config = normalizeLayer(layer, index);
         const bufferA = config.urlA ? await this._decode(config.urlA) : this._silence();
+        this._throwIfDestroyed();
         onFileLoaded?.();
         const bufferB = config.urlB === config.urlA
             ? bufferA
             : await this._decode(config.urlB);
+        this._throwIfDestroyed();
         if (config.urlB !== config.urlA) onFileLoaded?.();
 
         const gain = this.context.createGain();
@@ -752,6 +775,7 @@ export class SoundscapeMixer extends EventTarget {
         const prepared = await Promise.all(
             configs.map((layer, index) => this._prepareVoice(layer, index, report)),
         );
+        this._throwIfDestroyed();
         const previous = this.voices;
         const now = this.context.currentTime;
         const startAt = Math.max(now + 0.08, Math.ceil(now));
@@ -778,8 +802,10 @@ export class SoundscapeMixer extends EventTarget {
     async replaceLayer(index, layer, {
         crossfadeSeconds = this.crossfadeSeconds,
     } = {}) {
+        this._throwIfDestroyed();
         if (!this.voices[index]) throw new RangeError(`No layer exists at index ${index}.`);
         const replacement = await this._prepareVoice(layer, index);
+        this._throwIfDestroyed();
         const previous = this.voices[index];
         const now = this.context.currentTime;
         replacement.nextA = now + 0.08;
@@ -806,6 +832,7 @@ export class SoundscapeMixer extends EventTarget {
     async addLayer(layer, { crossfadeSeconds = this.crossfadeSeconds } = {}) {
         if (this.destroyed) throw new Error("Cannot add a layer to a destroyed mixer.");
         const voice = await this._prepareVoice(layer, this.voices.length);
+        this._throwIfDestroyed();
         const now = this.context.currentTime;
         voice.nextA = now + 0.08;
         voice.nextB = voice.nextA + voice.offsetB;

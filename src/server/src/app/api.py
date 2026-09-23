@@ -35,7 +35,7 @@ def get_manifest(request) -> dict[str, str]:
     player: Player = request.auth
     return {
         str(sound.pk): request.build_absolute_uri(sound.file.url)
-        for sound in player.program.collection.all()
+        for sound in player.program.collection.published()
         if sound.file
     }
 

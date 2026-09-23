@@ -37,6 +37,7 @@ class SleepingPlayerCardTests(TestCase):
             playing=Prediction.new(),
         )
         cls.sound = Sound.objects.create(
+            published=True,
             title="Morning birds",
             file="sounds/morning-birds.wav",
             embeddings=[0.0] * 5,

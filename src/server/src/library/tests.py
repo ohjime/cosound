@@ -18,6 +18,7 @@ class LibraryKeepSoundTests(TestCase):
             password="password",
         )
         cls.sound = Sound.objects.create(
+            published=True,
             file="sounds/heart-test.wav",
             title="Heart test",
             embeddings=[0, 0, 0, 0, 0],
@@ -86,12 +87,14 @@ class LibrarySwapTests(TestCase):
             password="password",
         )
         cls.sound = Sound.objects.create(
+            published=True,
             file="sounds/swap-test.wav",
             title="Forest Rain",
             embeddings=[0, 0, 0, 0, 0],
         )
         cls.sound.tags.add("rain")
         cls.other = Sound.objects.create(
+            published=True,
             file="sounds/traffic.wav",
             title="Ring Road",
             embeddings=[0, 0, 0, 0, 0],
@@ -146,6 +149,7 @@ class LibrarySwapTests(TestCase):
 
     def test_tag_buttons_wear_their_own_seeded_artwork(self):
         awkward = Sound.objects.create(
+            published=True,
             file="sounds/awkward.wav",
             title="Awkward",
             embeddings=[0, 0, 0, 0, 0],
@@ -204,6 +208,7 @@ class LibrarySwapTests(TestCase):
         listener.collection.add(self.sound)
         for index in range(2):
             extra = Sound.objects.create(
+                published=True,
                 file=f"sounds/more-rain-{index}.wav",
                 title=f"More rain {index}",
                 embeddings=[0, 0, 0, 0, 0],
@@ -219,6 +224,7 @@ class LibrarySwapTests(TestCase):
 
     def test_untagged_collection_falls_back_to_the_catalogue(self):
         bare = Sound.objects.create(
+            published=True,
             file="sounds/bare.wav",
             title="Untagged",
             embeddings=[0, 0, 0, 0, 0],
@@ -242,6 +248,7 @@ class LibrarySavedListTests(TestCase):
             password="password",
         )
         cls.sound = Sound.objects.create(
+            published=True,
             file="sounds/saved-list.wav",
             title="Night birds",
             artist_legacy="Field Recordist",
@@ -312,6 +319,7 @@ class LibraryDeleteMixTests(TestCase):
             username="other-listener", email="other-listener@example.com"
         )
         sound = Sound.objects.create(
+            published=True,
             file="sounds/delete-mix.wav",
             title="Deletable sound",
             embeddings=[0, 0, 0, 0, 0],
@@ -361,18 +369,21 @@ class LibrarySearchTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.sound1 = Sound.objects.create(
+            published=True,
             file="sounds/rain.wav",
             title="Rainstorm",
             embeddings=[0, 0, 0, 0, 0],
         )
         cls.sound1.tags.add("weather")
         cls.sound2 = Sound.objects.create(
+            published=True,
             file="sounds/wind.wav",
             title="Gentle Wind",
             embeddings=[0, 0, 0, 0, 0],
         )
         cls.sound2.tags.add("weather")
         cls.sound3 = Sound.objects.create(
+            published=True,
             file="sounds/market.wav",
             title="Market Square",
             embeddings=[0, 0, 0, 0, 0],
@@ -488,11 +499,13 @@ class LibrarySaveTests(TestCase):
             username="saver", email="saver@example.com", password="password"
         )
         cls.sound = Sound.objects.create(
+            published=True,
             file="sounds/save-a.wav",
             title="Rain on tin",
             embeddings=[0, 0, 0, 0, 0],
         )
         cls.other_sound = Sound.objects.create(
+            published=True,
             file="sounds/save-b.wav",
             title="Distant thunder",
             embeddings=[0, 0, 0, 0, 0],

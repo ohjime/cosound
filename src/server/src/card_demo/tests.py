@@ -9,6 +9,7 @@ class CardDemoTests(TestCase):
     def setUpTestData(cls):
         for index in range(1, 10):
             Sound.objects.create(
+                published=True,
                 title=f"Demo sound {index}",
                 artist_legacy=f"Artist {index}",
                 file=f"sounds/demo-{index}.wav",

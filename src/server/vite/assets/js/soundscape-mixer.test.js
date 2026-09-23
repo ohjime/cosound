@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+    MixerDestroyedError,
     SoundscapeMixer,
     cropRegion,
     gainFromSlider,
@@ -211,6 +212,49 @@ test("addLayer reports the new count on layerschange", async () => {
 
     assert.equal(count, 2);
     mixer.destroy();
+});
+
+// A mixer whose decodes wait until the test lets them finish, which is how a
+// mixer gets torn down mid-load: HTMX swaps the card out, or the store starts a
+// fresh load, while the files are still arriving.
+function pendingMixer() {
+    const context = fakeContext();
+    const mixer = new SoundscapeMixer({ audioContext: context });
+    const releases = [];
+    mixer._decode = () => new Promise((resolve) => {
+        releases.push(() => resolve({ duration: 24 }));
+    });
+    const releaseAll = () => releases.splice(0).forEach((release) => release());
+    return { context, mixer, releaseAll };
+}
+
+test("a mixer destroyed while its files decode builds nothing on the closed context", async () => {
+    const { context, mixer, releaseAll } = pendingMixer();
+    const loading = mixer.setLayers([
+        { id: "a", url: "a.wav" },
+        { id: "b", url: "b.wav" },
+        { id: "c", url: "c.wav" },
+    ]);
+    const gainsBuilt = context.gains.length;
+
+    mixer.destroy();
+    releaseAll();
+
+    await assert.rejects(loading, MixerDestroyedError);
+    assert.equal(context.gains.length, gainsBuilt);
+    assert.deepEqual(mixer.voices, []);
+});
+
+test("a layer added to a mixer destroyed mid-decode is never built", async () => {
+    const { context, mixer, releaseAll } = pendingMixer();
+    const adding = mixer.addLayer({ id: "a", url: "a.wav" });
+    const gainsBuilt = context.gains.length;
+
+    mixer.destroy();
+    releaseAll();
+
+    await assert.rejects(adding, MixerDestroyedError);
+    assert.equal(context.gains.length, gainsBuilt);
 });
 
 test("removeLayer drops only the targeted voice", async () => {

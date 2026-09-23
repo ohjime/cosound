@@ -16,7 +16,7 @@ class SelectablePostTests(TestCase):
         cls.local = cls.player.program
         cls.original = cls.local.post
         cls.replacement = Post.objects.create(title='Replacement writing', article='Replacement **article**', composer=cls.user, publication_date=timezone.now())
-        cls.sound = Sound.objects.create(title='Room sound', file='sounds/room.wav', embeddings=[0] * 5)
+        cls.sound = Sound.objects.create(published=True, title='Room sound', file='sounds/room.wav', embeddings=[0] * 5)
         cls.local.collection.add(cls.sound)
         cls.mix = Cosound.get_or_create_from_layers([(cls.sound.pk, 0.4)])
         cls.public = PublicPost.objects.create(post=cls.original, cosound=cls.mix)

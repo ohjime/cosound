@@ -86,7 +86,7 @@ def home_tab_library(request):
     if request.user.is_authenticated:
         listener = Listener.objects.filter(user=request.user).first()
         if listener is not None:
-            liked_sound_count = listener.collection.count()
+            liked_sound_count = listener.collection.visible_to(request.user).count()
         saved_mix_count = SoundMix.objects.filter(creator=request.user).count()
 
     return render(

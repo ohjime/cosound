@@ -53,6 +53,7 @@ class VoteChimeModelAndAdminTests(TestCase):
             name="Vote chime player",
         )
         self.sound = Sound.objects.create(
+            published=True,
             title="Collection sound",
             file="sounds/collection.wav",
             embeddings=[0.0] * 5,

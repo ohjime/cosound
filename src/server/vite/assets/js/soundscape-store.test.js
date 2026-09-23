@@ -164,6 +164,50 @@ test("destroy clears playback state before a replacement store mounts", async ()
     assert.equal(store.paused, false);
 });
 
+test("a load torn down mid-decode leaves the loading state to the one that replaced it", async () => {
+    // Each fetch waits until the test lets it through, so the first load can
+    // finish decoding while the second is still waiting on its file.
+    const releases = [];
+    const fetchNow = globalThis.fetch;
+    globalThis.fetch = () => new Promise((resolve) => {
+        releases.push(() => resolve({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) }));
+    });
+    try {
+        const store = createSoundLayersStore([soundLayer()], {
+            settleProgress: () => Promise.resolve(),
+        });
+        const first = store.initialize();
+        const second = store.initialize();
+        assert.equal(releases.length, 2);
+
+        releases[0]();
+        await first;
+
+        assert.equal(store.tracksLoading, true);
+        assert.equal(store.loadError, "");
+
+        releases[1]();
+        await second;
+
+        assert.equal(store.tracksLoading, false);
+        assert.equal(store._engine.voices.length, 1);
+    } finally {
+        globalThis.fetch = fetchNow;
+    }
+});
+
+test("a mix swapped out while it loads neither errors nor reports ready", async () => {
+    const store = createSoundLayersStore([soundLayer()], {
+        settleProgress: () => Promise.resolve(),
+    });
+    const loading = store.initialize();
+
+    store.destroy();
+    await loading;
+
+    assert.equal(store.loadError, "");
+});
+
 test("the loading view waits for its progress ring to finish at 100%", async () => {
     let releaseProgress;
     let progressReached;
@@ -555,12 +599,25 @@ test("Create turns a blank layer into a new sound that is still left out of a sa
     const layer = store.layers[0];
     assert.equal(layer.isNew, true);
     assert.equal(layer.isDraft, true);
-    assert.equal(layer.sound_title, "New Sound");
+    assert.equal(layer.sound_title, "");
     assert.equal(layer.sound_artist, "Some Artist");
     assert.equal(layer.flavor, "");
     assert.deepEqual(layer.tag_list, []);
     // No audio behind it yet, so there is still nothing to save.
     assert.equal(store.canSave, false);
+});
+
+test("Create gives the new sound stand-in artwork and hands the card back", async () => {
+    const store = await startedStore([seededBlankLayer()], { allowCreate: true });
+    const blankArtwork = store.layers[0].artwork_url;
+    // The Create button raises this while it fades the card out.
+    store.swappingLayer = true;
+
+    store.createSound(0);
+
+    assert.match(store.layers[0].artwork_url, /^data:image\/svg\+xml,/);
+    assert.notEqual(store.layers[0].artwork_url, blankArtwork);
+    assert.equal(store.swappingLayer, false);
 });
 
 test("Create is refused without allowCreate, and on a layer that has a sound", async () => {
@@ -612,8 +669,9 @@ test("uploading a sound gives a new sound audio and keeps its words", async () =
     assert.equal(layer.sound_file_name, "harbour-at-dawn.wav");
     assert.equal(layer.sound_title, "Harbour");
     assert.equal(layer.sound_artist, "Some Artist");
-    // The file stays on this device, so the mix cannot be saved with it.
+    // It has no artwork yet, so it is not ready to become a Sound.
     assert.equal(store.canSave, false);
+    assert.equal(store.saveBlockedReason, "Your new sound needs artwork.");
 
     const first = layer.sound_file;
     await store.uploadSound(0, new File(["y"], "second-take.wav"));
@@ -646,4 +704,116 @@ test("artwork on a new sound is swapped without touching its audio", async () =>
     assert.notEqual(store.layers[0].artwork_url, cover);
     assert.equal(store.layers[0].artwork_file_name, "cover-2.png");
     assert.equal(store.layers[0].sound_file, sound);
+});
+
+async function readyNewSound(store, index = 0) {
+    store.createSound(index);
+    store.updateLayer(index, { sound_title: "Harbour", flavor: "Gulls." });
+    store.setTags(index, ["sea", "birds"]);
+    await store.uploadSound(index, new File(["x"], "harbour.wav"));
+    store.setArtwork(index, new File(["y"], "harbour.png"));
+}
+
+test("a new sound blocks the save until it has a file, a title and artwork", async () => {
+    const store = await startedStore([soundLayer(), seededBlankLayer()], {
+        allowCreate: true,
+    });
+    store.createSound(1);
+    // Still a draft, so not in the save — but saving past it would lose it.
+    assert.equal(store.canSave, false);
+    assert.equal(store.saveBlockedReason, "Your new sound needs a sound file.");
+
+    await store.uploadSound(1, new File(["x"], "take.wav"));
+    assert.equal(store.saveBlockedReason, "Your new sound needs a title.");
+
+    store.updateLayer(1, { sound_title: "Take" });
+    assert.equal(store.saveBlockedReason, "Your new sound needs artwork.");
+
+    store.setArtwork(1, new File(["y"], "take.png"));
+    assert.equal(store.canSave, true);
+    assert.equal(store.saveBlockedReason, "");
+    assert.deepEqual(
+        store.saveLayers.map((layer) => layer.is_new ?? false),
+        [false, true],
+    );
+});
+
+test("a dropped track still keeps the mix on this device", async () => {
+    const store = await startedStore([soundLayer({ sound_id: "local-1", is_local: true })]);
+    assert.equal(store.canSave, false);
+    assert.equal(store.saveBlockedReason, "Mixes with your own tracks stay on this device.");
+});
+
+test("createNewSounds posts each new sound and swaps in the finished layer", async () => {
+    const store = await startedStore([seededBlankLayer()], { allowCreate: true });
+    await readyNewSound(store);
+    store.setGain(store.layers[0], 80);
+    const oldId = store.layers[0].sound_id;
+
+    const posted = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = async (url, init) => {
+        posted.push({ url, init });
+        return {
+            ok: true,
+            json: async () => ({
+                layer: {
+                    sound_id: 42,
+                    sound_file: "/media/sounds/harbour.wav",
+                    sound_gain: 0.5,
+                    gain: 50,
+                    sound_title: "Harbour",
+                    sound_artist: "Some Artist",
+                    artwork_url: "/media/sound_arts/harbour.png",
+                    published: false,
+                    tags: "sea / birds",
+                },
+            }),
+        };
+    };
+    try {
+        const created = await store.createNewSounds("/studio/htmx/sounds/create", "token");
+        assert.deepEqual(created, { [oldId]: 42 });
+    } finally {
+        globalThis.fetch = original;
+    }
+
+    assert.equal(posted.length, 1);
+    assert.equal(posted[0].init.headers["X-CSRFToken"], "token");
+    const body = posted[0].init.body;
+    assert.equal(body.get("title"), "Harbour");
+    assert.equal(body.get("flavor"), "Gulls.");
+    assert.equal(body.get("tags"), "sea\nbirds");
+    assert.equal(body.get("file").name, "harbour.wav");
+    assert.equal(body.get("art").name, "harbour.png");
+
+    const layer = store.layers[0];
+    assert.equal(layer.sound_id, 42);
+    assert.equal(layer.isNew, false);
+    assert.equal(layer.isLocal, false);
+    assert.equal(layer.published, false);
+    // The artist's fader survives; the server's default level does not.
+    assert.equal(layer.gain, 80);
+    assert.deepEqual(store.saveLayers, [{ sound_id: 42, sound_gain: 0.8 }]);
+});
+
+test("createNewSounds reports the server's reason and leaves the sound new", async () => {
+    const store = await startedStore([seededBlankLayer()], { allowCreate: true });
+    await readyNewSound(store);
+
+    const original = globalThis.fetch;
+    globalThis.fetch = async () => ({
+        ok: false,
+        json: async () => ({ error: "Sound must be 50 MB or smaller." }),
+    });
+    try {
+        await assert.rejects(
+            store.createNewSounds("/studio/htmx/sounds/create", "token"),
+            /50 MB/,
+        );
+    } finally {
+        globalThis.fetch = original;
+    }
+    assert.equal(store.layers[0].isNew, true);
+    assert.equal(store.canSave, true);
 });

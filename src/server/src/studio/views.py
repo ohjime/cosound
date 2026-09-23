@@ -1,9 +1,12 @@
+from django.db import transaction
 from django.db.models import Q
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
+from django.views.decorators.http import require_POST
 
-from core.models import Listener, Sound
+from core.models import Sound
 from library.utils import serialize_sounds
+from studio.forms import NewSoundForm
 from studio.utils import get_artist
 
 # The studio's views. The builder is served two ways from the same partials:
@@ -13,8 +16,9 @@ from studio.utils import get_artist
 #
 # The mix itself is not server state. Layers live in the browser's `soundLayers`
 # Alpine store, and a layer built from a dropped file never leaves the tab, so
-# there is nothing here that creates, updates or stores a draft. These views only
-# hand over the library the artist can pull from.
+# there is nothing here that updates or stores a draft. A new sound becomes
+# server state exactly once — `studio_create_sound`, when the mix holding it is
+# saved — and is never edited from here after that.
 
 
 def _blank_layer(index=1):
@@ -48,17 +52,16 @@ def _blank_layer(index=1):
 
 
 def _library(user):
-    """The sounds this user has collected, as a queryset.
+    """The sounds this artist can build with, as a queryset.
 
-    The studio pulls from the same Listener collection the library's swap panel
-    uses — an artist builds with sounds they have kept, not the whole catalogue.
+    The ones they have kept — the same Listener collection the library's swap
+    panel uses, not the whole catalogue — plus the ones they uploaded, which
+    are theirs whether or not they have been reviewed yet.
     """
-    try:
-        return Listener.objects.get(user=user).collection.all()
-    except Listener.DoesNotExist:
-        from core.models import Sound
-
-        return Sound.objects.none()
+    # A subquery rather than .distinct(): the pickers order this at random,
+    # and PostgreSQL will not ORDER BY RANDOM() over a SELECT DISTINCT.
+    mine = Sound.objects.filter(Q(saved_by__user=user) | Q(artist__user=user))
+    return Sound.objects.visible_to(user).filter(pk__in=mine.values("pk"))
 
 
 def studio_index(request):
@@ -178,3 +181,46 @@ def studio_tag_search(request):
         "studio/index.html#tag_suggestions",
         {"query": query, "tags": names, "exact": exact},
     )
+
+
+@require_POST
+def studio_create_sound(request):
+    """Turn a new sound on the artist's card into a Sound row.
+
+    Called by the save dialog, once per new sound, just before the mix itself is
+    saved (soundscape-store's createNewSounds). The files go to the default
+    storage — S3 — and the row is credited to the artist posting it and left
+    unpublished: it plays in this artist's mixes straight away, and reaches
+    anyone else only once staff publish it from the admin.
+
+    There is no matching edit. What the artist saved is what cosound reviews,
+    so a sound is fixed from this moment on; the answer is the finished layer,
+    which the card swaps in for the fields it was showing.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Sign in to save a new sound."}, status=401)
+    artist = get_artist(request.user)
+    if artist is None:
+        return JsonResponse({"error": "Only artists can add sounds."}, status=403)
+
+    form = NewSoundForm(request.POST, request.FILES)
+    if not form.is_valid():
+        field, errors = next(iter(form.errors.items()))
+        label = "" if field == "__all__" else f"{form.fields[field].label or field}: "
+        return JsonResponse({"error": f"{label}{errors[0]}"}, status=400)
+
+    data = form.cleaned_data
+    with transaction.atomic():
+        sound = Sound(
+            title=data["title"].strip(),
+            flavor=data["flavor"].strip(),
+            artist=artist,
+            published=False,
+        )
+        sound.file.save(data["file"].name, data["file"], save=False)
+        sound.art.save(data["art"].name, data["art"], save=False)
+        sound.save()
+        sound.tags.set(data["tags"])
+
+    [layer] = serialize_sounds([sound], user=request.user)
+    return JsonResponse({"layer": layer}, status=201)

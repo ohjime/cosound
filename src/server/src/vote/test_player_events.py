@@ -13,7 +13,7 @@ class VoteNotificationTests(TestCase):
         manager = Manager.objects.create(user=user, name="Manager")
         self.player = Player.objects.create(manager=manager, name="Room")
         self.listener = Listener.objects.create(user=user)
-        sound = Sound.objects.create(title="Rain", file="sounds/rain.wav", embeddings=[0] * 5)
+        sound = Sound.objects.create(published=True, title="Rain", file="sounds/rain.wav", embeddings=[0] * 5)
         self.cosound = Cosound.get_or_create_from_layers([(sound.pk, 1.0)])
 
     def vote(self, pleasant=1):

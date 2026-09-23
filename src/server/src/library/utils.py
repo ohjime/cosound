@@ -30,6 +30,19 @@ def parse_layers(raw):
     return layer_data, layers
 
 
+def count_new_sounds(layer_data):
+    """How many of a posted mix's layers are an artist's not-yet-created sounds.
+
+    The save button marks them `is_new`; they carry a browser-made id, so
+    parse_layers drops them like any other local layer.
+    """
+    if not isinstance(layer_data, list):
+        return 0
+    return sum(
+        1 for layer in layer_data if isinstance(layer, dict) and layer.get("is_new")
+    )
+
+
 def generate_sound_artwork(sound):
     return "https://picsum.photos/seed/{}/400/400".format(sound.id)
 
@@ -87,7 +100,9 @@ def get_random_sounds(user=None):
             pass
 
     sound_ids = list(
-        Sound.objects.order_by("?")[:OPENING_LAYERS].values_list("id", flat=True)
+        Sound.objects.published()
+        .order_by("?")[:OPENING_LAYERS]
+        .values_list("id", flat=True)
     )
     sounds = [
         {
@@ -144,17 +159,25 @@ PICKER_TAG_LIMIT = 12
 def collected_sounds(user):
     """The sounds a listener has put their name to.
 
-    Two things count as collected, because both are things the listener chose:
-    a sound they kept with the heart, and a sound sitting in one of their saved
-    mixes. Anonymous visitors have collected nothing.
+    Three things count as collected, because all are things the listener chose:
+    a sound they kept with the heart, a sound sitting in one of their saved
+    mixes, and — for an artist — a sound they uploaded. Anonymous visitors have
+    collected nothing. A sound pulled from publication drops out of everyone's
+    collection but its own artist's.
     """
     from core.models import Sound
 
     if user is None or not user.is_authenticated:
         return Sound.objects.none()
-    return Sound.objects.filter(
-        Q(saved_by__user=user) | Q(soundlayer__mix__soundmix__creator=user)
-    ).distinct()
+    return (
+        Sound.objects.visible_to(user)
+        .filter(
+            Q(saved_by__user=user)
+            | Q(soundlayer__mix__soundmix__creator=user)
+            | Q(artist__user=user)
+        )
+        .distinct()
+    )
 
 
 def picker_tag_facets(user, limit=PICKER_TAG_LIMIT):
@@ -175,7 +198,12 @@ def picker_tag_facets(user, limit=PICKER_TAG_LIMIT):
     from core.models import Sound
 
     content_type = ContentType.objects.get_for_model(Sound)
-    tagged = Tag.objects.filter(taggit_taggeditem_items__content_type=content_type)
+    # Only sounds this listener could pick count — a tag whose only sounds are
+    # someone else's unreviewed uploads would open on nothing.
+    tagged = Tag.objects.filter(
+        taggit_taggeditem_items__content_type=content_type,
+        taggit_taggeditem_items__object_id__in=Sound.objects.visible_to(user).values("id"),
+    )
 
     collected_ids = list(collected_sounds(user).values_list("id", flat=True))
     if collected_ids:

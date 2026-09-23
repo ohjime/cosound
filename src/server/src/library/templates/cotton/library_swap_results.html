@@ -60,7 +60,10 @@ The heading and Cancel are not here — they belong to the frame
                  decoding="async">
         </div>
         <div>
-            <div class="text-sm font-semibold">{{ sound.title }}</div>
+            <div class="text-sm font-semibold">
+                {{ sound.title }}
+                {% if not sound.published %}<span class="badge badge-warning badge-xs ml-1 align-middle" title="Only you can hear this until cosound has reviewed it">Unpublished</span>{% endif %}
+            </div>
             <div class="text-xs font-semibold opacity-60">
                 <span x-text="inMix ? 'Already in mix' : ''">{{ sound.artist_name }}</span>
                 <span x-show="!inMix">{{ sound.artist_name }}</span>

@@ -49,6 +49,7 @@ class SubmitVoteTests(TestCase):
     @staticmethod
     def create_sound(title):
         return Sound.objects.create(
+            published=True,
             file=f"sounds/{title.lower().replace(' ', '-')}.wav",
             title=title,
             embeddings=[0.0] * 5,
@@ -215,11 +216,13 @@ class SleepingActivationTests(TestCase):
             email="activator@example.com",
         )
         cls.first_sound = Sound.objects.create(
+            published=True,
             file="sounds/first.wav",
             title="First sound",
             embeddings=[0.0] * 5,
         )
         cls.second_sound = Sound.objects.create(
+            published=True,
             file="sounds/second.wav",
             title="Second sound",
             embeddings=[0.0] * 5,
@@ -415,6 +418,7 @@ class SleepingActivationTests(TestCase):
 
     def test_deleted_prediction_sound_is_replaced_during_activation(self):
         stale_sound = Sound.objects.create(
+            published=True,
             file="sounds/deleted-prediction.wav",
             title="Deleted prediction sound",
             embeddings=[0.0] * 5,
@@ -454,6 +458,7 @@ class SleepingActivationTests(TestCase):
 
     def test_mixed_live_and_deleted_prediction_is_repaired_instead_of_voted_on(self):
         stale_sound = Sound.objects.create(
+            published=True,
             file="sounds/deleted-mixed-prediction.wav",
             title="Deleted mixed prediction sound",
             embeddings=[0.0] * 5,
@@ -513,12 +518,14 @@ class VoteCarouselCreditTests(TestCase):
             name="Cameron", url="https://cameron.example/"
         )
         cls.credited = Sound.objects.create(
+            published=True,
             file="sounds/land.wav",
             title="Listening with the Land",
             artist=cls.artist,
             embeddings=[0.0] * 5,
         )
         cls.uncredited = Sound.objects.create(
+            published=True,
             file="sounds/bell.wav",
             title="Harbour Bell",
             artist_legacy="Field Recordist",

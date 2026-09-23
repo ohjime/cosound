@@ -9,7 +9,12 @@ from core.utils import add_card, close_modal, show_modal
 from app.utils import serialize_mix
 from login.views import login_modal
 from library.models import SoundMix
-from library.utils import parse_layers, picker_tag_facets, serialize_sounds
+from library.utils import (
+    count_new_sounds,
+    parse_layers,
+    picker_tag_facets,
+    serialize_sounds,
+)
 
 
 def library_save(request):
@@ -25,13 +30,20 @@ def library_save(request):
     layer_data, layers = parse_layers(request.POST.get("layers"))
     if layer_data is None:
         return HttpResponse("Invalid data.", status=400)
-    if not layers:
+    # An artist's new sounds have no id yet — the dialog creates them on the way
+    # to saving (see #mix_title_modal) — so they count as layers here although
+    # parse_layers has nothing to resolve them to.
+    new_sound_count = count_new_sounds(layer_data)
+    if not layers and not new_sound_count:
         return HttpResponse("No layers provided.", status=400)
 
-    hashid = Cosound.compute_hashid(layers)
-    existing = SoundMix.objects.filter(
-        creator=request.user, cosound__hashid=hashid
-    ).first()
+    # A mix with a sound in it that does not exist yet cannot already be saved.
+    existing = None
+    if not new_sound_count:
+        hashid = Cosound.compute_hashid(layers)
+        existing = SoundMix.objects.filter(
+            creator=request.user, cosound__hashid=hashid
+        ).first()
 
     # What the title box opens on. A mix this listener has already named keeps
     # that name; otherwise the card may suggest one — an Explore post sends its
@@ -51,6 +63,7 @@ def library_save(request):
             # carried in from an edit or an Explore post is a suggestion, not a
             # record of anything, so the dialog says nothing about when.
             "existing_saved_at": existing.updated_at if existing else None,
+            "new_sound_count": new_sound_count,
         },
     )
 
@@ -63,8 +76,19 @@ def library_save_confirm(request):
         return HttpResponse("Request Denied.", status=401)
 
     layer_data, layers = parse_layers(request.POST.get("layers"))
+    # The dialog swaps each new sound for its real id before it gets here. One
+    # still marked new would otherwise be dropped by parse_layers and the mix
+    # saved without it, which is worse than not saving.
+    if count_new_sounds(layer_data):
+        return HttpResponse("Upload the new sounds first.", status=400)
     if not layers:
         return HttpResponse("No layers provided.", status=400)
+    # Someone else's unreviewed upload is not a sound this listener can have.
+    sound_ids = {sound_id for sound_id, _ in layers}
+    if Sound.objects.visible_to(request.user).filter(pk__in=sound_ids).count() != len(
+        sound_ids
+    ):
+        return HttpResponse("Unknown sound.", status=400)
 
     title = (request.POST.get("title") or "").strip()
 
@@ -134,8 +158,8 @@ def library_keep_sound(request):
 
     sound_id = request.POST.get("sound_id")
     try:
-        sound = Sound.objects.get(pk=sound_id)
-    except Sound.DoesNotExist:
+        sound = Sound.objects.visible_to(request.user).get(pk=sound_id)
+    except (Sound.DoesNotExist, ValueError):
         return HttpResponse("Sound not found.", status=404)
 
     listener, _ = Listener.objects.get_or_create(user=request.user)
@@ -163,8 +187,10 @@ def library_liked_list(request):
     if request.user.is_authenticated:
         listener = Listener.objects.filter(user=request.user).first()
         if listener is not None:
-            liked_sounds = listener.collection.select_related("artist").order_by(
-                "title"
+            liked_sounds = (
+                listener.collection.visible_to(request.user)
+                .select_related("artist")
+                .order_by("title")
             )
 
     return add_card(
@@ -185,7 +211,10 @@ def library_saved_list(request):
         mixes = (
             SoundMix.objects.filter(creator=request.user)
             .select_related("cosound")
-            .prefetch_related("cosound__soundlayer_set__sound__tags")
+            .prefetch_related(
+                "cosound__soundlayer_set__sound__tags",
+                "cosound__soundlayer_set__sound__artist",
+            )
             .order_by("-created_at")
         )
         saved_mixes = [serialize_mix(mix) for mix in mixes]
@@ -234,7 +263,7 @@ def library_swap(request):
         "library/index.html#swap_view",
         {
             "tags": picker_tag_facets(request.user),
-            "collection_size": Sound.objects.count(),
+            "collection_size": Sound.objects.visible_to(request.user).count(),
         },
     )
 
@@ -261,7 +290,11 @@ def library_search(request):
             {"tags": picker_tag_facets(request.user)},
         )
 
-    qs = Sound.objects.select_related("artist").prefetch_related("tags")
+    qs = (
+        Sound.objects.visible_to(request.user)
+        .select_related("artist")
+        .prefetch_related("tags")
+    )
     if tag:
         qs = qs.filter(tags__name=tag)
     if q:

@@ -34,14 +34,18 @@ file is the wiring and the caption.
     <div x-ref="carousel" @scroll.debounce.5ms="updateActive()" @pointerdown="release()" @touchstart.passive="release()"
         @wheel.passive="release()" class="carousel w-full h-full">
         <!-- A blank layer has no artwork to show, so it gets its own face
-             instead. So does a new sound, whose face holds its uploads. Both branches are x-if rather than x-show: c-core-image
+             instead. A new sound gets a library sound's face with its uploads
+             on it. All three branches are x-if rather than x-show: c-core-image
              would otherwise start loading a placeholder nobody sees, and the
              empty card's htmx attributes would sit armed behind it. -->
         <template x-for="(layer, index) in $store.{{ name }}.layers" :key="layer.sound_id">
             <div class="carousel-item relative h-full w-full transition-[filter] duration-300 ease-out"
                 :style="`filter: grayscale(${$store.{{ name }}.grayscaleFor(layer)}%)`">
-                <template x-if="layer.isDraft || layer.isNew">
+                <template x-if="layer.isDraft && !layer.isNew">
                     <c-core-sound-empty-layer swap_url="{{ swap_url }}" />
+                </template>
+                <template x-if="layer.isNew">
+                    <c-core-sound-new-layer />
                 </template>
                 <template x-if="!layer.isDraft && !layer.isNew">
                     <div class="contents">
@@ -62,20 +66,38 @@ file is the wiring and the caption.
          immediately reflect whichever layer the carousel selects. -->
     <div
         class="pointer-events-none absolute inset-0 z-20 p-3 pt-8 font-serif italic flex flex-col justify-between text-white font-thin text-shadow-lg">
-        <div class="text-left text-lg leading-tight pr-12" x-show="!$store.{{ name }}.currentLayer?.isNew" x-text="$store.{{ name }}.currentLayer?.sound_title"></div>
+        <!-- `published` is false only on the artist's own upload awaiting
+             review (nobody else is served one), so the badge is theirs alone:
+             it says why no one else can hear this layer yet. -->
+        <div class="text-left text-lg leading-tight pr-12" x-show="!$store.{{ name }}.currentLayer?.isNew">
+            <span x-text="$store.{{ name }}.currentLayer?.sound_title"></span>
+            <span style="display: none" x-show="$store.{{ name }}.currentLayer?.published === false"
+                class="badge badge-warning badge-xs ml-1 align-middle font-sans not-italic text-shadow-none"
+                title="Only you can hear this until cosound has reviewed it">Unpublished</span>
+        </div>
         <!-- A new sound (an artist's Create on the LIBRARY tab) is the artist's to name, so
-             its title and artist are fields rather than a caption. Dark on the
-             whitened galaxy, and without the caption's shadow, which only
-             muddies dark text. -->
+             its title and artist are fields rather than a caption. They wear
+             the caption's own type and shadow over the same washes, with no
+             underline, so the card reads like a library sound.
+
+             The title starts empty under a "New Sound" placeholder, with a
+             pencil after it to say it can be typed in. The pencil sits in an
+             overlay behind an invisible copy of the placeholder, which is what
+             lands it just past the words rather than at the far end of the
+             field; it goes as soon as there is a title. -->
         <template x-if="$store.{{ name }}.currentLayer?.isNew">
-            <input type="text"
-                   class="pointer-events-auto w-full bg-transparent pr-12 font-serif text-lg leading-tight italic text-neutral-800 text-shadow-none outline-none border-b border-neutral-800/20 focus:border-neutral-800/60 placeholder:text-neutral-500"
-                   aria-label="Sound title"
-                   maxlength="255"
-                   placeholder="Title"
-                   spellcheck="false"
-                   :value="$store.{{ name }}.currentLayer.sound_title"
-                   @input="$store.{{ name }}.updateLayer($store.{{ name }}.currentIndex, { sound_title: $event.target.value })" />
+            <div class="relative pr-12">
+                <input type="text"
+                    class="pointer-events-auto w-full bg-transparent font-serif text-lg leading-tight italic text-white outline-none placeholder:text-white/60"
+                    aria-label="Sound title" maxlength="255" placeholder="New Sound" spellcheck="false"
+                    :value="$store.{{ name }}.currentLayer.sound_title"
+                    @input="$store.{{ name }}.updateLayer($store.{{ name }}.currentIndex, { sound_title: $event.target.value })" />
+                <span aria-hidden="true" x-show="!$store.{{ name }}.currentLayer.sound_title"
+                    class="pointer-events-none absolute left-0 top-0 flex items-center gap-1.5 text-lg leading-tight">
+                    <span class="invisible">New Sound</span>
+                    <c-icons.edit class="size-4 text-white/70 drop-shadow-md" />
+                </span>
+            </div>
         </template>
         <!-- Blank and browser-local layers have no Sound row for the collection
              endpoint to save. Keeping the control out of the tree also avoids
@@ -96,14 +118,85 @@ file is the wiring and the caption.
                     d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z" />
             </svg>
         </button>
-        <!-- `allowAdd` is the editability switch. Do not use `canAddLayer`
-             here: a full mix cannot add a ninth layer, but it is still an
-             editable mix and must be able to remove one. -->
-        <button type="button" x-show="$store.{{ name }}.allowAdd" x-cloak
-            class="pointer-events-auto absolute bottom-3 left-3 grid size-8 place-items-center rounded-full bg-black/25 text-white/80 shadow-md backdrop-blur-sm transition hover:scale-105 hover:bg-error/70 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-            aria-label="Remove current layer" title="Remove current layer" @click="removeCurrent()">
-            <c-icons.trash class="size-4" />
-        </button>
+        <div class="absolute bottom-3 left-3 flex flex-col-reverse items-center gap-2">
+            <!-- `allowAdd` is the editability switch. Do not use `canAddLayer`
+                 here: a full mix cannot add a ninth layer, but it is still an
+                 editable mix and must be able to remove one.
+
+                 Every button in this stack says what it does in a tooltip to
+                 its right, open on hover and on keyboard focus. The tooltip is
+                 a .tooltip-content element rather than data-tip so it can shed
+                 the caption's serif italics and shadow, and so a file name
+                 with no spaces breaks anywhere and is shown whole. -->
+            <div class="tooltip tooltip-right" x-show="$store.{{ name }}.allowAdd" x-cloak>
+                <div class="tooltip-content max-w-60 font-sans text-xs font-normal not-italic text-left text-shadow-none [overflow-wrap:anywhere]">Remove current layer</div>
+                <button type="button"
+                    class="pointer-events-auto grid size-8 place-items-center rounded-full bg-black/25 text-white/80 shadow-md backdrop-blur-sm transition hover:scale-105 hover:bg-error/70 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                    aria-label="Remove current layer" @click="removeCurrent()">
+                    <c-icons.trash class="size-4" />
+                </button>
+            </div>
+            <!-- A new sound's uploads, stacked above the trash (the column is
+                 reversed, so the trash keeps its corner): the sound file, then
+                 the artwork on top. A missing one is tinted red and flagged
+                 with a small warning triangle; once picked it takes a
+                 faint green tint and a green check on a white disc (the tick is
+                 cut out of the circle, so without the disc it would show the
+                 button through it), and its
+                 tooltip gives the picked file's name as it came off the disk.
+
+                 They are labels around visually hidden file inputs, so a press
+                 opens the picker natively — including a second press, which
+                 picks a replacement. The input is cleared after each pick, or
+                 choosing the same file again would not fire change.
+
+                 The sound button also starts playback, as a library pick does
+                 (library_swap_results). The LIBRARY tab has no tap-to-start
+                 screen, and the fader stays off until the mix has started, so
+                 an uploaded sound would otherwise sit behind a dead fader. It
+                 is done on the press rather than on change because browsers
+                 only let audio start inside the gesture, and the pick can come
+                 back long after it. -->
+            <template x-if="$store.{{ name }}.currentLayer?.isNew">
+                <div class="contents">
+                    <div class="tooltip tooltip-right">
+                        <div class="tooltip-content max-w-60 font-sans text-xs font-normal not-italic text-left text-shadow-none [overflow-wrap:anywhere]"
+                            x-text="$store.{{ name }}.currentLayer.sound_file_name || 'Upload sound'"></div>
+                        <label
+                            class="pointer-events-auto relative grid size-8 cursor-pointer place-items-center rounded-full shadow-md backdrop-blur-sm transition hover:scale-105 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-white"
+                            :class="$store.{{ name }}.currentLayer.sound_file_name ? 'bg-green-500/20 text-white hover:bg-green-500/30' : 'bg-red-500/35 text-white hover:bg-red-500/50'"
+                            @click="$store.{{ name }}.started || $store.{{ name }}.playAll()">
+                            <input type="file" accept="audio/*" class="sr-only"
+                                @change="const file = $event.target.files[0]; $event.target.value = ''; $store.{{ name }}.uploadSound($store.{{ name }}.currentIndex, file).catch(() => {})" />
+                            <span class="sr-only"
+                                x-text="$store.{{ name }}.currentLayer.sound_file_name ? `Replace sound ${$store.{{ name }}.currentLayer.sound_file_name}` : 'Upload sound'"></span>
+                            <c-icons.sound class="size-4" aria-hidden="true" />
+                            <c-icons.warning class="absolute -right-0.5 -top-0.5 size-3 text-yellow-400 drop-shadow"
+                                aria-hidden="true" x-show="!$store.{{ name }}.currentLayer.sound_file_name" />
+                            <c-icons.check-circle class="absolute -right-0.5 -top-0.5 size-3 rounded-full bg-white text-green-500 drop-shadow"
+                                aria-hidden="true" x-show="$store.{{ name }}.currentLayer.sound_file_name" />
+                        </label>
+                    </div>
+                    <div class="tooltip tooltip-right">
+                        <div class="tooltip-content max-w-60 font-sans text-xs font-normal not-italic text-left text-shadow-none [overflow-wrap:anywhere]"
+                            x-text="$store.{{ name }}.currentLayer.artwork_file_name || 'Upload artwork'"></div>
+                        <label
+                            class="pointer-events-auto relative grid size-8 cursor-pointer place-items-center rounded-full shadow-md backdrop-blur-sm transition hover:scale-105 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-white"
+                            :class="$store.{{ name }}.currentLayer.artwork_file_name ? 'bg-green-500/20 text-white hover:bg-green-500/30' : 'bg-red-500/35 text-white hover:bg-red-500/50'">
+                            <input type="file" accept="image/*" class="sr-only"
+                                @change="const file = $event.target.files[0]; $event.target.value = ''; $store.{{ name }}.setArtwork($store.{{ name }}.currentIndex, file)" />
+                            <span class="sr-only"
+                                x-text="$store.{{ name }}.currentLayer.artwork_file_name ? `Replace artwork ${$store.{{ name }}.currentLayer.artwork_file_name}` : 'Upload artwork'"></span>
+                            <c-icons.image class="size-4" aria-hidden="true" />
+                            <c-icons.warning class="absolute -right-0.5 -top-0.5 size-3 text-yellow-400 drop-shadow"
+                                aria-hidden="true" x-show="!$store.{{ name }}.currentLayer.artwork_file_name" />
+                            <c-icons.check-circle class="absolute -right-0.5 -top-0.5 size-3 rounded-full bg-white text-green-500 drop-shadow"
+                                aria-hidden="true" x-show="$store.{{ name }}.currentLayer.artwork_file_name" />
+                        </label>
+                    </div>
+                </div>
+            </template>
+        </div>
         <!-- The artist credited on the layer showing. A press reaches their
              own page when they have given us one, opened in a new tab because
              a mix is playing here and this whole front end is one page.
@@ -131,13 +224,10 @@ file is the wiring and the caption.
              sound can be credited to someone else, so it is a field too. -->
         <template x-if="$store.{{ name }}.currentLayer?.isNew">
             <input type="text"
-                   class="pointer-events-auto mb-1 mr-1 w-2/3 self-end bg-transparent text-right text-sm italic text-neutral-800 text-shadow-none outline-none border-b border-neutral-800/20 focus:border-neutral-800/60 placeholder:text-neutral-500"
-                   aria-label="Artist"
-                   maxlength="255"
-                   placeholder="Artist"
-                   spellcheck="false"
-                   :value="$store.{{ name }}.currentLayer.sound_artist"
-                   @input="$store.{{ name }}.updateLayer($store.{{ name }}.currentIndex, { sound_artist: $event.target.value })" />
+                class="pointer-events-auto mb-1 mr-1 w-2/3 self-end bg-transparent text-right text-sm italic text-white opacity-90 outline-none focus:opacity-100 placeholder:text-white/50"
+                aria-label="Artist" maxlength="255" placeholder="Artist" spellcheck="false"
+                :value="$store.{{ name }}.currentLayer.sound_artist"
+                @input="$store.{{ name }}.updateLayer($store.{{ name }}.currentIndex, { sound_artist: $event.target.value })" />
         </template>
     </div>
 

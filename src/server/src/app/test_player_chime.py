@@ -25,6 +25,7 @@ class PlayerVoteChimeAPITests(TestCase):
         self.manager = Manager.objects.create(user=self.user, name="Chime manager")
         self.player = Player.objects.create(manager=self.manager, name="Main room")
         self.sound = Sound.objects.create(
+            published=True,
             title="Library sound",
             file="sounds/library.wav",
             embeddings=[0.0] * 5,

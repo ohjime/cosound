@@ -49,7 +49,24 @@ def chime_upload_path(instance, filename):
     return f"chimes/{uuid.uuid4().hex}{suffix}"
 
 
+class SoundQuerySet(DjangoDB.QuerySet):
+    def published(self):
+        return self.filter(published=True)
+
+    def visible_to(self, user):
+        """Published sounds, plus the ones this user uploaded and is waiting on.
+
+        An artist's own sound is theirs to build with from the moment it is
+        created, before anyone has reviewed it; nobody else sees it until then.
+        """
+        if user is None or not user.is_authenticated:
+            return self.published()
+        return self.filter(DjangoDB.Q(published=True) | DjangoDB.Q(artist__user=user))
+
+
 class Sound(DjangoDB.Model):
+    objects = SoundQuerySet.as_manager()
+
     file = DjangoDB.FileField(upload_to="sounds/")
     title = DjangoDB.CharField(max_length=255)
     artist = DjangoDB.ForeignKey(
@@ -76,6 +93,17 @@ class Sound(DjangoDB.Model):
         upload_to="sound_arts/", blank=True, null=True, max_length=255
     )
     flavor = DjangoDB.TextField(blank=True, null=True, max_length=200)
+    # Whether cosound has reviewed this sound and let it out to everyone. Only
+    # staff set it, from the admin. An artist's upload starts unpublished: it
+    # plays in its own artist's mixes, and nowhere else — not the picker, not
+    # other listeners' saved mixes, not a player's program.
+    published = DjangoDB.BooleanField(
+        default=False,
+        help_text=(
+            "Reviewed and cleared for everyone. Unpublished sounds are heard "
+            "only by the artist who uploaded them."
+        ),
+    )
     embeddings = VectorField(null=True, dimensions=_get_sound_dimension())
     created_at = DjangoDB.DateTimeField(auto_now_add=True)
     updated_at = DjangoDB.DateTimeField(auto_now=True)
@@ -122,6 +150,9 @@ class Sound(DjangoDB.Model):
             "sound_title": self.title,
             "sound_artist": self.artist_name,
             "artist_url": self.artist_url,
+            # Only ever false for the artist who uploaded it — nobody else is
+            # served an unpublished sound — so the card can say it is waiting.
+            "published": self.published,
         }
 
 
@@ -476,7 +507,7 @@ class Player(DjangoDB.Model):
             raise
 
     def library(self) -> List[Sound]:
-        return list(self.program.collection.all())
+        return list(self.program.collection.published())
 
     def update(self, prediction: Prediction) -> None:
         self.playing = prediction

@@ -5,7 +5,8 @@ from core.models import Sound
 
 def card_demo(request):
     sounds = (
-        Sound.objects.select_related("artist")
+        Sound.objects.published()
+        .select_related("artist")
         .prefetch_related("tags")
         .order_by("pk")[:8]
     )

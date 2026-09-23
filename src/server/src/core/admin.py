@@ -167,6 +167,7 @@ class SoundResource(resources.ModelResource):
             "flavor",
             "file",
             "art",
+            "published",
         )
 
     def after_save_instance(self, instance, row, **kwargs):
@@ -193,7 +194,9 @@ class SoundAdmin(FileFormAdmin, ModelAdmin, ImportExportModelAdmin):  # type: ig
     import_form_class = ImportForm
     export_form_class = ExportForm
 
-    list_display = ["title", "artist", "created_at", "updated_at"]
+    list_display = ["title", "artist", "published", "created_at", "updated_at"]
+    list_filter = ["published"]
+    actions = ["publish_sounds", "unpublish_sounds"]
     compressed_fields = True
     fieldsets = [
         (
@@ -202,6 +205,7 @@ class SoundAdmin(FileFormAdmin, ModelAdmin, ImportExportModelAdmin):  # type: ig
                 "fields": [
                     "title",
                     "artist",
+                    "published",
                     "art",
                     "file",
                 ],
@@ -218,6 +222,26 @@ class SoundAdmin(FileFormAdmin, ModelAdmin, ImportExportModelAdmin):  # type: ig
             },
         ),
     ]
+
+    # One save per sound rather than queryset.update(): the save is what tells
+    # the players holding a sound to plan again, and an unpublished sound has
+    # to leave the air as soon as it is pulled.
+    def _set_published(self, request, queryset, published):
+        changed = 0
+        for sound in queryset.exclude(published=published):
+            sound.published = published
+            sound.save(update_fields=["published", "updated_at"])
+            changed += 1
+        verb = "Published" if published else "Unpublished"
+        self.message_user(request, f"{verb} {changed} sound(s).", messages.SUCCESS)
+
+    @admin.action(description="Publish selected sounds")
+    def publish_sounds(self, request, queryset):
+        self._set_published(request, queryset, True)
+
+    @admin.action(description="Unpublish selected sounds")
+    def unpublish_sounds(self, request, queryset):
+        self._set_published(request, queryset, False)
 
 
 admin.site.register(Post, PostAdmin)

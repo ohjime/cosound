@@ -99,18 +99,59 @@ to show, and the line is left out rather than filled with a guess.
 Saving over a *different* Cosound that happens to share the name is the
 destructive case, and the server answers that one with #mix_overwrite_modal
 instead of writing it.
+
+`new_sound_count` is how many of the layers are an artist's new sounds, which
+have no Sound row yet. This dialog is where they get one: Save first creates
+each of them (the store's createNewSounds, one `studio:create_sound` POST
+apiece), swaps their browser-made ids in the hidden `layers` for the real ones,
+and only then lets htmx post the form — `sounds-created` is its trigger rather
+than submit. Before that, the dialog says what saving does to them, because it
+is the one moment it can: they are fixed from then on, and nobody else hears
+them until cosound has reviewed them. A failed upload is reported here and
+Save tries again; sounds already created are kept, and `ids` remembers them.
 -->
 {% partialdef mix_title_modal %}
     <h3 class="text-lg font-bold">Name your cosound</h3>
     <!-- djlint:off -->
+    {% if new_sound_count %}
+    <form hx-post="{% url 'library:save_confirm' %}"
+          hx-trigger="sounds-created"
+          hx-target="#core_modal_content"
+          hx-swap="innerHTML"
+          class="flex flex-col gap-4 py-4"
+          x-data="{
+              title: '{{ existing_title|escapejs }}',
+              ids: {},
+              busy: false,
+              error: '',
+              async createThenSave() {
+                  if (this.busy) return;
+                  this.busy = true;
+                  this.error = '';
+                  try {
+                      const token = this.$el.querySelector('[name=csrfmiddlewaretoken]').value;
+                      Object.assign(this.ids, await Alpine.store('soundLayers').createNewSounds('{% url 'studio:create_sound' %}', token));
+                      const layers = JSON.parse(this.$refs.layers.value).map(({ is_new, ...layer }) => this.ids[layer.sound_id] ? { ...layer, sound_id: this.ids[layer.sound_id] } : { is_new, ...layer });
+                      this.$refs.layers.value = JSON.stringify(layers);
+                      htmx.trigger(this.$el, 'sounds-created');
+                  } catch (error) {
+                      this.error = error.message;
+                  } finally {
+                      this.busy = false;
+                  }
+              },
+          }"
+          @submit.prevent="createThenSave()">
+    {% else %}
     <form hx-post="{% url 'library:save_confirm' %}"
           hx-target="#core_modal_content"
           hx-swap="innerHTML"
           class="flex flex-col gap-4 py-4"
           x-data="{ title: '{{ existing_title|escapejs }}' }">
+    {% endif %}
     <!-- djlint:on -->
         {% csrf_token %}
-        <input type="hidden" name="layers" value="{{ layers_json }}" />
+        <input type="hidden" name="layers" value="{{ layers_json }}" x-ref="layers" />
         <div>
             <label class="input validator w-full">
                 <input type="text"
@@ -142,9 +183,27 @@ instead of writing it.
                 Last saved {{ existing_saved_at|date:"M j, Y" }} at {{ existing_saved_at|time:"g:i A" }}
             </p>
         {% endif %}
-        <div class="modal-action">
-            <button type="submit" class="btn btn-primary">Save</button>
-        </div>
+        {% if new_sound_count %}
+            <div role="alert" class="alert alert-info alert-soft text-sm">
+                <span>
+                    Saving uploads your {{ new_sound_count }} new sound{{ new_sound_count|pluralize }}.
+                    After that {{ new_sound_count|pluralize:"it,they" }} can't be changed, and only you will hear
+                    {{ new_sound_count|pluralize:"it,them" }} until cosound has reviewed
+                    {{ new_sound_count|pluralize:"it,them" }}.
+                </span>
+            </div>
+            <p class="text-error text-sm" x-show="error" x-text="error"></p>
+            <div class="modal-action">
+                <button type="submit" class="btn btn-primary" :disabled="busy">
+                    <span class="loading loading-spinner loading-sm" x-show="busy"></span>
+                    <span x-text="busy ? 'Uploading…' : 'Save'">Save</span>
+                </button>
+            </div>
+        {% else %}
+            <div class="modal-action">
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        {% endif %}
     </form>
 {% endpartialdef %}
 <!--

@@ -2,6 +2,7 @@ from django.urls import path
 
 from studio.views import (
     studio_carousel,
+    studio_create_sound,
     studio_index,
     studio_initial,
     studio_library,
@@ -21,6 +22,7 @@ htmx_urlpatterns = [
     path("htmx/library/search", studio_library_search, name="library_search"),
     path("htmx/carousel", studio_carousel, name="carousel"),
     path("htmx/tags", studio_tag_search, name="tag_search"),
+    path("htmx/sounds/create", studio_create_sound, name="create_sound"),
 ]
 
 urlpatterns += htmx_urlpatterns

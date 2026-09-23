@@ -55,6 +55,7 @@ class StudioTagSearchTests(TestCase):
         )
         Artist.objects.create(user=cls.user, name="Tag Artist")
         sound = Sound.objects.create(
+            published=True,
             file="sounds/tagged.wav", title="Tagged", embeddings=[0, 0, 0, 0, 0]
         )
         sound.tags.add("Rain", "Rainforest", "Night")

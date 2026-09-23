@@ -66,3 +66,37 @@ def validate_chime(upload):
 
     if validation_error is not None:
         raise validation_error
+
+
+SOUND_MAX_BYTES = 50 * 1024 * 1024
+
+
+def validate_sound(upload):
+    """Reject an artist's upload that the players could not decode.
+
+    Lighter than the chime's check: a sound is meant to be long and may be
+    quiet, so this only proves the file opens as audio and holds some. The
+    decode is libsndfile's, the same one the physical player uses, which is
+    why a format a browser happens to play (AAC, say) is still refused.
+    """
+    if upload.size > SOUND_MAX_BYTES:
+        raise ValidationError("Sound must be 50 MB or smaller.")
+    try:
+        original_position = upload.tell()
+    except (AttributeError, OSError, ValueError):
+        original_position = 0
+    try:
+        upload.seek(0)
+        with sf.SoundFile(upload) as audio:
+            empty = audio.samplerate <= 0 or audio.frames <= 0
+    except (OSError, RuntimeError, TypeError, ValueError) as error:
+        raise ValidationError(
+            "Upload a valid WAV, FLAC, OGG, MP3, or AIFF audio file."
+        ) from error
+    finally:
+        try:
+            upload.seek(original_position)
+        except (AttributeError, OSError, ValueError):
+            pass
+    if empty:
+        raise ValidationError("Sound cannot be empty.")

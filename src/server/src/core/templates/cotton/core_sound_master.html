@@ -48,7 +48,7 @@ the one thing every surface does identically — a list of sound ids and gains.
     </div>
 
     <!-- Save mix. A saved Cosound is a list of Sound ids, and a blank layer has
-         none to send, so `savableLayers` is what goes over the wire — an empty
+         none to send, so `saveLayers` is what goes over the wire — an empty
          slot is skipped rather than posted, and a mix that is nothing but empty
          slots is an empty one, which is the reason the button is off. The
          tooltip wrapper can still show that reason while the button is disabled.
@@ -68,7 +68,7 @@ the one thing every surface does identically — a list of sound ids and gains.
             hx-swap="none"
             @click.capture="if (window.cancelSoundSelectorBefore($el)) { $event.preventDefault(); $event.stopImmediatePropagation(); }"
             hx-vals='js:{
-                    layers: JSON.stringify(Alpine.store("soundLayers").savableLayers.map(l => ({ sound_id: l.sound_id, sound_gain: Alpine.store("soundLayers").isSilenced(l) ? 0 : l.gain / 100 }))),
+                    layers: JSON.stringify(Alpine.store("soundLayers").saveLayers),
                     title: Alpine.store("soundLayers")?.loadedTitle || "{{ save_title|escapejs }}"
                 }'>
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor" class="size-[2em]">

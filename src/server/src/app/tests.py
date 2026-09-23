@@ -39,6 +39,7 @@ class AppTabBodyTests(TestCase):
         )
         sounds = [
             Sound.objects.create(
+                published=True,
                 file=f"sounds/stats-{index}.wav",
                 title=f"Stats sound {index}",
                 embeddings=[0, 0, 0, 0, 0],
@@ -146,8 +147,9 @@ class AppLibraryCreateTests(TestCase):
         self.assertContains(response, "Create a new sound")
         self.assertContains(response, "Use a sound from your library")
         self.assertContains(response, "Type a story for this sound")
-        # After Create, the same circle and buttons become the uploads.
-        self.assertContains(response, "New Layer")
+        # Create swaps the card like a library pick does.
+        self.assertContains(response, 'hx-get="/library/carousel/"')
+        # What comes back is a new sound's face, carrying the uploads.
         self.assertContains(response, 'accept="audio/*"')
         self.assertContains(response, "Upload sound")
         self.assertContains(response, 'accept="image/*"')

@@ -62,6 +62,7 @@ class PlayerProgramModelTests(TestCase):
 
     def test_playback_updates_keep_sleeping_state_in_sync(self):
         sound = Sound.objects.create(
+            published=True,
             file="sounds/awake.mp3",
             title="Awake",
             embeddings=[0] * 5,
@@ -141,7 +142,7 @@ class PlayerProgramModelTests(TestCase):
     def test_library_and_links_follow_the_current_program(self):
         player = self.make_player()
         first_post = player.program
-        sound = Sound.objects.create(file="sounds/local.mp3", title="Local", embeddings=[0] * 5)
+        sound = Sound.objects.create(published=True, file="sounds/local.mp3", title="Local", embeddings=[0] * 5)
         program = PlayerProgram.objects.create(
             post=Post.objects.create(composer=self.user, title="Next collection")
         )

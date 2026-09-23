@@ -490,7 +490,9 @@ def run_stable_prediction(
                     return gated
 
             library = list(
-                program.collection.prefetch_related("tags").order_by("pk")
+                program.collection.published()
+                .prefetch_related("tags")
+                .order_by("pk")
             )
             program_id = program.pk
             library_ids = tuple(sound.pk for sound in library)
@@ -634,7 +636,8 @@ def run_stable_prediction(
                 )
                 return PREDICTION_RETRY if awakening else 0
             committed_library_ids = tuple(
-                committed_program.collection.select_for_update()
+                committed_program.collection.published()
+                .select_for_update()
                 .order_by("pk")
                 .values_list("pk", flat=True)
             )

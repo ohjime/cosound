@@ -41,11 +41,13 @@ class PlayerProgramAlgorithmParameterTests(TestCase):
         )
         cls.program = cls.player.program
         cls.baseline_sound = Sound.objects.create(
+            published=True,
             file="sounds/baseline.wav",
             title="Baseline",
             embeddings=[0] * 5,
         )
         cls.outside_sound = Sound.objects.create(
+            published=True,
             file="sounds/outside.wav",
             title="Outside sound",
             embeddings=[0] * 5,

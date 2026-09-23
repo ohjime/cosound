@@ -33,7 +33,10 @@ store a real layer object rather than rebuilding one from data attributes.
             <img class="size-10 rounded-box" src="{{ sound.artwork_url }}" alt="{{ sound.title }} artwork">
         </div>
         <div>
-            <div class="text-sm font-semibold">{{ sound.title }}</div>
+            <div class="text-sm font-semibold">
+                {{ sound.title }}
+                {% if not sound.published %}<span class="badge badge-warning badge-xs ml-1 align-middle" title="Only you can hear this until cosound has reviewed it">Unpublished</span>{% endif %}
+            </div>
             <div class="text-xs font-semibold opacity-60">
                 <span x-show="inMix">Already in mix</span>
                 <span x-show="!inMix">{{ sound.artist }}</span>

@@ -183,6 +183,10 @@ export function createSoundLayersStore(rawLayers, {
     artistName = "",
     settleProgress = settleLoadingProgress,
 } = {}) {
+    // The files behind each new sound, by layer id, kept for createNewSounds.
+    // Out here rather than on the layer: Alpine would wrap a File on a reactive
+    // layer in a Proxy, and FormData refuses anything that is not a real Blob.
+    const newSoundFiles = new Map();
     return {
         layers: rawLayers.map(normalizeUiLayer),
         maxLayers: MAX_LAYERS,
@@ -254,22 +258,57 @@ export function createSoundLayersStore(rawLayers, {
         get savableLayers() {
             return this.layers.filter((layer) => !layer.isDraft);
         },
+        // A new sound is local too until it is saved, but unlike a dropped
+        // track it has somewhere to go: the save dialog creates its Sound row
+        // (createNewSounds) before the mix is saved. So it does not count here.
         get hasLocalLayers() {
-            return this.savableLayers.some((layer) => layer.isLocal);
+            return this.savableLayers.some((layer) => layer.isLocal && !layer.isNew);
+        },
+        // What a new sound still lacks before it can become a Sound, or "".
+        // Every new sound is checked, including one still waiting for its
+        // audio: that one is a draft and so not in savableLayers, and saving
+        // past it would drop the artist's words without a word.
+        get newSoundBlockedReason() {
+            for (const layer of this.layers) {
+                if (!layer.isNew) continue;
+                if (layer.isDraft) return "Your new sound needs a sound file.";
+                if (!layer.sound_title?.trim()) return "Your new sound needs a title.";
+                // The name, not the file map: this getter has to re-run when
+                // artwork is picked, and only the layer is reactive.
+                if (!layer.artwork_file_name) return "Your new sound needs artwork.";
+            }
+            return "";
+        },
+        get hasNewSounds() {
+            return this.savableLayers.some((layer) => layer.isNew);
         },
         // Saving a mix posts sound_ids the server resolves to Sound rows, so a
         // mix holding a browser-local track has nothing to point at. The studio
         // uses this to explain why the save button is off rather than failing
         // the POST.
         get canSave() {
-            return this.savableLayers.length > 0 && !this.hasLocalLayers;
+            return this.savableLayers.length > 0
+                && !this.hasLocalLayers
+                && !this.newSoundBlockedReason;
         },
         get saveBlockedReason() {
-            if (this.savableLayers.length === 0) return "Can't save empty Cosound.";
+            if (this.savableLayers.length === 0 && !this.newSoundBlockedReason) {
+                return "Can't save empty Cosound.";
+            }
             if (this.hasLocalLayers) {
                 return "Mixes with your own tracks stay on this device.";
             }
-            return "";
+            return this.newSoundBlockedReason;
+        },
+        // What the save button posts: each layer's id and level. A new sound
+        // has no id the server knows yet, so it is marked, and the save dialog
+        // creates it before the mix is saved.
+        get saveLayers() {
+            return this.savableLayers.map((layer) => ({
+                sound_id: layer.sound_id,
+                sound_gain: this.isSilenced(layer) ? 0 : layer.gain / 100,
+                ...(layer.isNew ? { is_new: true } : {}),
+            }));
         },
 
         anyIsolated() {
@@ -412,6 +451,10 @@ export function createSoundLayersStore(rawLayers, {
                         emit("progress", { loaded, total });
                     },
                 });
+                // A newer load — or the card being swapped out — tore this
+                // engine down while its files decoded. Whatever replaced it
+                // owns the loading state now, so this one leaves it alone.
+                if (this._engine !== engine) return;
                 this.loadedCount = this.layers.length;
                 this._syncAllAnalysis();
                 // The mix went to the engine as it stood before the files were
@@ -421,9 +464,11 @@ export function createSoundLayersStore(rawLayers, {
                 // push the layers' own state over the top of what was sent.
                 this._syncAudibility();
                 await settleProgress();
+                if (this._engine !== engine) return;
                 this.tracksLoading = false;
                 emit("ready", { layers: this.layers.length });
             } catch (error) {
+                if (this._engine !== engine) return;
                 this.tracksLoading = false;
                 this.loadError = error instanceof Error ? error.message : String(error);
                 emit("error", { message: this.loadError });
@@ -470,14 +515,17 @@ export function createSoundLayersStore(rawLayers, {
             const layer = normalizeUiLayer(rawLayer);
             this.swappingLayer = false;
             this.loadError = "";
+            const engine = this._engine;
             try {
-                await this._engine.addLayer(layerConfig(layer));
+                await engine.addLayer(layerConfig(layer));
+                if (this._engine !== engine) return null;
                 this.layers.push(layer);
                 this.currentIndex = this.layers.length - 1;
                 this._syncAnalysis(this.currentIndex);
                 emit("add", { index: this.currentIndex, layer });
                 return layer;
             } catch (error) {
+                if (this._engine !== engine) return null;
                 this.loadError = error instanceof Error ? error.message : String(error);
                 emit("error", { message: this.loadError });
                 throw error;
@@ -532,15 +580,26 @@ export function createSoundLayersStore(rawLayers, {
         /**
          * Turn a blank layer into a new sound the artist is writing up. The
          * layer stays a draft — nothing has audio yet, so it is still left out
-         * of a save — but it now carries a working title, the artist's name
-         * and an empty story for the card's fields to edit.
+         * of a save — but it now carries an empty title, the artist's name,
+         * stand-in artwork and an empty story, so the card reads like any
+         * library sound whose words happen to be fields.
+         *
+         * The empty card's Create button calls this after it has faded the
+         * card out, the same way a library pick lands behind the swap, and
+         * raised `swappingLayer` for the wait. Lowering it here is what hands
+         * the card back.
          */
         createSound(index) {
             const layer = this.layers[index];
+            this.swappingLayer = false;
             if (!this.allowCreate || !layer?.isDraft || layer.isNew) return;
             this.updateLayer(index, {
                 isNew: true,
-                sound_title: "New Sound",
+                artwork_url: placeholderArtwork("New Sound"),
+                // Empty, not "New Sound": the card shows that as the title
+                // field's placeholder, beside a pencil that stays until the
+                // artist types a title of their own.
+                sound_title: "",
                 sound_artist: this.artistName,
                 flavor: "",
                 tags: "",
@@ -555,14 +614,20 @@ export function createSoundLayersStore(rawLayers, {
          * the layer is local and kept out of a save.
          */
         async uploadSound(index, file) {
-            if (!this.layers[index]?.isNew || !file) return null;
+            const layer = this.layers[index];
+            if (!layer?.isNew || !file) return null;
             const url = URL.createObjectURL(file);
             try {
-                return await this.setLayerSource(index, {
+                const next = await this.setLayerSource(index, {
                     sound_file: url,
                     sound_file_name: file.name,
                     is_local: true,
                 });
+                if (next) {
+                    const files = newSoundFiles.get(layer.sound_id) ?? {};
+                    newSoundFiles.set(next.sound_id, { ...files, audio: file });
+                }
+                return next;
             } catch (error) {
                 URL.revokeObjectURL(url);
                 throw error;
@@ -577,6 +642,8 @@ export function createSoundLayersStore(rawLayers, {
             const layer = this.layers[index];
             if (!layer?.isNew || !file) return;
             const previous = layer.artwork_url;
+            const files = newSoundFiles.get(layer.sound_id) ?? {};
+            newSoundFiles.set(layer.sound_id, { ...files, art: file });
             this.updateLayer(index, {
                 artwork_url: URL.createObjectURL(file),
                 artwork_file_name: file.name,
@@ -584,6 +651,72 @@ export function createSoundLayersStore(rawLayers, {
             if (typeof previous === "string" && previous.startsWith("blob:")) {
                 URL.revokeObjectURL(previous);
             }
+        },
+
+        /**
+         * Make every new sound in the mix a real Sound, one POST each, and put
+         * the finished layer in its place. The save dialog calls this just
+         * before it saves the mix, and uses the answer to swap each new
+         * sound's browser-made id in the posted layers for its real one.
+         *
+         * The swap keeps the voice that is already playing — the audio was
+         * decoded from the blob, and it is the same audio — along with the
+         * fader, mute, solo and the settings pane's timing. What changes is
+         * that the layer is no longer new: its words stop being fields and
+         * its files are the ones in storage. The server offers no edit, so
+         * from here the sound is fixed.
+         *
+         * It stops at the first failure and throws the server's reason. The
+         * sounds created before it stay created; a retry picks up the rest.
+         *
+         * @returns {Promise<Record<string, number>>} old id → Sound id
+         */
+        async createNewSounds(url, csrfToken) {
+            const created = {};
+            for (const current of [...this.layers]) {
+                if (!current.isNew || current.isDraft) continue;
+                const files = newSoundFiles.get(current.sound_id) ?? {};
+                if (!files.audio || !files.art) {
+                    throw new Error("Pick your new sound's file and artwork again.");
+                }
+                const body = new FormData();
+                body.append("file", files.audio, current.sound_file_name || files.audio?.name);
+                body.append("art", files.art, current.artwork_file_name || files.art?.name);
+                body.append("title", current.sound_title ?? "");
+                body.append("flavor", current.flavor ?? "");
+                body.append("tags", (current.tag_list ?? []).join("\n"));
+                const response = await fetch(url, {
+                    method: "POST",
+                    body,
+                    headers: { "X-CSRFToken": csrfToken },
+                    credentials: "same-origin",
+                });
+                const answer = await response.json().catch(() => ({}));
+                if (!response.ok || !answer.layer) {
+                    throw new Error(answer.error || "Your new sound could not be saved.");
+                }
+                const next = normalizeUiLayer({
+                    ...current,
+                    ...answer.layer,
+                    // The server's layer comes at a default level; the
+                    // artist's fader wins.
+                    sound_gain: Number(current.gain) / 100,
+                    mute: current.mute,
+                    is_new: false,
+                    isNew: false,
+                    is_local: false,
+                    isLocal: false,
+                });
+                next.isolated = current.isolated;
+                const index = this.layers.indexOf(current);
+                if (index === -1) continue;
+                this.layers.splice(index, 1, next);
+                revokeUnusedUrls(current, next);
+                newSoundFiles.delete(current.sound_id);
+                created[current.sound_id] = next.sound_id;
+                emit("created", { index, layer: next });
+            }
+            return created;
         },
 
         /**
@@ -610,7 +743,14 @@ export function createSoundLayersStore(rawLayers, {
             const layer = this.layers[index];
             if (!layer || !this._engine) return;
             const next = { ...layer, ...changes };
-            await this._engine.replaceLayer(index, layerConfig(next));
+            const engine = this._engine;
+            try {
+                await engine.replaceLayer(index, layerConfig(next));
+            } catch (error) {
+                if (this._engine !== engine) return;
+                throw error;
+            }
+            if (this._engine !== engine) return;
             Object.assign(layer, changes);
             this._syncAudibility();
             // After the crop, not before: a new region is a new loudness, and
@@ -656,14 +796,17 @@ export function createSoundLayersStore(rawLayers, {
                 loudness_gain_db: 0,
             });
             this.loadError = "";
+            const engine = this._engine;
             try {
-                await this._engine.replaceLayer(index, layerConfig(next));
+                await engine.replaceLayer(index, layerConfig(next));
+                if (this._engine !== engine) return null;
                 const [outgoing] = this.layers.splice(index, 1, next);
                 revokeUnusedUrls(outgoing, next);
                 this._syncAnalysis(index);
                 emit("source", { index, layer: next });
                 return next;
             } catch (error) {
+                if (this._engine !== engine) return null;
                 this.loadError = error instanceof Error ? error.message : String(error);
                 emit("error", { message: this.loadError });
                 throw error;
@@ -681,17 +824,20 @@ export function createSoundLayersStore(rawLayers, {
             this.swappingLayer = true;
             this.swapLoading = true;
             this.loadError = "";
+            const engine = this._engine;
             try {
                 await Promise.all([
-                    this._engine.replaceLayer(index, layerConfig(layer)),
+                    engine.replaceLayer(index, layerConfig(layer)),
                     preloadArtwork(layer.artwork_url),
                 ]);
+                if (this._engine !== engine) return;
                 const [outgoing] = this.layers.splice(index, 1, layer);
                 revokeUnusedUrls(outgoing, layer);
                 this._syncAnalysis(index);
                 emit("replace", { index, layer });
                 await afterNextPaint();
             } catch (error) {
+                if (this._engine !== engine) return;
                 this.loadError = error instanceof Error ? error.message : String(error);
                 emit("error", { message: this.loadError });
                 throw error;
@@ -709,18 +855,21 @@ export function createSoundLayersStore(rawLayers, {
             this.loadingTotal = nextLayers.length;
             this.currentIndex = 0;
             this.loadError = "";
+            const engine = this._engine;
             try {
-                await this._engine.setLayers(nextLayers.map(layerConfig), {
+                await engine.setLayers(nextLayers.map(layerConfig), {
                     onProgress: ({ loaded, total }) => {
                         this.loadedCount = Math.round((loaded / total) * nextLayers.length);
                     },
                 });
+                if (this._engine !== engine) return;
                 this.layers.forEach(revokeLocalUrls);
                 this.layers = nextLayers;
                 this.loadedTitle = mix.title || "";
                 this.loadedCount = nextLayers.length;
                 this._syncAllAnalysis();
                 await settleProgress();
+                if (this._engine !== engine) return;
                 this.tracksLoading = false;
                 // Loading a saved mix is itself a playback gesture. The
                 // AudioContext may still be suspended (or have been suspended
@@ -729,6 +878,7 @@ export function createSoundLayersStore(rawLayers, {
                 await this.playAll();
                 emit("mixload", { mix });
             } catch (error) {
+                if (this._engine !== engine) return;
                 this.tracksLoading = false;
                 this.loadError = error instanceof Error ? error.message : String(error);
                 emit("error", { message: this.loadError });

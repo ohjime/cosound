@@ -172,7 +172,8 @@ def collection_changed(sender, instance, action, reverse, pk_set, using, **kwarg
 def sound_saved(sender, instance, using, raw=False, created=False, update_fields=None, **kwargs):
     if raw or created:
         return
-    visible_fields = {"title", "file", "artist", "artist_id", "artist_legacy"}
+    # `published` is here because pulling a sound has to take it off the air.
+    visible_fields = {"title", "file", "artist", "artist_id", "artist_legacy", "published"}
     if update_fields is not None and not visible_fields.intersection(update_fields):
         return
     notify_players_changed(_player_ids_for_sounds([instance.pk], using), using=using)

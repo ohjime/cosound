@@ -143,7 +143,7 @@ class PlayerStateTests(TestCase):
     def test_snapshot_includes_playback_and_metadata_without_credentials(self):
         user = User.objects.create_user(username="state-manager")
         manager = Manager.objects.create(user=user, name="Manager")
-        sound = Sound.objects.create(title="Rain", embeddings=[0.0] * 5)
+        sound = Sound.objects.create(published=True, title="Rain", embeddings=[0.0] * 5)
         playing = Prediction.new()
         playing.add_layer(sound.pk, 0.5)
         player = Player.objects.create(manager=manager, name="Player", bio="Room sounds", location="Library", playing=playing)

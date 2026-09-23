@@ -232,6 +232,7 @@ class ListenerTestPointAdminTests(TestCase):
     @staticmethod
     def create_sound(title):
         return Sound.objects.create(
+            published=True,
             file=f"sounds/{title.lower().replace(' ', '-')}.wav",
             title=title,
             embeddings=[0, 0, 0, 0, 0],
@@ -352,6 +353,7 @@ class PlayerAdminAwakenTests(TestCase):
         cls.manager = Manager.objects.create(user=cls.admin, name="Player manager")
         cls.player = Player.objects.create(manager=cls.manager, name="Garden player")
         cls.sound = Sound.objects.create(
+            published=True,
             file="sounds/garden.wav",
             title="Garden birds",
             embeddings=[0, 0, 0, 0, 0],
@@ -436,6 +438,7 @@ class PredictorTests(TestCase):
 
     def make_sound(self, title, *tags):
         sound = Sound.objects.create(
+            published=True,
             file=f"sounds/{title}.mp3",
             title=title,
             embeddings=[0.0] * 5,
@@ -876,6 +879,7 @@ class SoundCreditTests(TestCase):
     def make_sound(self, title="Rain on Tin", **fields):
         """A Sound with its embedding supplied, so save() skips the classifier."""
         return Sound.objects.create(
+            published=True,
             file=f"sounds/{title.lower().replace(' ', '-')}.wav",
             title=title,
             embeddings=[0, 0, 0, 0, 0],
@@ -1382,6 +1386,7 @@ class StablePredictorIntegrationTests(TestCase):
 
     def make_sound(self, title, *tags):
         sound = Sound.objects.create(
+            published=True,
             file=f"sounds/{title}.mp3",
             title=title,
             embeddings=[0.0] * 5,

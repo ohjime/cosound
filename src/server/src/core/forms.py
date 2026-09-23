@@ -20,7 +20,7 @@ class SoundForm(FileFormMixin, ModelForm):
 
     class Meta:
         model = Sound
-        fields = ["file", "title", "artist", "set", "art", "flavor", "tags"]
+        fields = ["file", "title", "artist", "published", "set", "art", "flavor", "tags"]
 
     readonly_fields = ["timestamp"]
 
@@ -28,6 +28,10 @@ class SoundForm(FileFormMixin, ModelForm):
         super().__init__(*args, s3_upload_dir="sounds", **kwargs)
         if self.instance.pk:
             self.fields["tags"].initial = self.instance.tags.all()
+        else:
+            # Staff adding a sound here are the reviewers, so theirs start
+            # cleared. The model's default (unpublished) is for artist uploads.
+            self.fields["published"].initial = True
 
     def _save_m2m(self):
         super()._save_m2m()

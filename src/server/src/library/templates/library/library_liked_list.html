@@ -4,7 +4,10 @@
         <ul class="flex flex-col gap-2">
             {% for sound in liked_sounds %}
             <li class="border-base-300 flex justify-between gap-3 border-b py-2">
-                <span>{{ sound.title }}</span>
+                <span>
+                    {{ sound.title }}
+                    {% if not sound.published %}<span class="badge badge-warning badge-xs ml-1 align-middle" title="Only you can hear this until cosound has reviewed it">Unpublished</span>{% endif %}
+                </span>
                 {% if sound.artist_name %}<span class="text-sm opacity-60">{{ sound.artist_name }}</span>{% endif %}
             </li>
             {% empty %}

@@ -10,7 +10,7 @@ class PlayerManifestCollectionTests(TestCase):
         manager = Manager.objects.create(user=user, name="Manager")
         player = Player.objects.create(manager=manager, name="Player")
         old_sound, new_sound = [
-            Sound.objects.create(title=name, file=f"sounds/{name}.wav", embeddings=[0.0] * 5)
+            Sound.objects.create(published=True, title=name, file=f"sounds/{name}.wav", embeddings=[0.0] * 5)
             for name in ("old", "new")
         ]
         player.program.collection.add(old_sound)

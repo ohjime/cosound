@@ -18,6 +18,7 @@ class PlayerProgramAdminTests(TestCase):
         cls.manager = Manager.objects.create(user=cls.admin, name="Post manager")
         cls.player = Player.objects.create(manager=cls.manager, name="Garden player")
         cls.sound = Sound.objects.create(
+            published=True,
             file="sounds/garden.wav", title="Garden birds", embeddings=[0, 0, 0, 0, 0]
         )
 
@@ -165,6 +166,7 @@ class PlayerProgramAdminTests(TestCase):
         old_mix.add_layer(self.sound.pk)
         self.player.update(old_mix)
         next_sound = Sound.objects.create(
+            published=True,
             file="sounds/new-room.wav", title="New room", embeddings=[0] * 5
         )
         replacement = PlayerProgram.objects.create(

@@ -56,7 +56,8 @@ def _predict_for_player(player_id: int, *, intent: str = REFRESH_INTENT) -> int:
 
         if intent == AWAKEN_INTENT:
             sound_ids = list(
-                player.program.collection.select_for_update()
+                player.program.collection.published()
+                .select_for_update()
                 .order_by("pk")
                 .values_list("pk", flat=True)
             )
@@ -138,7 +139,7 @@ def _predict_for_player(player_id: int, *, intent: str = REFRESH_INTENT) -> int:
             selected_sound_ids: set[int] = set()
 
             library_by_tag: dict[int, list[Sound]] = defaultdict(list)
-            for sound in program.collection.prefetch_related("tags"):
+            for sound in program.collection.published().prefetch_related("tags"):
                 for tag in sound.tags.all():
                     library_by_tag[tag.pk].append(sound)
 
@@ -277,7 +278,9 @@ class Algorithm:
                 and playable_ids
                 and len(playable_ids) == len(layers)
                 and len(playable_ids) == len(set(playable_ids))
-                and player.program.collection.filter(pk__in=playable_ids).count()
+                and player.program.collection.published()
+                .filter(pk__in=playable_ids)
+                .count()
                 == len(playable_ids)
             )
             if completed == 1 and prediction_is_playable:

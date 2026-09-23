@@ -84,12 +84,14 @@ class PlayerChangeSignalTests(TestCase):
         other_manager = Manager.objects.create(user=user, name="Other manager")
         cls.artist = Artist.objects.create(name="Original artist")
         cls.sound = Sound.objects.create(
+            published=True,
             title="Original sound",
             file="sounds/original.wav",
             artist=cls.artist,
             embeddings=[0] * 5,
         )
         cls.other_sound = Sound.objects.create(
+            published=True,
             title="Other sound", file="sounds/other.wav", embeddings=[0] * 5
         )
         cls.collecting_player = Player.objects.create(

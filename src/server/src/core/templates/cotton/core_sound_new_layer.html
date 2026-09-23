@@ -1,0 +1,37 @@
+<!--
+The face of a new sound — a blank layer the artist pressed Create on (see
+c-core-sound-empty-layer). Create arrives the way a library pick does: the card
+fades out and comes back as this. What makes it the artist's is what sits on
+it: the title and artist are fields in the caption, the tags and story are
+fields in the body (c-studio-new-sound-details), and the picture and sound
+buttons beside the trash (c-core-sound-carousel) upload the artwork and the
+sound file.
+
+Until artwork is picked there is no picture to show, so the face is a plain
+dark neutral field with a faint question mark: the picture and sound buttons
+beside the trash already say what they do. Once artwork is picked, it is drawn
+like any library sound's face — a blob: URL from setArtwork, faded in by
+c-core-image — and only then do the washes go over it. The white title and
+artist fields read on the dark field without them.
+-->
+<div class="contents">
+    <template x-if="layer.artwork_file_name">
+        <div class="contents">
+            <c-core-image bind_src="layer.artwork_url" bind_alt="layer.sound_title" class="w-full" />
+            <div
+                class="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-black/80 to-transparent z-10">
+            </div>
+            <div
+                class="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/60 to-transparent z-10">
+            </div>
+        </div>
+    </template>
+    <template x-if="!layer.artwork_file_name">
+        <div aria-hidden="true"
+            class="absolute inset-0 grid place-items-center bg-neutral-700 font-serif text-[12rem] leading-none text-white/10 select-none">
+            ?
+        </div>
+    </template>
+    <p class="absolute inset-x-6 bottom-16 z-10 mx-auto w-fit max-w-56 rounded-full bg-black/60 px-3 py-1 text-center text-xs text-error"
+        x-show="$store.soundLayers.loadError" x-text="$store.soundLayers.loadError"></p>
+</div>

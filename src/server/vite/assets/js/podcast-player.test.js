@@ -12,13 +12,29 @@ function deferred() {
 }
 
 function fakeNode(kind) {
+    const parameter = (value = 0) => ({
+        value,
+        cancelScheduledValues() {},
+        setValueAtTime(next) { this.value = next; },
+        linearRampToValueAtTime(next) { this.value = next; },
+    });
     return {
         kind,
-        gain: { value: 1 },
-        frequency: { value: 0 },
-        Q: { value: 0 },
+        gain: parameter(1),
+        frequency: parameter(),
+        Q: parameter(),
+        delayTime: parameter(),
+        threshold: parameter(),
+        ratio: parameter(),
+        knee: parameter(),
+        attack: parameter(),
+        release: parameter(),
+        starts: 0,
+        stops: 0,
         connections: [],
         disconnects: 0,
+        start() { this.starts += 1; },
+        stop() { this.stops += 1; },
         connect(node) { this.connections.push(node); },
         disconnect() { this.connections = []; this.disconnects += 1; },
     };
@@ -34,6 +50,8 @@ function fixture(options = {}) {
     let ended = 0;
     const context = {
         state: "suspended",
+        currentTime: 0,
+        sampleRate: 22050,
         destination: fakeNode("destination"),
         resume: () => { calls.push("resume"); context.state = "running"; return Promise.resolve(); },
         close: () => { calls.push("close"); context.state = "closed"; return Promise.resolve(); },
@@ -41,6 +59,15 @@ function fixture(options = {}) {
         createGain: () => { const node = fakeNode("gain"); nodes.push(node); return node; },
         createBiquadFilter: () => { const node = fakeNode("biquad"); nodes.push(node); return node; },
         createWaveShaper: () => { const node = fakeNode("shaper"); nodes.push(node); return node; },
+        createDynamicsCompressor: () => { const node = fakeNode("compressor"); nodes.push(node); return node; },
+        createDelay: () => { const node = fakeNode("delay"); nodes.push(node); return node; },
+        createConvolver: () => { const node = fakeNode("convolver"); nodes.push(node); return node; },
+        createOscillator: () => { const node = fakeNode("oscillator"); nodes.push(node); return node; },
+        createBufferSource: () => { const node = fakeNode("noise"); nodes.push(node); return node; },
+        createBuffer(channels, length, sampleRate) {
+            const data = Array.from({ length: channels }, () => new Float32Array(length));
+            return { length, sampleRate, numberOfChannels: channels, getChannelData: (channel) => data[channel] };
+        },
     };
     const audioFactory = () => {
         const listeners = new Map();
@@ -130,26 +157,119 @@ test("presets change only the live graph and volume clamps to its allowed range"
     await f.player.load(EPISODE, { preset: "radio", volume: 0.4 });
     const source = f.nodes.find((node) => node.kind === "source");
     const gain = f.nodes.find((node) => node.kind === "gain");
-    assert.equal(source.connections[0].type, "bandpass");
+    const dry = source.connections[0];
+    const input = source.connections[1];
+    const highpass = input.connections[0];
+    const lowpass = highpass.connections[0];
+    const shaper = f.nodes.find((node) => node.kind === "shaper");
+    const nodeCount = f.nodes.length;
+    assert.equal(highpass.frequency.value, 280);
     f.player.setPreset("vintage");
-    assert.equal(source.connections[0].type, "highpass");
-    const lowpass = source.connections[0].connections[0];
+    assert.equal(highpass.type, "highpass");
+    assert.equal(highpass.frequency.value, 180);
     assert.equal(lowpass.type, "lowpass");
-    const shaper = lowpass.connections[0];
-    assert.equal(shaper.kind, "shaper");
-    assert.equal(shaper.curve.length, 1024);
+    assert.equal(lowpass.frequency.value, 3300);
+    assert.equal(shaper.curve.length, 2049);
     assert.ok(shaper.curve.every((sample) => Math.abs(sample) <= 1));
     f.player.setPreset("muffled");
-    assert.equal(source.connections[0].type, "lowpass");
-    assert.equal(source.connections[0].frequency.value, 1100);
+    assert.equal(lowpass.frequency.value, 850);
     f.player.setPreset("clean");
-    assert.deepEqual(source.connections, [gain]);
+    assert.equal(dry.gain.value, 1);
+    assert.equal(f.nodes.length, nodeCount);
+    assert.equal(source.connections[1], input);
     f.player.setVolume(4);
     assert.equal(gain.gain.value, 1);
     f.player.setVolume(-1);
     assert.equal(gain.gain.value, 0);
     assert.equal(f.audios.length, 1);
     assert.equal(f.audios[0].playCalls, 0);
+    f.player.destroy();
+});
+
+test("texture only runs during audible playback and releases every generated source", async () => {
+    const f = fixture();
+    await f.player.load(EPISODE, { preset: "gramophone", effectMix: 1, texture: 1, space: 1 });
+    const audio = f.audios[0];
+    const liveNoise = () => f.nodes.filter((node) => node.kind === "noise" && !node.stops);
+    assert.equal(liveNoise().length, 0);
+    await f.player.play();
+    assert.equal(liveNoise().length, 2);
+    audio.emit("waiting");
+    assert.equal(liveNoise().length, 0);
+    audio.emit("playing");
+    assert.equal(liveNoise().length, 2);
+    f.player.setVolume(0);
+    assert.equal(liveNoise().length, 0);
+    f.player.setVolume(0.7);
+    assert.equal(liveNoise().length, 2);
+    audio.muted = true;
+    audio.emit("volumechange");
+    assert.equal(liveNoise().length, 0);
+    audio.muted = false;
+    audio.volume = 0;
+    audio.emit("volumechange");
+    assert.equal(liveNoise().length, 0);
+    audio.volume = 1;
+    audio.emit("volumechange");
+    assert.equal(liveNoise().length, 2);
+    f.player.pause();
+    assert.equal(liveNoise().length, 0);
+    await f.player.play();
+    audio.emit("ended");
+    assert.equal(liveNoise().length, 0);
+    f.player.destroy();
+    for (const node of f.nodes.filter((entry) => ["noise", "oscillator"].includes(entry.kind))) {
+        assert.equal(node.stops, 1);
+        assert.equal(node.connections.length, 0);
+    }
+});
+
+test("effect controls clamp, keep the media position, and Original disables all texture", async () => {
+    const f = fixture();
+    await f.player.load(EPISODE, { preset: "cassette", autoplay: true, effectMix: 0.6, texture: 0.8, space: 0.9 });
+    const audio = f.audios[0];
+    audio.currentTime = 84;
+    const source = f.nodes.find((node) => node.kind === "source");
+    const dry = source.connections[0];
+    const liveNoise = () => f.nodes.filter((node) => node.kind === "noise" && !node.stops);
+    assert.equal(dry.gain.value, 0.4);
+    assert.equal(liveNoise().length, 2);
+    f.player.setEffectMix(-2);
+    assert.equal(dry.gain.value, 1);
+    assert.equal(liveNoise().length, 0);
+    f.player.setEffectMix(2);
+    assert.equal(dry.gain.value, 0);
+    f.player.setTexture(-2);
+    assert.equal(liveNoise().length, 0);
+    f.player.setTexture(2);
+    assert.equal(liveNoise().length, 2);
+    f.player.setSpace(Infinity);
+    f.player.setPreset("clean");
+    f.player.setTexture(1);
+    f.player.setSpace(1);
+    assert.equal(dry.gain.value, 1);
+    assert.equal(liveNoise().length, 0);
+    assert.equal(f.audios.length, 1);
+    assert.equal(audio.currentTime, 84);
+    assert.equal(audio.playCalls, 1);
+    f.player.destroy();
+});
+
+test("source changes and CORS fallback stop texture and disconnect the entire graph", async () => {
+    const f = fixture();
+    await f.player.load(EPISODE, { preset: "shortwave", texture: 1, autoplay: true });
+    const firstNodes = [...f.nodes];
+    await f.player.load({ audio_url: "https://publisher.example/two.mp3" }, { preset: "cassette", texture: 1, autoplay: true });
+    assert.ok(firstNodes.every((node) => node.connections.length === 0));
+    assert.ok(firstNodes.filter((node) => ["noise", "oscillator"].includes(node.kind)).every((node) => node.stops === 1));
+    f.audios[1].emit("error");
+    assert.equal(f.state.effectsAvailable, false);
+    assert.ok(f.nodes.every((node) => node.connections.length === 0));
+    assert.ok(f.nodes.filter((node) => ["noise", "oscillator"].includes(node.kind)).every((node) => node.stops === 1));
+    f.player.setTexture(1);
+    f.player.setSpace(1);
+    f.player.setEffectMix(1);
+    assert.equal(f.audios.length, 3);
     f.player.destroy();
 });
 

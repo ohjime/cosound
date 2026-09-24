@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPodcastStash, formatPodcastTime, MAX_PODCASTS } from './podcast-stash.js';
+import { DEFAULT_PODCAST_EFFECTS, PODCAST_PRESETS } from './podcast-effects.js';
 
 const episode = index => ({ id: String(index), title: `Episode ${index}`, audio_url: `https://podcasts.example/${index}.mp3` });
 function setup(options = {}) {
@@ -11,6 +12,9 @@ function setup(options = {}) {
         play() { calls.push(['play']); }, pause() { calls.push(['pause']); },
         setVolume(value) { calls.push(['volume', value]); },
         setPreset(value) { calls.push(['preset', value]); },
+        setEffectMix(value) { calls.push(['effectMix', value]); },
+        setTexture(value) { calls.push(['texture', value]); },
+        setSpace(value) { calls.push(['space', value]); },
         seek(value) { calls.push(['seek', value]); }, destroy() { calls.push(['destroy']); },
     };
     const stash = createPodcastStash({
@@ -44,11 +48,128 @@ test('selected settings belong to each episode without changing the one playing'
     stash.add(episode(1)); stash.add(episode(2));
     await stash.playAt(0);
     stash.select(1); stash.setVolume(.25); stash.setPreset('vintage');
+    stash.setEffectMix(.9); stash.setTexture(.3); stash.setSpace(.4);
     assert.equal(calls.length, 1);
     await stash.playAt(1);
-    assert.deepEqual(calls.at(-1)[2], { autoplay: true, volume: .25, preset: 'vintage' });
+    assert.deepEqual(calls.at(-1)[2], {
+        autoplay: true, volume: .25, preset: 'vintage', effectMix: .9, texture: .3, space: .4,
+    });
     stash.setVolume(.5); stash.setPreset('radio');
-    assert.deepEqual(calls.slice(-2), [['volume', .5], ['preset', 'radio']]);
+    stash.setEffectMix(.6); stash.setTexture(.2); stash.setSpace(.1);
+    assert.deepEqual(calls.slice(-5), [
+        ['volume', .5], ['preset', 'radio'], ['effectMix', .6], ['texture', .2], ['space', .1],
+    ]);
+    assert.equal(calls.filter(([action]) => action === 'load').length, 2, 'live settings never reload the episode');
+    assert.equal(stash.queue[0].preset, 'clean');
+    assert.equal(stash.queue[0].texture, DEFAULT_PODCAST_EFFECTS.texture);
+    stash.destroy();
+});
+
+test('all catalog effects can be selected without autoplay, and unknown effects are ignored', async () => {
+    const { stash, calls } = setup();
+    stash.add(episode(1));
+    assert.deepEqual(stash.presets, PODCAST_PRESETS);
+    for (const preset of stash.presets) {
+        stash.setPreset(preset.id);
+        assert.equal(stash.selected.preset, preset.id);
+        assert.equal(stash.selectedPreset.id, preset.id);
+    }
+    const previous = stash.selected.preset;
+    stash.setPreset('unknown');
+    await stash.auditionPreset('unknown');
+    assert.equal(stash.selected.preset, previous);
+    assert.equal(calls.length, 0, 'selecting a sound or rejecting an invalid audition never starts audio');
+    stash.destroy();
+});
+
+test('effect sliders clamp out-of-range values and preserve settings on invalid input', () => {
+    const { stash, calls } = setup();
+    stash.add(episode(1));
+    stash.setEffectMix('2'); stash.setTexture(-1); stash.setSpace('0.42');
+    assert.equal(stash.selected.effectMix, 1);
+    assert.equal(stash.selected.texture, 0);
+    assert.equal(stash.selected.space, .42);
+    stash.setEffectMix(NaN); stash.setTexture(Infinity); stash.setSpace('invalid');
+    assert.equal(stash.selected.effectMix, 1);
+    assert.equal(stash.selected.texture, 0);
+    assert.equal(stash.selected.space, .42);
+    assert.equal(calls.length, 0, 'configuring a queued episode does not touch active audio');
+    stash.destroy();
+});
+
+test('audition starts a queued episode, resumes a paused one, and never restarts playing or loading audio', async () => {
+    const { stash, calls, callbacks } = setup();
+    stash.add(episode(1)); stash.add(episode(2));
+    await stash.auditionPreset('noir');
+    assert.equal(calls.at(-1)[0], 'load');
+    assert.equal(calls.at(-1)[2].preset, 'noir');
+    assert.equal(calls.at(-1)[2].autoplay, true);
+    callbacks.onChange({ playing: true, currentTime: 52 });
+    await stash.auditionPreset('cassette');
+    assert.deepEqual(calls.at(-1), ['preset', 'cassette']);
+    assert.equal(stash.status.currentTime, 52);
+    callbacks.onChange({ playing: false, loading: true });
+    await stash.auditionPreset('telephone');
+    assert.deepEqual(calls.at(-1), ['preset', 'telephone']);
+    assert.equal(calls.filter(([action]) => action === 'play' || action === 'load').length, 1);
+    callbacks.onChange({ loading: false });
+    await stash.auditionPreset('newsreel');
+    assert.deepEqual(calls.at(-1), ['play']);
+    assert.equal(calls.filter(([action]) => action === 'load').length, 1, 'resuming does not reload');
+    stash.select(1);
+    await stash.auditionPreset('gramophone');
+    assert.equal(calls.at(-1)[1].id, '2');
+    assert.equal(calls.at(-1)[2].preset, 'gramophone');
+    stash.destroy();
+});
+
+test('reset returns selected effects to Original and defaults without restarting audio or changing its volume', async () => {
+    const { stash, calls, callbacks } = setup();
+    stash.add(episode(1)); stash.add(episode(2));
+    stash.setPreset('shortwave'); stash.setEffectMix(.2); stash.setTexture(.8); stash.setSpace(.6);
+    stash.setVolume(.35);
+    await stash.playAt(0);
+    callbacks.onChange({ playing: true, currentTime: 80 });
+    const beforeReset = calls.length;
+    stash.resetEffects();
+    assert.equal(stash.selected.preset, 'clean');
+    for (const [key, value] of Object.entries(DEFAULT_PODCAST_EFFECTS)) assert.equal(stash.selected[key], value);
+    assert.equal(stash.selected.volume, .35);
+    assert.equal(stash.status.currentTime, 80);
+    assert.deepEqual(calls.slice(beforeReset), [
+        ['preset', 'clean'], ['effectMix', DEFAULT_PODCAST_EFFECTS.effectMix],
+        ['texture', DEFAULT_PODCAST_EFFECTS.texture], ['space', DEFAULT_PODCAST_EFFECTS.space],
+    ]);
+    stash.select(1); stash.setPreset('fireside'); stash.setSpace(.9);
+    const beforeQueuedReset = calls.length;
+    stash.resetEffects();
+    assert.equal(stash.selected.preset, 'clean');
+    assert.equal(stash.selected.space, DEFAULT_PODCAST_EFFECTS.space);
+    assert.equal(calls.length, beforeQueuedReset, 'resetting another episode leaves current audio alone');
+    stash.destroy();
+});
+
+test('publisher effects fallback preserves ordinary playback and only disables the active episode controls', async () => {
+    const { stash, calls, callbacks } = setup();
+    stash.add(episode(1)); stash.add(episode(2));
+    stash.setPreset('radio');
+    await stash.playAt(0);
+    callbacks.onChange({ playing: true, effectsAvailable: false, currentTime: 10, notice: 'Original audio only.' });
+    assert.equal(stash.effectsBlocked, true);
+    assert.equal(stash.status.playing, true);
+    assert.equal(stash.selected.preset, 'radio', 'publisher fallback does not discard chosen effects');
+    await stash.togglePlayback();
+    assert.deepEqual(calls.at(-1), ['pause'], 'regular transport remains available');
+    callbacks.onChange({ playing: false });
+    await stash.togglePlayback();
+    assert.deepEqual(calls.at(-1), ['play']);
+    stash.select(1);
+    assert.equal(stash.effectsBlocked, false, 'a different episode can be configured before it plays');
+    stash.setPreset('fireside'); stash.setTexture(.4);
+    assert.equal(stash.selected.preset, 'fireside');
+    callbacks.onChange({ effectsAvailable: true });
+    stash.select(0);
+    assert.equal(stash.effectsBlocked, false);
     stash.destroy();
 });
 
@@ -56,11 +177,15 @@ test('reordering keeps active and selected episodes stable and changes what foll
     const { stash, calls, callbacks } = setup();
     [1, 2, 3].forEach(index => stash.add(episode(index)));
     await stash.playAt(0);
-    stash.select(2); stash.move(2, -1);
+    stash.select(2); stash.setPreset('noir'); stash.setEffectMix(.8); stash.setTexture(.25); stash.setSpace(.55);
+    stash.move(2, -1);
     assert.equal(stash.activeIndex, 0);
     assert.equal(stash.selected.id, '3');
     callbacks.onEnded();
     assert.equal(calls.at(-1)[1].id, '3');
+    assert.deepEqual(calls.at(-1)[2], {
+        autoplay: true, volume: .75, preset: 'noir', effectMix: .8, texture: .25, space: .55,
+    });
     stash.destroy();
 });
 
@@ -93,6 +218,8 @@ test('removing the podcast card keeps progress and effects, advances while hidde
     const { stash, calls, callbacks } = setup();
     stash.add(episode(1)); stash.add(episode(2));
     stash.setPreset('radio');
+    stash.setEffectMix(.65); stash.setTexture(.3); stash.setSpace(.2);
+    stash.select(1); stash.setPreset('cassette'); stash.setEffectMix(.85); stash.setTexture(.2); stash.setSpace(.45);
     stash.panel = 'queue';
     stash.toggleDrawer();
     await stash.playAt(0);
@@ -103,9 +230,15 @@ test('removing the podcast card keeps progress and effects, advances while hidde
     assert.equal(stash.status.playing, true);
     assert.equal(stash.status.currentTime, 120);
     assert.equal(stash.selected.preset, 'radio');
+    assert.equal(stash.selected.effectMix, .65);
+    assert.equal(stash.selected.texture, .3);
+    assert.equal(stash.selected.space, .2);
     assert.equal(calls.length, beforeClose, 'closing the presentation does not touch media');
     callbacks.onEnded();
     assert.equal(stash.activeIndex, 1);
+    assert.deepEqual(calls.at(-1)[2], {
+        autoplay: true, volume: .75, preset: 'cassette', effectMix: .85, texture: .2, space: .45,
+    });
     assert.equal(stash.open, false, 'next episode does not reopen the card');
     const beforeReopen = calls.length;
     stash.toggleDrawer();

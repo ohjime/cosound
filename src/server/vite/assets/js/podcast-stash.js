@@ -1,6 +1,12 @@
 import { PodcastPlayer } from './podcast-player.js';
+import { DEFAULT_PODCAST_EFFECTS, getPodcastPreset, PODCAST_PRESETS } from './podcast-effects.js';
 
 export const MAX_PODCASTS = 12;
+
+function clampEffect(value, fallback) {
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.max(0, Math.min(1, number)) : fallback;
+}
 
 export function formatPodcastTime(value) {
     const seconds = Math.max(0, Math.floor(Number(value) || 0));
@@ -41,11 +47,14 @@ export function createPodcastStash({ playerFactory, fetcher, eventTarget } = {})
         selectedIndex: 0,
         activeId: null,
         settingsOpen: false,
+        presets: PODCAST_PRESETS,
         status: { playing: false, loading: false, currentTime: 0, duration: 0, effectsAvailable: true, notice: '', error: '' },
         get selected() { return this.queue[this.selectedIndex] ?? null; },
+        get selectedPreset() { return getPodcastPreset(this.selected?.preset ?? 'clean'); },
         get activeIndex() { return this.queue.findIndex(item => item.key === this.activeId); },
         get full() { return this.queue.length >= MAX_PODCASTS; },
         get isSelectedActive() { return Boolean(this.selected && this.selected.key === this.activeId); },
+        get effectsBlocked() { return this.isSelectedActive && this.status.effectsAvailable === false; },
         get isFeedQuery() { return /^https?:\/\//i.test(this.query.trim()); },
         formatTime: formatPodcastTime,
         formatDate(value) {
@@ -179,7 +188,10 @@ export function createPodcastStash({ playerFactory, fetcher, eventTarget } = {})
         queued(episode) { return this.queue.some(item => item.audio_url === episode.audio_url); },
         add(episode) {
             if (this.full || this.queued(episode)) return;
-            const item = { ...episode, key: `podcast-${++sequence}`, volume: 0.75, preset: 'clean' };
+            const item = {
+                ...episode, key: `podcast-${++sequence}`, volume: 0.75,
+                preset: 'clean', ...DEFAULT_PODCAST_EFFECTS,
+            };
             this.queue.push(item);
             if (this.queue.length === 1) this.selectedIndex = 0;
             this.queueMessage = `Added ${episode.title}. ${this.queue.length} in your queue.`;
@@ -194,7 +206,11 @@ export function createPodcastStash({ playerFactory, fetcher, eventTarget } = {})
             if (!item || disposed) return;
             this.selectedIndex = index;
             this.activeId = item.key;
-            await player.load(item, { volume: item.volume, preset: item.preset, autoplay: true });
+            await player.load(item, {
+                volume: item.volume, preset: item.preset,
+                effectMix: item.effectMix, texture: item.texture, space: item.space,
+                autoplay: true,
+            });
         },
         async togglePlayback() {
             if (!this.selected) return;
@@ -213,9 +229,39 @@ export function createPodcastStash({ playerFactory, fetcher, eventTarget } = {})
             if (this.isSelectedActive) player.setVolume(this.selected.volume);
         },
         setPreset(value) {
-            if (!this.selected || !['clean', 'radio', 'vintage', 'muffled'].includes(value)) return;
+            if (disposed || !this.selected || !PODCAST_PRESETS.some(preset => preset.id === value)) return;
             this.selected.preset = value;
             if (this.isSelectedActive) player.setPreset(value);
+        },
+        setEffectMix(value) {
+            if (disposed || !this.selected) return;
+            this.selected.effectMix = clampEffect(value, this.selected.effectMix);
+            if (this.isSelectedActive) player.setEffectMix(this.selected.effectMix);
+        },
+        setTexture(value) {
+            if (disposed || !this.selected) return;
+            this.selected.texture = clampEffect(value, this.selected.texture);
+            if (this.isSelectedActive) player.setTexture(this.selected.texture);
+        },
+        setSpace(value) {
+            if (disposed || !this.selected) return;
+            this.selected.space = clampEffect(value, this.selected.space);
+            if (this.isSelectedActive) player.setSpace(this.selected.space);
+        },
+        resetEffects() {
+            if (disposed || !this.selected) return;
+            // Update the existing graph in the same turn, preserving the
+            // listener's playback position and each other episode's settings.
+            this.setPreset('clean');
+            this.setEffectMix(DEFAULT_PODCAST_EFFECTS.effectMix);
+            this.setTexture(DEFAULT_PODCAST_EFFECTS.texture);
+            this.setSpace(DEFAULT_PODCAST_EFFECTS.space);
+        },
+        async auditionPreset(value) {
+            if (disposed || !this.selected || !PODCAST_PRESETS.some(preset => preset.id === value)) return;
+            this.setPreset(value);
+            if (!this.isSelectedActive || this.status.error) return this.playAt(this.selectedIndex);
+            if (!this.status.playing && !this.status.loading) await player.play();
         },
         move(index, offset) {
             const target = index + offset;

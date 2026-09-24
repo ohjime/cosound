@@ -15,9 +15,37 @@ episodes. The current limit is 12 episodes, and feeds expose up to 50 playable
 entries in publisher order.
 
 Each episode has its own volume and settings button, available to all Library
-visitors. Effects are Original, Radio show (a narrow frequency range), Old-time
-(a narrower range with gentle saturation), and Next room (a low-pass filter).
-These settings follow their episode through queue reordering.
+visitors. Open the settings to browse the atmosphere library. Selecting a row
+applies that style; its play button auditions the current episode with the
+effect. Changing effects while listening preserves the playback position.
+
+| Style | Character |
+| --- | --- |
+| Original | Unprocessed publisher audio |
+| AM Radio | A narrow, familiar broadcast sound |
+| Golden Era | Warm, rounded vintage radio |
+| Noir Lounge | Darker tone and intimate room sound |
+| Newsreel | Thin, forward, archival broadcast character |
+| Fireside | Soft warmth for relaxed listening |
+| Gramophone | A narrow, worn record sound |
+| Cassette | Soft tape colour with gentle pitch drift |
+| Telephone | The limited frequency range of a telephone |
+| Shortwave | Distant radio with subtle signal movement |
+| Next Room | A voice softened through a wall |
+
+**Effect strength** blends the original audio with the chosen style; zero is
+original audio. **Texture** adds a subtle bed of locally generated hiss or
+crackle appropriate to the style. **Room ambience** controls the surrounding
+space. Original bypasses every effect, and Reset returns to Original with the
+default control values. Each episode carries its own settings through
+reordering, closing/reopening the card, and automatic queue advancement.
+
+The presentation takes inspiration from the named styles, descriptions, and
+audition rows on [ElevenLabs' old-time-radio voice library](https://elevenlabs.io/voice-library/old-time-radio).
+That service generates speech; CoSound's effects process the publisher's
+existing voice in the browser. There is no ElevenLabs API integration, speech
+generation, voice replacement, or additional server audio processing. Noise
+and room textures are synthesized locally, without downloading effect assets.
 
 Closing the card with its X, toggling the Stash button, or opening another card
 keeps playback running. Reopening restores the same queue, play position,

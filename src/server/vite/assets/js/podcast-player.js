@@ -5,7 +5,7 @@
  * Keep this instance in a closure, outside Alpine's reactive state.
  */
 
-const PRESETS = new Set(["clean", "radio", "vintage", "muffled"]);
+import { createPodcastEffectsGraph, DEFAULT_PODCAST_EFFECTS, getPodcastPreset } from "./podcast-effects.js";
 const FILTER_NOTICE = "Filters are unavailable for this episode on this host or browser. Standard playback is used.";
 const BROWSER_NOTICE = "Audio filters are unavailable in this browser. Standard playback is used.";
 
@@ -75,10 +75,13 @@ export class PodcastPlayer {
         this._playRevision = 0;
         this._volume = 0.75;
         this._preset = "clean";
+        this._effects = { ...DEFAULT_PODCAST_EFFECTS };
         this._url = "";
     }
 
-    load(episode, { volume = 0.75, preset = "clean", autoplay = false } = {}) {
+    load(episode, { volume = 0.75, preset = "clean", autoplay = false,
+        effectMix = DEFAULT_PODCAST_EFFECTS.effectMix, texture = DEFAULT_PODCAST_EFFECTS.texture,
+        space = DEFAULT_PODCAST_EFFECTS.space } = {}) {
         if (this._destroyed) return Promise.resolve(false);
         this._wantsPlay = false;
         this._playRevision += 1;
@@ -86,7 +89,8 @@ export class PodcastPlayer {
         this._state = neutralState();
         this._url = "";
         this._volume = volumeValue(volume);
-        this._preset = PRESETS.has(preset) ? preset : "clean";
+        this._preset = getPodcastPreset(preset).id;
+        this._effects = { effectMix: volumeValue(effectMix), texture: volumeValue(texture), space: volumeValue(space) };
         if (!episode) {
             this._emit();
             return Promise.resolve(true);
@@ -197,17 +201,53 @@ export class PodcastPlayer {
         if (this._destroyed) return;
         this._volume = volumeValue(volume);
         if (!this._media) return;
-        if (this._media.gain) this._media.gain.gain.value = this._volume;
+        if (this._media.gain) {
+            const parameter = this._media.gain.gain;
+            const now = this._context.currentTime;
+            if (typeof parameter.cancelAndHoldAtTime === "function") parameter.cancelAndHoldAtTime(now);
+            else {
+                parameter.cancelScheduledValues(now);
+                parameter.setValueAtTime(parameter.value, now);
+            }
+            parameter.linearRampToValueAtTime(this._volume, now + 0.02);
+        }
         else this._media.audio.volume = this._volume;
+        this._syncEffectsPlayback();
     }
 
     setPreset(preset) {
         if (this._destroyed) return;
-        this._preset = PRESETS.has(preset) ? preset : "clean";
-        if (this._media?.filtered) {
-            try { this._connectPreset(this._media); } catch { this._mediaFailure(this._media); }
-        }
+        this._preset = getPodcastPreset(preset).id;
+        this._updateEffects();
         this._emit();
+    }
+
+    setEffectMix(value) { this._setEffectControl("effectMix", value); }
+
+    setTexture(value) { this._setEffectControl("texture", value); }
+
+    setSpace(value) { this._setEffectControl("space", value); }
+
+    _setEffectControl(control, value) {
+        if (this._destroyed) return;
+        this._effects[control] = volumeValue(value);
+        this._updateEffects();
+    }
+
+    _updateEffects() {
+        if (!this._media?.effects) return;
+        try { this._media.effects.update({ preset: this._preset, ...this._effects }); }
+        catch { this._mediaFailure(this._media); }
+    }
+
+    _syncEffectsPlayback() {
+        const record = this._media;
+        if (!record?.effects) return;
+        try {
+            record.effects.setPlaybackActive(this._wantsPlay && this._state.playing && !this._state.loading
+                && !record.audio.paused && !record.audio.muted && record.audio.volume > 0
+                && !record.ended && !record.failed && this._volume > 0);
+        } catch { this._mediaFailure(record); }
     }
 
     destroy() {
@@ -229,14 +269,17 @@ export class PodcastPlayer {
     }
 
     _emit() {
-        if (!this._destroyed) this._onChange({ ...this._state });
+        if (!this._destroyed) {
+            this._syncEffectsPlayback();
+            this._onChange({ ...this._state });
+        }
     }
 
     _replaceMedia(filtered, position = 0) {
         this._releaseMedia();
         const audio = this._audioFactory();
         const record = {
-            audio, filtered, listeners: [], filters: [], source: null, gain: null,
+            audio, filtered, listeners: [], effects: null, source: null, gain: null,
             timer: null, pendingSeek: position > 0 ? position : null,
             ended: false, failed: false, fallbackPromise: null,
         };
@@ -253,7 +296,8 @@ export class PodcastPlayer {
                 record.gain.gain.value = this._volume;
                 record.gain.connect(this._context.destination);
                 audio.volume = 1;
-                this._connectPreset(record);
+                record.effects = createPodcastEffectsGraph(this._context, record.source, record.gain,
+                    { preset: this._preset, ...this._effects });
             } catch {
                 this._state.notice = BROWSER_NOTICE;
                 this._replaceMedia(false, position);
@@ -296,6 +340,7 @@ export class PodcastPlayer {
             if (!this._wantsPlay) this._state.loading = false;
             this._emit();
         });
+        listen("volumechange", () => this._syncEffectsPlayback());
         for (const event of ["waiting", "stalled", "seeking"]) {
             listen(event, () => {
                 if (!this._wantsPlay) return;
@@ -337,40 +382,6 @@ export class PodcastPlayer {
             record.audio.currentTime = position;
             record.pendingSeek = null;
         } catch { /* Some hosts do not permit seeking until more data arrives. */ }
-    }
-
-    _connectPreset(record) {
-        record.source.disconnect();
-        for (const node of record.filters) node.disconnect();
-        record.filters = [];
-        const filter = (type, frequency, q = 0.707) => {
-            const node = this._context.createBiquadFilter();
-            record.filters.push(node);
-            node.type = type;
-            node.frequency.value = frequency;
-            node.Q.value = q;
-            return node;
-        };
-        if (this._preset === "radio") {
-            filter("bandpass", 1600, 0.65);
-        } else if (this._preset === "vintage") {
-            filter("highpass", 250);
-            filter("lowpass", 2800);
-            const saturation = this._context.createWaveShaper();
-            record.filters.push(saturation);
-            const curve = new Float32Array(1024);
-            for (let i = 0; i < curve.length; i += 1) {
-                const x = 2 * i / (curve.length - 1) - 1;
-                curve[i] = Math.tanh(x * 1.8) / Math.tanh(1.8);
-            }
-            saturation.curve = curve;
-            saturation.oversample = "2x";
-        } else if (this._preset === "muffled") {
-            filter("lowpass", 1100);
-        }
-        let tail = record.source;
-        for (const node of record.filters) { tail.connect(node); tail = node; }
-        tail.connect(record.gain);
     }
 
     _mediaFailure(record, timedOut = false) {
@@ -434,7 +445,8 @@ export class PodcastPlayer {
         this._clearStallTimer(record);
         for (const [event, listener] of record.listeners) record.audio.removeEventListener(event, listener);
         record.audio.pause();
-        for (const node of [record.source, ...record.filters, record.gain]) {
+        record.effects?.destroy();
+        for (const node of [record.source, record.gain]) {
             try { node?.disconnect(); } catch { /* Already disconnected. */ }
         }
         record.audio.removeAttribute("src");

@@ -48,15 +48,53 @@
                 <output x-text="Math.round((selected?.volume ?? 0.75) * 100) + '%'"></output>
             </label>
             <div id="podcast-effects" class="podcast-effects" x-show="selected && settingsOpen">
-                <label for="podcast-filter">Give it a little atmosphere</label>
-                <select id="podcast-filter" :value="selected?.preset || 'clean'" @change="setPreset($event.target.value)"
-                        :disabled="isSelectedActive && status.effectsAvailable === false">
-                    <option value="clean">Original · clear voice</option>
-                    <option value="radio">Radio show · AM dial</option>
-                    <option value="vintage">Old-time · warm &amp; worn</option>
-                    <option value="muffled">Next room · soft &amp; distant</option>
-                </select>
-                <p>Each episode keeps its own volume and effect for this visit.</p>
+                <div class="podcast-effects-heading">
+                    <div><span class="podcast-eyebrow">TUNE THE ATMOSPHERE</span><h4>Find your frequency.</h4></div>
+                    <button type="button" class="podcast-effect-reset" @click="resetEffects()" aria-label="Reset episode effects">Reset</button>
+                </div>
+                <p class="podcast-effects-intro">A little broadcast warmth, a worn-out tape, a room away. The same story, with a different feel.</p>
+                <div class="podcast-effect-current" role="status">
+                    <span class="podcast-effect-current-dot" aria-hidden="true"></span>
+                    <span x-text="effectsBlocked ? 'Original playback · effects unavailable' : selectedPreset.name"></span>
+                    <span class="podcast-effect-count" x-text="presets.length + ' styles'"></span>
+                </div>
+                <div class="podcast-effect-library" role="group" aria-label="Podcast atmosphere styles">
+                    <template x-for="preset in presets" :key="preset.id">
+                        <div class="podcast-effect-row" :class="{ 'is-selected': selected?.preset === preset.id }">
+                            <button type="button" class="podcast-effect-choice" @click="setPreset(preset.id)"
+                                    :disabled="effectsBlocked" :aria-pressed="selected?.preset === preset.id" :aria-label="'Apply ' + preset.name">
+                                <span class="podcast-effect-orb" :data-style="preset.id" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M4 10v4m4-8v12m4-14v16m4-13v10m4-7v4" /></svg>
+                                </span>
+                                <span class="podcast-effect-copy"><strong x-text="preset.name"></strong><small x-text="preset.description"></small><span class="podcast-effect-tag" x-text="preset.tag"></span></span>
+                            </button>
+                            <button type="button" class="podcast-effect-audition" @click="auditionPreset(preset.id)"
+                                    :disabled="effectsBlocked" :aria-label="'Listen with ' + preset.name" :title="'Listen with ' + preset.name">
+                                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7Z" /></svg>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+                <p class="podcast-effect-hint">Choose a style, or press ▶ to hear it on this episode.</p>
+                <fieldset class="podcast-effect-dials" :disabled="effectsBlocked || selected?.preset === 'clean'">
+                    <legend class="sr-only">Tune the selected podcast effect</legend>
+                    <label class="podcast-effect-dial">
+                        <span><span>Effect strength</span><output x-text="Math.round((selected?.effectMix ?? 0.75) * 100) + '%'"></output></span>
+                        <input type="range" min="0" max="1" step="0.01" :value="selected?.effectMix ?? 0.75" @input="setEffectMix($event.target.value)" aria-label="Podcast effect strength" />
+                        <small>Original <span>Full character</span></small>
+                    </label>
+                    <label class="podcast-effect-dial">
+                        <span><span x-text="selectedPreset.textureLabel || 'Texture'"></span><output x-text="Math.round((selected?.texture ?? 0.15) * 100) + '%'"></output></span>
+                        <input type="range" min="0" max="1" step="0.01" :value="selected?.texture ?? 0.15" @input="setTexture($event.target.value)" aria-label="Podcast texture" />
+                    </label>
+                    <label class="podcast-effect-dial">
+                        <span><span>Room ambience</span><output x-text="Math.round((selected?.space ?? 0.15) * 100) + '%'"></output></span>
+                        <input type="range" min="0" max="1" step="0.01" :value="selected?.space ?? 0.15" @input="setSpace($event.target.value)" aria-label="Podcast room ambience" />
+                    </label>
+                </fieldset>
+                <p class="podcast-effect-hint" x-show="selected?.preset === 'clean' && !effectsBlocked">Original keeps the episode untouched. Pick a style to tune it.</p>
+                <p class="podcast-effect-hint" x-show="effectsBlocked">This publisher or browser allows original playback only.</p>
+                <p class="podcast-effect-footnote">Settings follow this episode, even with the card closed.</p>
             </div>
             <div class="podcast-progress" x-show="isSelectedActive">
                 <input type="range" min="0" :max="status.duration || 1" step="1" :value="status.currentTime"

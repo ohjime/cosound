@@ -1,5 +1,7 @@
 from django.urls import path
 
+from library.podcasts import podcast_episodes, podcast_search
+
 from library.views import (
     library_save,
     library_save_confirm,
@@ -17,6 +19,8 @@ from library.views import (
 app_name = "library"
 
 urlpatterns = [
+    path("podcasts/search/", podcast_search, name="podcast_search"),
+    path("podcasts/episodes/", podcast_episodes, name="podcast_episodes"),
     path("save/", library_save, name="save"),
     path("save/confirm/", library_save_confirm, name="save_confirm"),
     path("keep-sound/", library_keep_sound, name="keep_sound"),

@@ -1,4 +1,5 @@
 import '../css/main.css';
+import '../css/podcast-stash.css';
 import Alpine from 'alpinejs';
 import htmx from 'htmx.org/dist/htmx.esm.js';
 import { Observer } from 'tailwindcss-intersect';
@@ -10,6 +11,7 @@ import { installSoundSelectorGuard } from './sound-selector-guard.js';
 import { trimTrack } from './trim-track.js';
 import { voteCountdown } from './vote-countdown.js';
 import { voteDisplay } from './vote-display.js';
+import { podcastStash } from './podcast-stash.js';
 import './explore-fonts.js';
 
 window.htmx = htmx;
@@ -24,6 +26,7 @@ Alpine.data('layerCarousel', layerCarousel);
 Alpine.data('trimTrack', trimTrack);
 Alpine.data('voteCountdown', voteCountdown);
 Alpine.data('voteDisplay', voteDisplay);
+Alpine.data('podcastStash', podcastStash);
 Alpine.start();
 
 // Start the intersection observer for scroll animations

@@ -3,6 +3,9 @@
 See [Live player updates](../../docs/realtime.md) for the Redis service,
 development startup, WebSocket protocol, and deployment checks.
 
+See [Podcast Stash](../../docs/podcast-stash.md) for the Library podcast drawer,
+direct publisher streaming, browser effects, and metadata request limits.
+
 ## Upload routes
 
 Admin file fields take one of two routes, and the difference is deliberate:

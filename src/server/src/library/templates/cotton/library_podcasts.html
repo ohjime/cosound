@@ -1,0 +1,147 @@
+<!-- Podcast state belongs to this library visit. Collapsing the drawer keeps
+     listening; leaving the library destroys its media and its unsaved queue. -->
+<section class="podcast-stash" x-data="podcastStash" data-podcast-stash
+         data-search-url="{% url 'library:podcast_search' %}"
+         data-episodes-url="{% url 'library:podcast_episodes' %}">
+    <button type="button" class="podcast-launch" @click="toggleDrawer()"
+            :aria-expanded="open" aria-controls="podcast-drawer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+            <rect x="4" y="8" width="16" height="12" rx="3" />
+            <path d="m6 8 11-5M7 12h10M7 16h5" /><circle cx="16" cy="16" r="1" />
+        </svg>
+        <span>Podcast Stash</span>
+        <span class="podcast-launch-count" x-show="queue.length" x-text="queue.length"></span>
+        <span class="podcast-launch-arrow" x-text="open ? '−' : '+'" aria-hidden="true">+</span>
+    </button>
+    <p class="podcast-collapsed-status" x-show="!open && status.playing" x-cloak>
+        Still playing alongside your Cosound
+    </p>
+    <div id="podcast-drawer" class="podcast-card" x-show="open" x-cloak>
+        <header class="podcast-heading">
+            <div><span class="podcast-eyebrow">ON YOUR FREQUENCY</span><h2>Podcast Stash</h2></div>
+            <button type="button" class="podcast-icon-button" @click="open = false" aria-label="Collapse podcast drawer">−</button>
+        </header>
+        <div class="podcast-artwork">
+            <template x-if="selected?.artwork">
+                <img :src="selected.artwork" :alt="selected.show_title || selected.title" referrerpolicy="no-referrer"
+                     @error="$el.style.opacity = '0'" @load="$el.style.opacity = '1'" />
+            </template>
+            <div class="podcast-art-placeholder">
+                <svg viewBox="0 0 120 100" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <rect x="18" y="29" width="84" height="55" rx="10" />
+                    <path d="m30 29 54-15M29 44h61M29 50h61" />
+                    <circle cx="40" cy="67" r="9" /><circle cx="82" cy="67" r="5" /><path d="M58 64h11M58 70h11" />
+                </svg>
+                <span x-text="selected ? 'A voice for your soundscape' : 'Make room for a story.'"></span>
+            </div>
+            <div class="podcast-sequence" aria-label="Podcast queue positions">
+                <template x-for="(episode, index) in queue" :key="episode.key">
+                    <button type="button" @click="select(index)" :class="{ 'is-selected': index === selectedIndex, 'is-playing': episode.key === activeId && status.playing }"
+                            :aria-label="'Select episode ' + (index + 1) + ': ' + episode.title" :aria-pressed="index === selectedIndex" x-text="index + 1"></button>
+                </template>
+                <button type="button" @click="backToSearch(); $nextTick(() => $refs.podcastSearch.focus())" aria-label="Find more podcasts">+</button>
+            </div>
+        </div>
+        <div class="podcast-current">
+            <div class="podcast-current-top">
+                <span class="podcast-eyebrow" x-text="selected ? 'EPISODE ' + (selectedIndex + 1) + ' OF ' + queue.length : 'YOUR LISTENING QUEUE'"></span>
+                <button type="button" class="podcast-icon-button" x-show="selected" @click="settingsOpen = !settingsOpen"
+                        :aria-expanded="settingsOpen" aria-controls="podcast-effects" aria-label="Episode effects settings">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 7h16M4 17h16M8 4v6M16 14v6" /></svg>
+                </button>
+            </div>
+            <h3 x-text="selected?.title || 'Stories over soundscapes'"></h3>
+            <p class="podcast-author" x-text="selected ? [selected.show_title, selected.author].filter(Boolean).join(' · ') : 'Find a show, add episodes, and listen in order alongside your Cosound.'"></p>
+            <label class="podcast-volume" x-show="selected">
+                <span>Volume</span>
+                <input type="range" min="0" max="1" step="0.01" :value="selected?.volume ?? 0.75" @input="setVolume($event.target.value)" aria-label="Selected podcast volume" />
+                <output x-text="Math.round((selected?.volume ?? 0.75) * 100) + '%'"></output>
+            </label>
+            <div id="podcast-effects" class="podcast-effects" x-show="selected && settingsOpen">
+                <label for="podcast-filter">Give it a little atmosphere</label>
+                <select id="podcast-filter" :value="selected?.preset || 'clean'" @change="setPreset($event.target.value)"
+                        :disabled="isSelectedActive && status.effectsAvailable === false">
+                    <option value="clean">Original · clear voice</option>
+                    <option value="radio">Radio show · AM dial</option>
+                    <option value="vintage">Old-time · warm &amp; worn</option>
+                    <option value="muffled">Next room · soft &amp; distant</option>
+                </select>
+                <p>Each episode keeps its own volume and effect for this visit.</p>
+            </div>
+            <div class="podcast-progress" x-show="isSelectedActive">
+                <input type="range" min="0" :max="status.duration || 1" step="1" :value="status.currentTime"
+                       :disabled="!status.duration" @change="seek($event.target.value)" aria-label="Podcast playback position" />
+                <div><span x-text="formatTime(status.currentTime)"></span><span x-text="formatTime(status.duration)"></span></div>
+            </div>
+            <div class="podcast-transport" x-show="queue.length">
+                <button type="button" class="podcast-play" @click="togglePlayback()"
+                        :aria-label="isSelectedActive && (status.playing || status.loading) ? 'Pause podcast' : 'Play selected podcast'"
+                        x-text="isSelectedActive && status.loading ? 'Cancel loading' : isSelectedActive && status.playing ? 'Pause podcast' : 'Play podcast'"></button>
+                <button type="button" class="podcast-secondary" @click="next()" :disabled="activeIndex < 0 || activeIndex >= queue.length - 1">Next →</button>
+            </div>
+            <p class="podcast-playing-status" x-show="activeIndex >= 0" x-text="status.loading ? 'Connecting to the publisher…' : status.playing ? 'Playing ' + (activeIndex + 1) + ' of ' + queue.length + ' · continues in order' : 'Podcast paused'"></p>
+            <p class="podcast-notice" x-show="status.notice" x-text="status.notice" role="status"></p>
+            <p class="podcast-error" x-show="status.error" x-text="status.error" role="alert"></p>
+        </div>
+        <nav class="podcast-tabs" aria-label="Podcast drawer sections">
+            <button type="button" :class="{ 'is-selected': panel !== 'queue' }" @click="backToSearch()" :aria-pressed="panel !== 'queue'">Find podcasts</button>
+            <button type="button" :class="{ 'is-selected': panel === 'queue' }" @click="panel = 'queue'" :aria-pressed="panel === 'queue'" x-text="'Queue (' + queue.length + ')'"></button>
+        </nav>
+        <div class="podcast-browser">
+            <form x-show="panel === 'search'" @submit.prevent="search()" class="podcast-search-form">
+                <label for="podcast-search">Search shows or paste an RSS feed</label>
+                <div class="podcast-search-row">
+                    <input id="podcast-search" x-ref="podcastSearch" type="search" x-model="query" maxlength="2048"
+                           @input="queryChanged()" placeholder="History, science, a favourite show…" autocomplete="off" />
+                    <button type="submit" class="podcast-secondary" :disabled="busy || query.trim().length < 2" aria-label="Search podcasts or open RSS feed">Go</button>
+                </div>
+            </form>
+            <div x-show="panel === 'episodes'" class="podcast-feed-heading">
+                <button type="button" class="podcast-text-button" @click="backToSearch()">← Shows</button>
+                <h3 x-text="show?.title || 'RSS episodes'"></h3>
+                <p x-text="show?.author"></p>
+            </div>
+            <p x-show="busy && panel !== 'queue'" class="podcast-empty" role="status">Finding your next listen…</p>
+            <p x-show="searchError && panel !== 'queue'" class="podcast-error" role="alert" x-text="searchError"></p>
+            <div class="podcast-results" x-show="panel === 'search' && !busy">
+                <p class="podcast-empty" x-show="!searched && !searchError">Try a topic or a show you love. Public podcast feeds are welcome, too.</p>
+                <p class="podcast-empty" x-show="searched && !shows.length">No shows found. Try another name or paste the show's RSS feed.</p>
+                <template x-for="showResult in shows" :key="showResult.id || showResult.feed_url">
+                    <button type="button" class="podcast-show" @click="browse(showResult)">
+                        <img x-show="showResult.artwork" :src="showResult.artwork" alt="" loading="lazy" referrerpolicy="no-referrer" @error="$el.style.visibility = 'hidden'" />
+                        <span><strong x-text="showResult.title"></strong><small x-text="showResult.author"></small></span><span aria-hidden="true">→</span>
+                    </button>
+                </template>
+            </div>
+            <div class="podcast-results" x-show="panel === 'episodes' && !busy">
+                <p class="podcast-empty" x-show="!episodes.length && !searchError">This feed has no playable audio episodes.</p>
+                <template x-for="episode in episodes" :key="episode.id">
+                    <div class="podcast-episode">
+                        <div><strong x-text="episode.title"></strong><small x-text="[formatDate(episode.published), episode.duration ? formatTime(episode.duration) : ''].filter(Boolean).join(' · ')"></small></div>
+                        <button type="button" class="podcast-secondary" @click="add(episode)" :disabled="full || queued(episode)"
+                                :aria-label="queued(episode) ? 'Already queued: ' + episode.title : 'Add episode: ' + episode.title" x-text="queued(episode) ? 'Added' : '+ Add'"></button>
+                    </div>
+                </template>
+            </div>
+            <div x-show="panel === 'queue'">
+                <p class="podcast-empty" x-show="!queue.length">Your queue is empty. Find a podcast to get started.</p>
+                <p class="podcast-queue-note" x-show="queue.length">One voice at a time, in this order.</p>
+                <ol class="podcast-results podcast-queue">
+                    <template x-for="(episode, index) in queue" :key="episode.key">
+                        <li :class="{ 'is-active': episode.key === activeId }">
+                            <button type="button" class="podcast-queue-title" @click="select(index)"><span x-text="index + 1"></span><strong x-text="episode.title"></strong></button>
+                            <div class="podcast-queue-actions">
+                                <button type="button" class="podcast-text-button" @click="move(index, -1)" :disabled="index === 0" :aria-label="'Move up: ' + episode.title">↑</button>
+                                <button type="button" class="podcast-text-button" @click="move(index, 1)" :disabled="index === queue.length - 1" :aria-label="'Move down: ' + episode.title">↓</button>
+                                <button type="button" class="podcast-text-button" @click="remove(index)" :aria-label="'Remove episode: ' + episode.title">Remove</button>
+                            </div>
+                        </li>
+                    </template>
+                </ol>
+            </div>
+            <p class="podcast-notice" x-show="full">Your stash is full (12 episodes). Remove one to make room.</p>
+            <p class="sr-only" role="status" x-text="queueMessage"></p>
+        </div>
+        <footer class="podcast-footer">Streamed from publishers. This queue clears when you leave the library or refresh. <span>Search via Apple Podcasts.</span></footer>
+    </div>
+</section>

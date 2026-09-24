@@ -21,6 +21,7 @@ export function createPodcastStash({ playerFactory, fetcher, eventTarget } = {})
     let sequence = 0;
     let disposed = false;
     let cleanup;
+    let root;
     const events = eventTarget ?? globalThis.document;
     const fetchMetadata = fetcher ?? ((...args) => fetch(...args));
     return {
@@ -53,8 +54,9 @@ export function createPodcastStash({ playerFactory, fetcher, eventTarget } = {})
                 ? date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
         },
         init() {
-            this.searchUrl = this.$el?.dataset.searchUrl ?? this.searchUrl;
-            this.episodesUrl = this.$el?.dataset.episodesUrl ?? this.episodesUrl;
+            root = this.$el;
+            this.searchUrl = root?.dataset?.searchUrl ?? this.searchUrl;
+            this.episodesUrl = root?.dataset?.episodesUrl ?? this.episodesUrl;
             player = (playerFactory ?? (options => new PodcastPlayer(options)))({
                 onChange: status => { if (!disposed) this.status = { ...this.status, ...status }; },
                 onEnded: () => {
@@ -65,7 +67,7 @@ export function createPodcastStash({ playerFactory, fetcher, eventTarget } = {})
             });
             cleanup = event => {
                 const removed = event.detail?.elt;
-                if (removed && (removed === this.$el || removed.contains?.(this.$el))) this.destroy();
+                if (removed && (removed === root || removed.contains?.(root))) this.destroy();
             };
             events?.addEventListener('htmx:beforeCleanupElement', cleanup);
         },
@@ -79,8 +81,20 @@ export function createPodcastStash({ playerFactory, fetcher, eventTarget } = {})
             player?.destroy();
         },
         toggleDrawer() {
+            if (disposed) return;
             this.open = !this.open;
             if (this.open && !this.queue.length) this.panel = 'search';
+            if (this.open) this.$nextTick?.(() => {
+                const card = root?.querySelector('#podcast-drawer');
+                card?.querySelector('.podcast-card')?.focus({ preventScroll: true });
+                root?.querySelector('#deck')?.scrollIntoView({ block: 'start', behavior: 'instant' });
+            });
+        },
+        cardRemoved(card) {
+            // The deck can dismiss us when another overlay opens. An old
+            // animation finishing after a reopen must not hide the new card.
+            if (card?.dataset.cardKey === 'library-podcasts'
+                && !root?.querySelector('#podcast-drawer')) this.open = false;
         },
         async metadata(url, params, accept) {
             if (disposed) return;

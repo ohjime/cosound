@@ -18,6 +18,7 @@ function setup(options = {}) {
         playerFactory: value => { callbacks = value; return player; },
         ...options,
     });
+    stash.$el = options.element;
     stash.init();
     return { stash, calls, callbacks };
 }
@@ -86,6 +87,56 @@ test('closing drawer preserves playback but leaving library destroys it exactly 
     callbacks.onEnded(); callbacks.onChange({ playing: true });
     assert.deepEqual(calls, [['destroy']]);
     assert.equal(stash.status.playing, false);
+});
+
+test('removing the podcast card keeps progress and effects, advances while hidden, and reopens without reloading audio', async () => {
+    const { stash, calls, callbacks } = setup();
+    stash.add(episode(1)); stash.add(episode(2));
+    stash.setPreset('radio');
+    stash.panel = 'queue';
+    stash.toggleDrawer();
+    await stash.playAt(0);
+    callbacks.onChange({ playing: true, currentTime: 120 });
+    const beforeClose = calls.length;
+    stash.cardRemoved({ dataset: { cardKey: 'library-podcasts' } });
+    assert.equal(stash.open, false);
+    assert.equal(stash.status.playing, true);
+    assert.equal(stash.status.currentTime, 120);
+    assert.equal(stash.selected.preset, 'radio');
+    assert.equal(calls.length, beforeClose, 'closing the presentation does not touch media');
+    callbacks.onEnded();
+    assert.equal(stash.activeIndex, 1);
+    assert.equal(stash.open, false, 'next episode does not reopen the card');
+    const beforeReopen = calls.length;
+    stash.toggleDrawer();
+    assert.equal(stash.open, true);
+    assert.equal(stash.panel, 'queue');
+    assert.equal(stash.queue.length, 2);
+    assert.equal(calls.length, beforeReopen, 'reopening does not reload or restart media');
+    stash.destroy();
+});
+
+test('a different card removal or a stale exit cannot close a newly reopened podcast card', () => {
+    const { stash } = setup({ element: { querySelector: () => ({ id: 'podcast-drawer' }) } });
+    stash.open = true;
+    stash.cardRemoved({ dataset: { cardKey: 'library-liked' } });
+    assert.equal(stash.open, true);
+    stash.cardRemoved({ dataset: { cardKey: 'library-podcasts' } });
+    assert.equal(stash.open, true);
+    stash.destroy();
+});
+
+test('HTMX removing a child card leaves playback alive; removing its Library owner stops it', () => {
+    const eventTarget = new EventTarget();
+    const owner = { contains: () => false };
+    const { stash, calls } = setup({ eventTarget, element: owner });
+    eventTarget.dispatchEvent(new CustomEvent('htmx:beforeCleanupElement', {
+        detail: { elt: { contains: () => false } },
+    }));
+    assert.equal(calls.length, 0);
+    eventTarget.dispatchEvent(new CustomEvent('htmx:beforeCleanupElement', { detail: { elt: owner } }));
+    assert.deepEqual(calls, [['destroy']]);
+    stash.destroy();
 });
 
 test('queue bounds and duplicate enclosures do not create extra entries', () => {

@@ -1,16 +1,20 @@
-.podcast-stash { width: min(20rem, calc(100vw - 2rem)); margin: -.5rem 0 1rem; }
+.library-podcast-deck { width: min(20rem, calc(100vw - 2rem)); }
+.library-podcast-deck > #deck { scroll-margin-top: 2rem; }
+.library-podcast-deck > #deck > [data-core-card] { align-self: start; }
+.podcast-stash { margin: 2rem 0 1rem; }
 .podcast-stash [x-cloak] { display: none !important; }
-.podcast-stash button, .podcast-stash input, .podcast-stash select { font: inherit; }
-.podcast-stash button { cursor: pointer; }
-.podcast-stash button:disabled { opacity: .45; cursor: default; }
-.podcast-stash :focus-visible { outline: 3px solid #f4b86a; outline-offset: 3px; }
+.podcast-stash button, .podcast-card button, .podcast-card input, .podcast-card select { font: inherit; }
+.podcast-stash button, .podcast-card button { cursor: pointer; }
+.podcast-card button:disabled { opacity: .45; cursor: default; }
+.podcast-stash :focus-visible, .podcast-card :focus-visible { outline: 3px solid #f4b86a; outline-offset: 3px; }
 .podcast-launch { display: flex; align-items: center; gap: .65rem; width: 100%; padding: .85rem 1rem; border: 2px solid #997452; border-radius: 1rem; background: #62432f; color: #fff1de; box-shadow: 0 5px 0 #3c2a20; font-weight: 650 !important; }
 .podcast-launch svg { width: 1.5rem; height: 1.5rem; }
 .podcast-launch-arrow { margin-left: auto; font-size: 1.4rem; line-height: 1; }
 .podcast-launch-count { padding: .08rem .45rem; border-radius: 1rem; background: #e7c39c; color: #38251b; font-size: .75rem; }
 .podcast-collapsed-status { margin-top: .85rem; text-align: center; font-size: .75rem; }
-.podcast-card { margin-top: 1.7rem; border-radius: 1.5rem 1.5rem 2rem 2rem; background: #634631; color: #faefdf; box-shadow: 0 0 0 7px #302d29, 0 18px 36px #1d140e35; overflow: hidden; }
-.podcast-heading { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: 1.2rem 1.3rem .9rem; }
+#podcast-drawer { scroll-margin-top: 2rem; align-self: start; }
+.podcast-card { color: #faefdf; }
+.podcast-heading { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: 1.2rem 2.8rem .9rem 1.3rem; }
 .podcast-eyebrow { display: block; font-size: .58rem; letter-spacing: .14em; font-weight: 700; }
 .podcast-heading .podcast-eyebrow { color: #e6c29b; }
 .podcast-heading h2 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.025em; }

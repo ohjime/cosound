@@ -53,12 +53,18 @@ Create without losing the mix.
                          saved_limit="5" />
         <c-core-sound-player :sounds="sounds" artist_name="{{ artist.name }}" :allow_create="artist" />
         <c-app-library-create />
-        <div>
-            <c-core-deck id="deck">
+        <div class="library-podcast-deck" x-data="podcastStash" data-podcast-stash
+             data-search-url="{% url 'library:podcast_search' %}"
+             data-episodes-url="{% url 'library:podcast_episodes' %}"
+             @card:removed="cardRemoved($event.detail.card)">
+            <c-core-deck id="deck" depth_translate_y="36">
                 {% include "library/index.html#library" %}
+                <template x-if="open">
+                    <c-library-podcasts />
+                </template>
             </c-core-deck>
+            <c-library-podcast-launch />
         </div>
-        <c-library-podcasts />
     </div>
 {% endpartialdef %}
 <!--

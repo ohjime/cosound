@@ -1,8 +1,10 @@
 # Podcast Stash
 
 The Library has a **Podcast Stash** button below the soundscape card. It opens
-a brown card that plays alongside the existing CoSound player, with its own
-transport and volume. Explore and venue players have no podcast controls.
+a brown card stacked over the existing CoSound card. It plays alongside the
+CoSound player, with its own transport and volume. Its X uses the same
+slide-away dismissal as the other cards. Explore and venue players have no
+podcast controls.
 
 Search for a show or topic, or paste a public RSS/Atom feed URL and press Go.
 Open a show and add episodes. The first episode stays selected as the queue
@@ -17,7 +19,11 @@ visitors. Effects are Original, Radio show (a narrow frequency range), Old-time
 (a narrower range with gentle saturation), and Next room (a low-pass filter).
 These settings follow their episode through queue reordering.
 
-Collapsing the drawer keeps playback running. Leaving Library or refreshing
+Closing the card with its X, toggling the Stash button, or opening another card
+keeps playback running. Reopening restores the same queue, play position,
+effects, and search state. The numbered queue continues advancing while the
+card is absent; the Library wrapper owns the player independently of the view.
+Leaving Library or refreshing
 destroys its audio and clears the queue. There are no favourites, save controls,
 database models, migrations, localStorage, or sessionStorage for podcasts.
 Saving a CoSound still saves only its original sound layers.

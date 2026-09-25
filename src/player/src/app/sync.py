@@ -26,16 +26,25 @@ class ServerClock:
     WINDOW_SECONDS = 6.0
     MAX_ROUND_TRIP = 1.0
     MAX_EXCHANGE_SECONDS = 5.0
+    # Real oscillator drift is ~0.1 ms/s at most. A faster move in the chosen
+    # sample is estimation noise: a late receive timestamp, or Wi-Fi queuing
+    # on every exchange in the window. Glide toward it rather than jumping
+    # every loop on this player by the same amount.
+    SLEW_PER_SECOND = 0.001
+    # A server clock or host change is real, and gliding would take hours.
+    STEP_SECONDS = 1.0
 
     def __init__(self):
         self._samples = deque(maxlen=32)
-        self._offset = None
+        # (local time the target was chosen, offset then, target offset).
+        # Replaced whole, so the audio thread never reads a torn update.
+        self._slew = None
         self._last_send = None
         self._samples_seen = 0
 
     @property
     def ready(self) -> bool:
-        return self._offset is not None
+        return self._slew is not None
 
     def reset(self, *, keep_estimate: bool = True) -> None:
         """Relearn after reconnect, optionally retaining playback holdover."""
@@ -43,7 +52,7 @@ class ServerClock:
         self._last_send = None
         self._samples_seen = 0
         if not keep_estimate:
-            self._offset = None
+            self._slew = None
 
     def observe(self, client_send, server_receive, server_send, client_receive) -> bool:
         """Accept four timestamps in seconds; client timestamps are monotonic."""
@@ -73,12 +82,23 @@ class ServerClock:
         # sample is better than retaining an old mapping indefinitely.
         if self._samples_seen >= self.MIN_SAMPLES:
             # Prefer the newer sample when delays tie, so oscillator drift tracks.
-            self._offset = min(self._samples, key=lambda sample: (sample[1], -sample[0]))[2]
+            target = min(self._samples, key=lambda sample: (sample[1], -sample[0]))[2]
+            current = self._offset_at(client_receive)
+            if current is None or abs(target - current) > self.STEP_SECONDS:
+                current = target
+            self._slew = (client_receive, current, target)
         return True
+
+    def _offset_at(self, local_seconds: float) -> float | None:
+        slew = self._slew
+        if slew is None:
+            return None
+        since, start, target = slew
+        allowed = self.SLEW_PER_SECOND * max(0.0, local_seconds - since)
+        return start + max(-allowed, min(allowed, target - start))
 
     def server_time(self, monotonic_seconds: float | None = None) -> float | None:
         """Map a local time (including an audio DAC deadline) onto server time."""
-        offset = self._offset
-        if offset is None:
-            return None
-        return (monotonic() if monotonic_seconds is None else monotonic_seconds) + offset
+        local = monotonic() if monotonic_seconds is None else monotonic_seconds
+        offset = self._offset_at(local)
+        return None if offset is None else local + offset

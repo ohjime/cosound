@@ -82,7 +82,32 @@ class ServerClockTests(unittest.TestCase):
         for index in range(3):
             self.observe(clock, 100 + 2 * index)
         self.observe(clock, 120, offset=self.OFFSET + 0.002)
-        self.assertAlmostEqual(clock.server_time(121), self.OFFSET + 121.002, places=6)
+        # Glides at 1 ms/s rather than stepping, so it is there within 2 s.
+        self.assertAlmostEqual(clock.server_time(123), self.OFFSET + 123.002, places=6)
+
+    def test_sudden_estimate_change_glides_instead_of_stepping_playback(self):
+        # Every sample in the window delayed on its way back (a stalled
+        # receive, Wi-Fi queuing) biases the best one by hundreds of ms.
+        clock = ServerClock()
+        for index in range(3):
+            self.observe(clock, 100 + index)
+        for index in range(4):
+            self.observe(clock, 110 + index, offset=self.OFFSET + 0.3)
+        received = 113.008
+        for elapsed in (0, 0.1, 10, 100):
+            with self.subTest(elapsed=elapsed):
+                moved = clock.server_time(received + elapsed) - (self.OFFSET + received + elapsed)
+                self.assertAlmostEqual(moved, min(0.3, 0.001 * elapsed + 0.003), places=6)
+        self.assertAlmostEqual(clock.server_time(500), self.OFFSET + 500.3, places=6)
+
+    def test_mapping_is_continuous_when_a_new_target_arrives_mid_glide(self):
+        clock = ServerClock()
+        for index in range(3):
+            self.observe(clock, 100 + index)
+        self.observe(clock, 110, offset=self.OFFSET + 0.3)
+        before = clock.server_time(112.008)
+        self.observe(clock, 112, offset=self.OFFSET - 0.3)
+        self.assertAlmostEqual(clock.server_time(112.008), before, places=6)
 
     def test_reset_relearns_server_step_without_interrupting_holdover(self):
         clock = ServerClock()

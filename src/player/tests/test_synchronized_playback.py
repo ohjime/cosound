@@ -8,7 +8,7 @@ import numpy as np
 
 from app.devices import OutputDevice
 from app.player import SoundDevicePlayer
-from app.playback import PlaybackPlan, loop_chunk
+from app.playback import CORRECTION_SLEW_SECONDS, MAX_CORRECTION, PlaybackPlan, loop_chunk
 
 
 def timeline(revision="one", at=1010.0, previous=None, fade=8.0):
@@ -204,10 +204,42 @@ class LoopPhaseTests(unittest.TestCase):
         track = {"data": np.arange(48000, dtype=np.float32)[:, None] / 48000, "duration": 1}
         loop_chunk(track, 480, 10, 10, 48000)
         chunk = loop_chunk(track, 480, 10.5, 10, 48000)
+        # The old position leads the crossfade, and the new one takes over
+        # once the 50 ms fade (five 480-frame blocks) has run.
         self.assertAlmostEqual(float(chunk[0, 0]), 0.01, places=6)
-        self.assertAlmostEqual(float(chunk[-1, 0]), 0.5 + 479 / 48000, places=6)
-        loop_chunk(track, 480, 10.51, 10, 48000)
+        for block in range(1, 5):
+            chunk = loop_chunk(track, 480, 10.5 + block * 0.01, 10, 48000)
+        self.assertNotIn("fade_ptr", track)
+        chunk = loop_chunk(track, 480, 10.55, 10, 48000)
+        self.assertAlmostEqual(float(chunk[0, 0]), 0.55, places=5)
         self.assertLess(abs(track["sync_error_ms"]), 1e-6)
+
+    def test_skipped_device_cycle_catches_up_by_gliding_not_jumping(self):
+        fs, frames = 48000, 1024
+        track = {"data": np.ones((48000, 1), np.float32), "duration": 1}
+        block = frames / fs
+        loop_chunk(track, frames, 100, 10, fs)
+        corrections = []
+        for index in range(2, 800):  # index 1 is the cycle CoreAudio dropped
+            loop_chunk(track, frames, 100 + index * block, 10, fs)
+            self.assertNotIn("fade_ptr", track)
+            corrections.append(track["sync_correction"])
+        steps = np.abs(np.diff([0.0] + corrections))
+        self.assertLessEqual(max(corrections), MAX_CORRECTION)
+        self.assertLessEqual(steps.max(), MAX_CORRECTION * block / CORRECTION_SLEW_SECONDS + 1e-12)
+        # Settles without overshooting into a lead it then has to give back.
+        self.assertGreaterEqual(min(corrections), 0)
+        self.assertLess(abs(track["sync_error_ms"]), 0.01)
+
+    def test_error_below_seek_threshold_is_recovered_in_seconds(self):
+        fs, frames = 48000, 480
+        track = {"data": np.ones((48000, 1), np.float32), "duration": 1}
+        loop_chunk(track, frames, 100, 10, fs)
+        track["sync_ptr"] = (track["sync_ptr"] - 0.2 * fs) % 48000  # 200 ms behind
+        for index in range(1, 100 * 60):
+            loop_chunk(track, frames, 100 + index * frames / fs, 10, fs)
+            self.assertNotIn("fade_ptr", track)
+        self.assertLess(abs(track["sync_error_ms"]), 0.1)
 
     def test_invalid_schedule_rejected(self):
         for descriptor in ({}, timeline(fade=-1), timeline(at=float("nan"))):

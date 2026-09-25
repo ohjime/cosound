@@ -359,7 +359,11 @@ DATABASES = {
     "default": dj_database_url.config(
         # For local development, you can use SQLite or a local PostgreSQL
         default="sqlite:///" + str(BASE_DIR / "db.sqlite3"),
-        conn_max_age=600,
+        # Under ASGI each request runs in its own thread context, so a
+        # persistent connection is never reused and lingers until garbage
+        # collection; with Postgres capped at 20 clients that exhausted the
+        # database. Close each connection when its request finishes.
+        conn_max_age=0,
     )
 }
 

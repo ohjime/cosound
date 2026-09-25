@@ -1,6 +1,6 @@
 <c-vars choice="" throttle_seconds_left="0" />
 <c-core-card showExit="true" bgColor="bg-[#3a536f]" ringColor="ring-[#46566b]">
-    <div data-vote-card data-vote-prompt-card class="contents">
+    <div data-vote-card data-vote-prompt-card class="contents" x-init="$nextTick(() => htmx.process($el))">
         <figure class="relative mx-6 mt-7 overflow-visible rounded-t-md bg-base-300 ring-7 ring-neutral-content/70">
             <c-vote-layer-indicator-dock>
                 <span role="img" :aria-label="isUpvote ? 'Pleasant vote' : 'Unpleasant vote'" class="grid h-7 min-w-9 place-items-center bg-neutral/70 text-neutral-content">

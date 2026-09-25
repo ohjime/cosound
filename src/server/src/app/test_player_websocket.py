@@ -1,4 +1,5 @@
 import asyncio
+import json
 from contextlib import asynccontextmanager
 from unittest.mock import patch
 
@@ -48,7 +49,9 @@ class PlayerSocketTests(TransactionTestCase):
         self.assertEqual(await socket.receive_output(), {"type": "websocket.accept", "subprotocol": None})
         message = await socket.receive_output()
         self.assertEqual(message["type"], "websocket.send")
-        self.assertJSONEqual(message["text"], {"type": "player.ready", "schema_version": 1})
+        self.assertJSONEqual(message["text"], {
+            "type": "player.ready", "schema_version": 1, "sync_version": 1,
+        })
 
     async def test_missing_invalid_duplicate_and_query_credentials_are_rejected(self):
         for token, query, extra in [
@@ -98,6 +101,26 @@ class PlayerSocketTests(TransactionTestCase):
             await layer.group_send(player_group_name(self.player.pk), event)
             self.assertEqual(await socket.receive_output(), {"type": "websocket.close", "code": 4401})
 
+    async def test_vote_schedule_is_shared_and_invalid_timestamp_is_omitted(self):
+        async with socket_connection(self.player.token) as first:
+            await self.assert_ready(first)
+            async with socket_connection(self.player.token) as second:
+                await self.assert_ready(second)
+                for timestamp in [1234.5, float("nan")]:
+                    await get_channel_layer().group_send(player_group_name(self.player.pk), {
+                        "type": "player.vote_received", "vote_id": 12,
+                        "pleasant": 1, "play_at": timestamp,
+                    })
+                    messages = [
+                        json.loads((await first.receive_output())["text"]),
+                        json.loads((await second.receive_output())["text"]),
+                    ]
+                    self.assertEqual(messages[0], messages[1])
+                    if timestamp == 1234.5:
+                        self.assertEqual(messages[0]["play_at"], 1234.5)
+                    else:
+                        self.assertNotIn("play_at", messages[0])
+
     async def test_idle_subscription_is_renewed_and_rechecks_credentials(self):
         with patch("app.consumers.SUBSCRIPTION_REFRESH_SECONDS", 0.02):
             async with socket_connection(self.player.token) as socket:
@@ -117,6 +140,73 @@ class PlayerSocketTests(TransactionTestCase):
                 await self.assert_ready(socket)
                 await socket.send_input({"type": "websocket.receive", "text": '{"type":"subscribe","player_id":999}'})
                 self.assertEqual(await socket.receive_output(), {"type": "websocket.close", "code": 1008})
+
+    async def test_clock_probe_echoes_timestamps_and_excludes_processing_delay(self):
+        probe = {
+            "type": "player.time_ping", "schema_version": 1,
+            "id": 7, "client_send": 12.5,
+        }
+        async with socket_connection(self.player.token) as socket:
+            await self.assert_ready(socket)
+            with patch("app.consumers.time.time", side_effect=[1000.125, 1000.375]):
+                await socket.send_input({
+                    "type": "websocket.receive", "text": json.dumps(probe),
+                })
+                message = await socket.receive_output()
+            self.assertJSONEqual(message["text"], {
+                "type": "player.time_pong", "schema_version": 1,
+                "id": 7, "client_send": 12.5,
+                "server_receive": 1000.125, "server_send": 1000.375,
+            })
+            await database_sync_to_async(Player.objects.filter(pk=self.player.pk).update)(token="rotated")
+            await socket.send_input({
+                "type": "websocket.receive", "text": json.dumps(probe),
+            })
+            self.assertEqual(await socket.receive_output(), {
+                "type": "websocket.close", "code": 4401,
+            })
+
+    async def test_malformed_or_unbounded_clock_probes_are_rejected(self):
+        base = {
+            "type": "player.time_ping", "schema_version": 1,
+            "id": 1, "client_send": 12.5,
+        }
+        invalid = ["{", "[]", "null", "x" * 513]
+        invalid.extend(json.dumps({**base, **change}) for change in [
+            {"id": True}, {"id": -1}, {"id": 2**53},
+            {"schema_version": True}, {"schema_version": 2},
+            {"client_send": True}, {"client_send": "12.5"},
+            {"client_send": float("nan")}, {"client_send": float("inf")},
+            {"client_send": 10**350},
+        ])
+        for payload in invalid:
+            async with socket_connection(self.player.token) as socket:
+                await self.assert_ready(socket)
+                await socket.send_input({"type": "websocket.receive", "text": payload})
+                self.assertEqual(await socket.receive_output(), {
+                    "type": "websocket.close", "code": 1008,
+                })
+        async with socket_connection(self.player.token) as socket:
+            await self.assert_ready(socket)
+            await socket.send_input({"type": "websocket.receive", "bytes": b"ping"})
+            self.assertEqual(await socket.receive_output(), {
+                "type": "websocket.close", "code": 1008,
+            })
+
+    async def test_clock_probe_flood_is_bounded(self):
+        probe = json.dumps({
+            "type": "player.time_ping", "schema_version": 1,
+            "id": 1, "client_send": 12.5,
+        })
+        with patch("app.consumers.MAX_CLOCK_PROBES_PER_SECOND", 1):
+            async with socket_connection(self.player.token) as socket:
+                await self.assert_ready(socket)
+                await socket.send_input({"type": "websocket.receive", "text": probe})
+                self.assertEqual(json.loads((await socket.receive_output())["text"])["type"], "player.time_pong")
+                await socket.send_input({"type": "websocket.receive", "text": probe})
+                self.assertEqual(await socket.receive_output(), {
+                    "type": "websocket.close", "code": 1008,
+                })
 
     async def test_redis_unavailable_does_not_acknowledge_subscription(self):
         with patch("app.consumers.PlayerConsumer._subscribe", side_effect=OSError("offline")):

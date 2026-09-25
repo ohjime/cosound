@@ -31,8 +31,10 @@ from app.client import (
     get_vote_chime,
     prune_vote_chimes,
 )
-from app.conditioning import condition_manifest
+from app.conditioning import CONDITION_SAMPLE_RATE, condition_manifest
 from app.live import watch_player_changes
+from app.playback import PlaybackPlan
+from app.sync import ServerClock
 from app.utils import the_love_life_you_wish_you_had
 
 ROOT_DIR = os.path.join(os.path.dirname(__file__), "..", "..")
@@ -52,6 +54,7 @@ def _refresh_missing_manifest_entries(
     manifest: dict,
     layers: list,
     target_fs: int | None,
+    *, strict: bool = False,
 ) -> None:
     """Download and condition newly referenced sounds into ``manifest``.
 
@@ -94,7 +97,8 @@ def _refresh_missing_manifest_entries(
             ) from error
 
     try:
-        conditioned = condition_manifest(downloaded, CONDITIONED_DIR, target_fs)
+        options = {"strict": True} if strict else {}
+        conditioned = condition_manifest(downloaded, CONDITIONED_DIR, target_fs, **options)
     except Exception as error:
         joined_ids = ", ".join(missing_ids)
         raise RuntimeError(
@@ -630,12 +634,16 @@ class CosoundPlayerApp(App):
     async def _watch_live_updates(self) -> None:
         # Async Textual workers share the UI event loop and are cancelled when
         # the app exits. HTTP, downloads, and audio remain in the refresh thread.
+        clock = getattr(self.player, "clock", None)
+        timing = {"clock": clock} if isinstance(clock, ServerClock) else {}
         await watch_player_changes(
             self.api_key, self.refresh_cosound, self._show_live_status,
             on_vote=self.player.play_vote_chime,
+            **timing,
         )
 
     def _show_live_status(self, status: str) -> None:
+        self._live_status = status
         self.query_one("#live-status", Static).update(form_row("LIVE UPDATES", status))
 
     def _sync_state_refresh_interval(self, info: dict) -> None:
@@ -670,7 +678,9 @@ class CosoundPlayerApp(App):
                 for layer in info.get("layers", [])
             )
         )
-        return (info.get("program_id"), layers)
+        timing = info.get("playback_sync")
+        revision = timing.get("revision") if isinstance(timing, dict) else None
+        return (info.get("program_id"), layers, revision)
 
     def refresh_cosound(self) -> None:
         """Request a refresh, coalescing requests that arrive during one."""
@@ -736,18 +746,37 @@ class CosoundPlayerApp(App):
         changed = self._signature_of(info) != self._cosound_signature
         if changed:
             layers = info.get("layers", [])
+            timing = info.get("playback_sync")
+            plan = PlaybackPlan.parse(timing, layers) if timing is not None else None
             _refresh_missing_manifest_entries(
                 self.api_key,
                 manifest,
                 layers,
-                getattr(self.player, "fs", None),
+                CONDITION_SAMPLE_RATE,
+                strict=plan is not None,
             )
+
+            if plan is not None:
+                # A late join can reproduce a fade-out too when that asset is
+                # still available. Removed library assets must not prevent it
+                # joining the current, fully prepared target mix.
+                try:
+                    _refresh_missing_manifest_entries(
+                        self.api_key, manifest, timing.get("previous_layers", []),
+                        CONDITION_SAMPLE_RATE,
+                        strict=True,
+                    )
+                except Exception as error:
+                    self.log(f"Previous mix assets unavailable: {error}")
 
             # Audio loading stays on this worker thread. Since this is the only
             # refresh worker, an older transition always finishes before the
             # latest coalesced request is fetched and applied.
             self.manifest.update(manifest)
-            _queue_manifest_layers(self.manifest, layers, self.player)
+            if plan is None:
+                _queue_manifest_layers(self.manifest, layers, self.player)
+            else:
+                self.player.schedule_cosound(self.manifest, layers, timing)
 
         # Textual waits for this UI callback to finish, so the worker cannot
         # begin a newer refresh until this state is visible.
@@ -886,6 +915,17 @@ class CosoundPlayerApp(App):
     # --- Real-time peak meters ---
 
     def _update_meters(self) -> None:
+        if isinstance(getattr(self.player, "clock", None), ServerClock):
+            timing = self.player.get_sync_status()
+            status = getattr(self, "_live_status", "Connecting…")
+            if status == "Connected" and timing["timeline_active"]:
+                if not timing["clock_ready"]:
+                    status += " · syncing clock…"
+                elif not timing["dac_timing_available"]:
+                    status += " · output timing unavailable"
+                else:
+                    status += " · timing active"
+            self.query_one("#live-status", Static).update(form_row("LIVE UPDATES", status))
         entry = self._current_entry
         if entry is None or not entry.is_mounted:
             return

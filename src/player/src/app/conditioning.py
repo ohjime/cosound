@@ -28,6 +28,8 @@ HF_SHELF_LO = 13000.0  # start of the transition
 HF_SHELF_HI = 16000.0  # full cut above here
 LOOP_XFADE_MS = 50.0
 CONDITION_VERSION = 2  # bump to invalidate every cached file
+# All replicas prepare the same loop length before adapting it to their DAC.
+CONDITION_SAMPLE_RATE = 48_000
 
 
 def _resample(data: np.ndarray, sr: int, target: int) -> np.ndarray:
@@ -139,22 +141,28 @@ def condition_file(
 
 
 def condition_manifest(
-    manifest: dict, out_dir: str, target_fs: int, target_lufs: float = TARGET_LUFS
+    manifest: dict, out_dir: str, target_fs: int, target_lufs: float = TARGET_LUFS,
+    *, strict: bool = False,
 ) -> dict:
     """Condition every local file in ``manifest`` ({id: path}); return {id: path}.
 
     Files that fail to condition fall back to their original path so playback
-    still works.
+    still works. Synchronized callers use ``strict`` because an unconditioned
+    fallback has a different loop length from the other replicas.
     """
     out = {}
     for sound_id, src_path in manifest.items():
         if not src_path or not os.path.exists(src_path):
+            if strict:
+                raise ValueError(f"Missing source audio for sound {sound_id}")
             out[sound_id] = src_path
             continue
         dest = os.path.join(out_dir, f"{sound_id}.wav")
         try:
             out[sound_id] = condition_file(src_path, dest, target_fs, target_lufs)
         except Exception as error:
+            if strict:
+                raise
             print(f"  ! conditioning {sound_id} failed ({error}); using original")
             out[sound_id] = src_path
     return out

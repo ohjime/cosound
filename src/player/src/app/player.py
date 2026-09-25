@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import random
 import threading
+from time import monotonic
 import numpy as np
 import sounddevice as sd
 import soundfile as sf
@@ -10,6 +11,8 @@ from app.layout import infer_layout, default_source_azimuths
 from app.spatial import make_renderer
 from app.reverb import FDNReverb
 from app.conditioning import _resample as resample_audio
+from app.sync import ServerClock
+from app.playback import PlaybackPlan, loop_chunk
 from app.chime import (
     VOTE_CHIME_DEFAULT_VOLUME,
     VOTE_CHIME_DOWNVOTE_DEGREES,
@@ -107,6 +110,11 @@ class SoundDevicePlayer(CommunalPlayer):
         self.muted = False
         self.levels = {}
         self.last_status = None
+        self.clock = ServerClock()
+        self._sync_plans = []
+        self._scheduled_chimes = []
+        self._dac_timing_available = False
+        self._audio_clock_anchor = None
         # One finished buffer per degree of the scale in app.chime, plus a
         # cursor into whichever degree each in-flight acknowledgement is using.
         self._default_vote_chime = vote_chime_scale(self.fs)
@@ -138,6 +146,7 @@ class SoundDevicePlayer(CommunalPlayer):
             dtype="float32",
         )
         self.stream.start()
+        self._capture_audio_clock()
 
     # --- Controls -----------------------------------------------------------
 
@@ -145,7 +154,7 @@ class SoundDevicePlayer(CommunalPlayer):
         with self.lock:
             self.master_gain = max(0.0, min(1.0, float(gain)))
 
-    def play_vote_chime(self, pleasant=None):
+    def play_vote_chime(self, pleasant=None, *, play_at=None, vote_id=None):
         """Start a one-shot on the existing output, independently of mix changes."""
         with self.lock:
             if pleasant == 0 and type(pleasant) is int:
@@ -154,6 +163,12 @@ class SoundDevicePlayer(CommunalPlayer):
                 degrees = VOTE_CHIME_UPVOTE_DEGREES
             else:
                 degrees = range(len(self._vote_chime))
+            if play_at is not None and type(vote_id) is int:
+                # Every replica chooses the same voice, regardless of missed
+                # votes or when this process was started.
+                degree = degrees[vote_id % len(degrees)]
+                self._scheduled_chimes = self._scheduled_chimes[-7:] + [(degree, play_at)]
+                return
             # Pick freely within the consonant set, avoiding an immediate repeat.
             choices = [degree for degree in degrees if degree != self._vote_chime_degree]
             self._vote_chime_degree = random.choice(choices)
@@ -184,6 +199,7 @@ class SoundDevicePlayer(CommunalPlayer):
             # shorter replacement.  Dropping an in-flight acknowledgement makes
             # the swap safe; the next vote starts the new sound immediately.
             self._vote_chime_positions = []
+            self._scheduled_chimes = []
 
     def set_vote_chime_volume(self, volume):
         """Set how loud an acknowledgement is against the mix, from 0 to 1."""
@@ -230,6 +246,20 @@ class SoundDevicePlayer(CommunalPlayer):
     def dequeue_cosound(self):
         """Triggers the transition: fades out old tracks and fades in new ones."""
         with self.lock:
+            # A rolling server downgrade can remove the optional timeline.
+            # Convert existing tracks before returning to the legacy mixer.
+            plans = getattr(self, "_sync_plans", [])
+            if plans:
+                now = self.clock.server_time()
+                for track in self.active_tracks.values():
+                    gain = 0.0
+                    if now is not None:
+                        for plan in plans:
+                            if now >= plan.effective_at:
+                                gain = float(plan.gains(track.get("sound_id"), np.array([now]))[0])
+                    track.update(ptr=int(track.get("sync_ptr", 0)),
+                                 curr_gain=gain, target_gain=gain)
+                self._sync_plans = []
             pending = dict(self.pending_queue)
             self.pending_queue = {}
 
@@ -267,12 +297,141 @@ class SoundDevicePlayer(CommunalPlayer):
                     new_track["azimuth"] = self._assign_azimuth()
                     self.active_tracks[path] = new_track
 
+    def schedule_cosound(self, manifest, layers, descriptor):
+        """Prepare a server timeline off the audio thread, then install atomically."""
+        plan = PlaybackPlan.parse(descriptor, layers)
+        with self.lock:
+            if self._sync_plans and (
+                plan.revision == self._sync_plans[-1].revision
+                or plan.effective_at < self._sync_plans[-1].effective_at
+            ):
+                return
+            existing = dict(self.active_tracks)
+        prepared = {}
+        for sound_id in plan.previous.keys() | plan.target.keys():
+            if not (plan.previous.get(sound_id) or plan.target.get(sound_id)):
+                continue
+            path = manifest.get(sound_id)
+            if not path:
+                if not plan.target.get(sound_id):
+                    continue
+                raise ValueError(f"Missing synchronized sound {sound_id}")
+            path = str(path)
+            if path in existing and existing[path].get("sound_id") == sound_id:
+                prepared[path] = existing[path]
+                continue
+            try:
+                data, sr = sf.read(path, dtype="float32", always_2d=True)
+                if not len(data) or not np.isfinite(data).all():
+                    raise ValueError(f"Invalid synchronized sound {sound_id}")
+            except Exception:
+                if not plan.target.get(sound_id):
+                    continue
+                raise
+            duration = len(data) / sr
+            if sr != self.fs:
+                data = resample_audio(data, sr, self.fs)
+            prepared[path] = {
+                "data": data, "duration": duration, "sound_id": sound_id,
+                "azimuth": self._positions[int(sound_id) % len(self._positions)],
+            }
+        with self.lock:
+            if not self.clock.ready or not self._dac_timing_available:
+                # Nothing synchronized is audible yet. An unavailable clock
+                # or driver must not accumulate every revision and audio file.
+                self.active_tracks = prepared
+                self._sync_plans = [plan]
+            else:
+                self.active_tracks.update(prepared)
+                # Keep earlier queued deadlines until the callback passes them.
+                self._sync_plans.append(plan)
+
+    def get_sync_status(self):
+        """Diagnostics describe the estimate, not measured acoustic accuracy."""
+        self._capture_audio_clock()
+        with self.lock:
+            return {
+                "clock_ready": self.clock.ready,
+                "timeline_active": bool(self._sync_plans),
+                "dac_timing_available": self._dac_timing_available,
+                "phase_error_ms": max((abs(t.get("sync_error_ms", 0))
+                                       for t in self.active_tracks.values()), default=0),
+            }
+
+    def _capture_audio_clock(self):
+        """Bridge the device clock off the callback, where PortAudio allows it.
+
+        Called by the existing UI meter timer. Bracketing bounds scheduling
+        jitter; skip delayed readings instead of moving all audible samples.
+        """
+        before = monotonic()
+        try:
+            stream_time = self.stream.time
+        except sd.PortAudioError:
+            self._audio_clock_anchor = None
+            return
+        after = monotonic()
+        if np.isfinite(stream_time) and after - before <= 0.001:
+            self._audio_clock_anchor = (stream_time, (before + after) / 2)
+
+    def _server_output_time(self, timing):
+        clock = getattr(self, "clock", None)
+        if clock is None or timing is None:
+            return None
+        current = float(timing.currentTime)
+        dac = float(timing.outputBufferDacTime)
+        anchor = getattr(self, "_audio_clock_anchor", None)
+        valid = (anchor is not None and np.isfinite(current) and np.isfinite(dac)
+                 and dac > 0 and dac >= current)
+        self._dac_timing_available = bool(valid)
+        if not valid:
+            return None
+        # Python/GIL delays after PortAudio invoked us do not change this
+        # deadline. No PortAudio API is called on the real-time audio thread.
+        return clock.server_time(anchor[1] + dac - anchor[0])
+
+    def _synchronized_sources(self, frames, server_time):
+        if server_time is None:
+            return [], {}
+        times = server_time + np.arange(frames) / self.fs
+        plans = self._sync_plans
+        sources, levels = [], {}
+        for path, track in list(self.active_tracks.items()):
+            sound_id = track.get("sound_id")
+            if sound_id is None:
+                del self.active_tracks[path]
+                continue
+            gain = np.zeros(frames)
+            for plan in plans:
+                mask = times >= plan.effective_at
+                gain[mask] = plan.gains(sound_id, times[mask])
+            # Loop origins stay fixed across gain changes, removals and rejoins.
+            chunk = loop_chunk(track, frames, server_time, plans[-1].epoch, self.fs)
+            signal = (chunk * gain[:, None]).astype(np.float32)
+            sources.append({"signal": signal, "azimuth": track["azimuth"]})
+            levels[path] = float(np.max(np.abs(signal))) if frames else 0.0
+
+        # Retain the active envelope and future deadlines, not the entire run.
+        while len(plans) > 1 and plans[1].effective_at <= server_time:
+            plans.pop(0)
+        needed = set()
+        for plan in plans:
+            needed.update(key for key, gain in plan.target.items() if gain)
+            if server_time < plan.effective_at + plan.fade_seconds:
+                needed.update(key for key, gain in plan.previous.items() if gain)
+        for path, track in list(self.active_tracks.items()):
+            if track.get("sound_id") not in needed:
+                del self.active_tracks[path]
+        return sources, levels
+
     # --- Real-time audio ----------------------------------------------------
 
     def _audio_callback(self, outdata, frames, time, status):
         """The real-time audio thread: gain-ramp tracks, then spatialise+reverb."""
         if status:
             self.last_status = status
+
+        server_time = self._server_output_time(time)
 
         sources = []
         levels = {}
@@ -287,10 +446,25 @@ class SoundDevicePlayer(CommunalPlayer):
                 if position + count < len(voice):
                     remaining.append((degree, position + count))
             self._vote_chime_positions = remaining
+            if server_time is not None:
+                scheduled = []
+                for degree, play_at in getattr(self, "_scheduled_chimes", []):
+                    voice = self._vote_chime[degree]
+                    position = round((server_time - play_at) * self.fs)
+                    start = max(0, -position)
+                    end = min(frames, len(voice) - position)
+                    if end > start:
+                        chime[start:end] += voice[position + start:position + end]
+                    if position + frames < len(voice):
+                        scheduled.append((degree, play_at))
+                self._scheduled_chimes = scheduled
             chime_volume = self._vote_chime_volume
             chime_peak = self._vote_chime_peak
             chime_loudness_level = self._vote_chime_loudness
-            for path in list(self.active_tracks.keys()):
+            synchronized = bool(getattr(self, "_sync_plans", []))
+            if synchronized:
+                sources, levels = self._synchronized_sources(frames, server_time)
+            for path in ([] if synchronized else list(self.active_tracks.keys())):
                 track = self.active_tracks[path]
                 data = track["data"]
                 if data.size == 0:
@@ -335,6 +509,10 @@ class SoundDevicePlayer(CommunalPlayer):
 
         # Spatialise (positioned/decorrelated) + add the reverb return. These
         # objects are only ever touched here on the audio thread.
+        if synchronized and server_time is not None and getattr(self.renderer, "rotation_deg_per_s", 0):
+            self.renderer._angle = (
+                (server_time - self._sync_plans[-1].epoch) * self.renderer.rotation_deg_per_s
+            ) % 360.0
         dry, send = self.renderer.render(sources, frames)
         wet = self.reverb.process(send)
         mix = dry + wet

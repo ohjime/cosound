@@ -4,6 +4,12 @@ The server uses Django Channels and Redis to notify the Python player after its
 state changes. The player keeps one authenticated WebSocket open and uses its
 existing REST refresh worker to fetch the latest state and update playback.
 
+Updated players also use this connection to estimate server time and follow a
+persisted playback timeline. Multiple computers using the same Player token
+share loop positions, transitions, and vote-chime deadlines. See
+[synchronized players](player-synchronization.md) for the BeatSync research,
+server migration, timing protocol, and physical synchronization test procedure.
+
 ```mermaid
 flowchart LR
     save[Database commit] --> redis[Redis notification]
@@ -111,7 +117,7 @@ tokens and deleted players lose access even while idle.
 After subscription, the server sends:
 
 ```json
-{"type": "player.ready", "schema_version": 1}
+{"type": "player.ready", "schema_version": 1, "sync_version": 1}
 ```
 
 After a relevant transaction commits, it sends:

@@ -9,6 +9,7 @@ periodically so a Redis outage never prevents a database write.
 
 import asyncio
 import logging
+import time
 from functools import partial
 
 from asgiref.sync import async_to_sync
@@ -17,6 +18,7 @@ from django.conf import settings
 from django.db import transaction
 
 logger = logging.getLogger(__name__)
+VOTE_SYNC_LEAD_SECONDS = 0.5
 
 
 def player_group_name(player_id):
@@ -66,6 +68,7 @@ def publish_player_vote(player_id, vote_id, pleasant):
         async_to_sync(_send_player_changes)((player_id,), {
             "type": "player.vote_received", "schema_version": 1,
             "vote_id": vote_id, "pleasant": pleasant,
+            "play_at": time.time() + VOTE_SYNC_LEAD_SECONDS,
         })
     except Exception:
         logger.warning("Could not publish player vote notification", exc_info=True)

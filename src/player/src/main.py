@@ -7,7 +7,7 @@ from app.client import (
     get_latest_manifest,
 )
 from app.devices import detect_output
-from app.conditioning import condition_manifest
+from app.conditioning import CONDITION_SAMPLE_RATE, condition_manifest
 from app.tui import CosoundPlayerApp
 from app.utils import get_or_read_api_key
 
@@ -49,7 +49,7 @@ def setup(api_key: str, target_fs: int):
     # Offline conditioning pass: decode/resample/loudness/loop-fix/de-harsh once
     # so even lossy sources play back cleanly. Manifest now points at the cache.
     print(f"Conditioning {len(manifest)} sound(s) @ {target_fs} Hz…")
-    manifest = condition_manifest(manifest, CONDITIONED_DIR, target_fs)
+    manifest = condition_manifest(manifest, CONDITIONED_DIR, target_fs, strict=True)
 
     config = {"API_KEY": api_key, "MANIFEST": manifest}
 
@@ -68,7 +68,8 @@ def main(
 ):
     api_key = token or os.environ.get("COSOUND_API_KEY") or get_or_read_api_key()
 
-    # Auto-detect the output so we can condition audio to its native rate.
+    # Probe the output; loops are conditioned at a shared rate, then adapted
+    # to this device during loading without changing their canonical duration.
     device = detect_output(output_device)
     note = ""
     if device.channels_assumed:
@@ -76,7 +77,7 @@ def main(
         note = f" (assumed stereo; '{device.name}' advertises {reported}ch routing max)"
     print(f"Output: {device.name} — {device.channels}ch @ {device.samplerate} Hz{note}")
 
-    manifest = setup(api_key, device.samplerate)
+    manifest = setup(api_key, CONDITION_SAMPLE_RATE)
     player = SoundDevicePlayer(
         channels=channels,
         master_gain=master_gain,

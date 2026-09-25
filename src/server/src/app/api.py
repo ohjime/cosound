@@ -75,6 +75,7 @@ def get_player(request) -> dict:
         "bio": player.bio,
         "photo": request.build_absolute_uri(player.photo.url) if player.photo else "",
         "program_id": player.program_id,
+        "playback_sync": player.playback_sync,
         "runtime": {
             "state_refresh_interval_seconds": player.state_refresh_interval_seconds,
         },

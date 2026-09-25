@@ -37,6 +37,8 @@ from core.validators import validate_chime
 MIN_ALGORITHM_REFRESH_SECONDS = 5
 MIN_PLAYER_STATE_REFRESH_SECONDS = 5
 MAX_ALGORITHM_LAYERS = 5
+PLAYBACK_SYNC_LEAD_SECONDS = 2.0
+PLAYBACK_SYNC_FADE_SECONDS = 8.0
 
 
 def chime_upload_path(instance, filename):
@@ -539,6 +541,7 @@ class Player(DjangoDB.Model):
         blank=True,
     )
     playing: Prediction = SchemaField(default=Prediction)
+    playback_sync = DjangoDB.JSONField(default=dict, editable=False)
     sleeping = DjangoDB.BooleanField(default=True)
     activated_at = DjangoDB.DateTimeField(blank=True, null=True)
     manager = DjangoDB.ForeignKey(Manager, on_delete=DjangoDB.CASCADE)
@@ -578,6 +581,79 @@ class Player(DjangoDB.Model):
         return self.name
 
     def save(self, *args, **kwargs):
+        using = kwargs.get("using") or router.db_for_write(type(self), instance=self)
+        kwargs["using"] = using
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            update_fields = set(update_fields)
+            if not update_fields:
+                return
+            kwargs["update_fields"] = update_fields
+        if self.pk and self.program_id is not None and update_fields is not None and not {
+            "playing", "program", "program_id",
+        }.intersection(update_fields):
+            return self._save_player(*args, **kwargs)
+
+        # Persist the prediction and its timeline together. The row lock also
+        # covers admin/Player.update callers outside the predictor's own lock,
+        # so workers never publish incompatible revisions for the same room.
+        with transaction.atomic(using=using):
+            previous = (
+                type(self).objects.using(using).select_for_update()
+                .only("playing", "program_id", "playback_sync")
+                .filter(pk=self.pk).first()
+                if self.pk else None
+            )
+            changed = self._prepare_playback_sync(previous, update_fields)
+            if changed and update_fields is not None:
+                update_fields.add("playback_sync")
+            return self._save_player(*args, **kwargs)
+
+    def _prepare_playback_sync(self, previous, update_fields):
+        def gains(prediction):
+            return {layer.sound_id: float(layer.sound_gain) for layer in prediction.layers}
+
+        prior = previous.playback_sync if previous is not None else {}
+        writes_playing = update_fields is None or "playing" in update_fields
+        writes_program = self.program_id is None or update_fields is None or bool(
+            {"program", "program_id"}.intersection(update_fields)
+        )
+        before = gains(previous.playing) if previous is not None else {}
+        after = gains(self.playing) if writes_playing or previous is None else before
+        if prior.get("version") == 1 and before == after and (
+            not writes_program or previous.program_id == self.program_id
+        ):
+            # A full metadata save may use a stale model instance. Preserve
+            # the committed timeline instead of writing that stale copy back.
+            self.playback_sync = prior
+            return False
+
+        effective_at = timezone.now().timestamp() + PLAYBACK_SYNC_LEAD_SECONDS
+        previous_layers = []
+        if prior.get("version") == 1:
+            starts = {
+                layer["sound_id"]: layer["gain"]
+                for layer in prior.get("previous_layers", [])
+            }
+            fraction = min(1.0, max(0.0, (
+                effective_at - prior["effective_at"]
+            ) / prior["fade_seconds"]))
+            for sound_id in sorted(starts.keys() | before.keys()):
+                start = starts.get(sound_id, 0.0)
+                gain = start + (before.get(sound_id, 0.0) - start) * fraction
+                if gain > 0.0:
+                    previous_layers.append({"sound_id": sound_id, "gain": gain})
+        self.playback_sync = {
+            "version": 1,
+            "revision": str(uuid.uuid4()),
+            "epoch": prior.get("epoch", effective_at),
+            "effective_at": effective_at,
+            "fade_seconds": PLAYBACK_SYNC_FADE_SECONDS,
+            "previous_layers": previous_layers,
+        }
+        return True
+
+    def _save_player(self, *args, **kwargs):
         update_fields = kwargs.get("update_fields")
         if update_fields is not None:
             update_fields = set(update_fields)

@@ -1,7 +1,11 @@
-"""Authenticated, notification-only subscriptions for physical players."""
+"""Authenticated player notifications and clock synchronization probes."""
 
 import asyncio
+import json
 import logging
+import math
+import time
+from collections import deque
 from contextlib import suppress
 
 from channels.db import database_sync_to_async
@@ -16,6 +20,7 @@ from core.player_events import player_group_name
 logger = logging.getLogger(__name__)
 SUBSCRIPTION_REFRESH_SECONDS = 60
 CHANNEL_TIMEOUT_SECONDS = 3
+MAX_CLOCK_PROBES_PER_SECOND = 16
 
 
 @database_sync_to_async
@@ -31,6 +36,7 @@ class PlayerConsumer(AsyncJsonWebsocketConsumer):
         self.maintenance = None
         self.close_sent = False
         self.disconnected = False
+        self.clock_probes = deque()
         try:
             return await super().__call__(scope, receive, send)
         except RedisError:
@@ -90,7 +96,9 @@ class PlayerConsumer(AsyncJsonWebsocketConsumer):
         await self.accept()
         # The client refreshes only after this acknowledgement, closing the gap
         # between its initial HTTP snapshot and the subscription becoming live.
-        await self.send_json({"type": "player.ready", "schema_version": 1})
+        await self.send_json({
+            "type": "player.ready", "schema_version": 1, "sync_version": 1,
+        })
         self.maintenance = asyncio.create_task(self._maintain_subscription())
 
     async def _subscribe(self):
@@ -121,9 +129,43 @@ class PlayerConsumer(AsyncJsonWebsocketConsumer):
             await self.send_json({"type": "player.changed", "schema_version": 1})
 
     async def receive(self, text_data=None, bytes_data=None, **kwargs):
-        # Application messages are server-to-player; transport pings/pongs are
-        # handled by the ASGI server and do not reach this method.
-        await self.close(code=1008)
+        # Capture receipt before parsing/authentication. The client subtracts
+        # this processing interval from its round trip, including any DB wait.
+        received_at = time.time()
+        if bytes_data is not None or not text_data or len(text_data) > 512:
+            await self.close(code=1008)
+            return
+        try:
+            probe = json.loads(text_data)
+        except (ValueError, TypeError):
+            await self.close(code=1008)
+            return
+        if not (
+            isinstance(probe, dict)
+            and probe.get("type") == "player.time_ping"
+            and type(probe.get("schema_version")) is int
+            and probe["schema_version"] == 1
+            and type(probe.get("id")) is int
+            and 0 <= probe["id"] <= 2**53 - 1
+            and type(probe.get("client_send")) in (int, float)
+            and abs(probe["client_send"]) <= 1e15
+            and math.isfinite(probe["client_send"])
+        ):
+            await self.close(code=1008)
+            return
+        now = time.monotonic()
+        while self.clock_probes and self.clock_probes[0] <= now - 1.0:
+            self.clock_probes.popleft()
+        if len(self.clock_probes) >= MAX_CLOCK_PROBES_PER_SECOND:
+            await self.close(code=1008)
+            return
+        self.clock_probes.append(now)
+        if await self._authorized():
+            await self.send_json({
+                "type": "player.time_pong", "schema_version": 1,
+                "id": probe["id"], "client_send": probe["client_send"],
+                "server_receive": received_at, "server_send": time.time(),
+            })
 
     async def player_vote_received(self, event):
         vote_id = event.get("vote_id")
@@ -133,10 +175,14 @@ class PlayerConsumer(AsyncJsonWebsocketConsumer):
             and type(pleasant) is int and pleasant in (0, 1)
             and await self._authorized()
         ):
-            await self.send_json({
+            message = {
                 "type": "player.vote_received", "schema_version": 1,
                 "vote_id": vote_id, "pleasant": pleasant,
-            })
+            }
+            play_at = event.get("play_at")
+            if type(play_at) in (int, float) and abs(play_at) <= 1e15 and math.isfinite(play_at):
+                message["play_at"] = play_at
+            await self.send_json(message)
 
     async def close(self, code=None, reason=None):
         if not self.close_sent and not self.disconnected:

@@ -62,6 +62,7 @@ class SoundDevicePlayer(CommunalPlayer):
         fs=None,
         fade_time_ms=8000,
         blocksize=1024,
+        latency=0.1,
         master_gain=0.7,
         device=None,
         layout_override=None,
@@ -136,13 +137,20 @@ class SoundDevicePlayer(CommunalPlayer):
         self._positions = default_source_azimuths(8)
         self._pos_idx = 0
 
-        # Initialize Stream
+        # Initialize Stream. The callback is Python, so it must take the GIL,
+        # and any thread holding it (the TUI, GC, a backgrounded app losing its
+        # core) delays the real-time thread. PortAudio's "high" latency is only
+        # ~44 ms on CoreAudio, two blocks, and a missed deadline is an audible
+        # skipped cycle. Ambient loops don't need low latency, and
+        # outputBufferDacTime already includes it, so synchronization is
+        # unaffected by a deeper buffer.
         self.stream = sd.OutputStream(
             samplerate=self.fs,
             channels=self.channels,
             device=self.device,
             callback=self._audio_callback,
             blocksize=blocksize,
+            latency=latency,
             dtype="float32",
         )
         self.stream.start()

@@ -1,3 +1,4 @@
+import gc
 import os
 import json
 import argparse
@@ -85,6 +86,11 @@ def main(
     )
     print(f"Speaker layout: {player.layout.describe()}")
     app = CosoundPlayerApp(api_key=api_key, manifest=manifest, player=player)
+    # A full collection holds the GIL throughout, and it was measured at 28–45 ms,
+    # longer than the audio thread can wait. Everything loaded so far lives for
+    # the whole run, so move it out of the collector's reach.
+    gc.collect()
+    gc.freeze()
     app.run()
 
 

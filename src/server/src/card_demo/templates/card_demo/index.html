@@ -39,14 +39,24 @@
         }
 
         [data-card-demo] {
-            width: 18.5rem;
+            container-type: inline-size;
+            width: var(--card-width);
+            height: var(--card-height);
             max-width: none;
-            transform: scale(var(--card-scale-x), var(--card-scale-y));
+            transform: scale(var(--card-scale));
             transform-origin: top left;
         }
 
+        [data-card-demo] > div {
+            width: 100%;
+            max-width: none;
+            height: 100%;
+        }
+
         [data-card-demo] [data-core-card] {
-            height: 31.5rem;
+            width: 100%;
+            height: 100%;
+            min-height: 0;
             border-radius: 1.125rem;
             background-color: var(--card-shell);
             box-shadow: 0 0 0 8px var(--ring-surface);
@@ -63,6 +73,21 @@
 
         [data-card-demo] [data-card-demo-master-shell] {
             --tw-ring-color: var(--card-master-ring);
+        }
+
+        [data-card-demo] [data-card-demo-master] {
+            height: clamp(1.5rem, 10cqw, 2rem);
+        }
+
+        [data-card-demo-logo-box] {
+            container-type: size;
+            margin-bottom: clamp(1rem, calc(10cqw - 0.5rem), 1.5rem);
+        }
+
+        [data-card-demo-logo-frame] {
+            box-sizing: border-box;
+            padding-block: clamp(0.25rem, 12cqh, 0.75rem);
+            padding-inline: clamp(0.5rem, 8cqw, 1.5rem);
         }
 
         .card-demo-hue-range {
@@ -165,7 +190,7 @@
                    class="z-50 max-h-[calc(100vh-4rem)] w-80 shrink-0 overflow-y-auto rounded-2xl border border-base-content/15 bg-base-200/95 p-4 shadow-xl backdrop-blur xl:sticky xl:top-8">
                 <div class="mb-4">
                     <h1 class="text-lg font-bold">Print sheet</h1>
-                    <p class="mt-1 text-sm opacity-70">US Letter · portrait business cards</p>
+                    <p class="mt-1 text-sm opacity-70">US Letter · dimensions in millimetres</p>
                 </div>
                 <fieldset class="mt-5 space-y-4">
                     <legend class="mb-3 text-xs font-bold uppercase tracking-[0.16em] opacity-60">Colors</legend>
@@ -209,33 +234,33 @@
                     <label class="block" for="card-demo-width">
                         <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
                             <span>Card width</span>
-                            <output for="card-demo-width" x-text="`${Number(cardWidthIn).toFixed(2)} in`">2.00 in</output>
+                            <output for="card-demo-width" x-text="`${Number(cardWidthMm).toFixed(1)} mm`">50.8 mm</output>
                         </span>
                         <input id="card-demo-width"
                                data-card-width-slider
                                type="range"
-                               min="1.5"
-                               max="2"
-                               step="0.05"
-                               :value="cardWidthIn"
+                               min="35"
+                               max="100"
+                               step="0.1"
+                               x-model.number="cardWidthMm"
                                @input="setCardWidth($event.target.value)"
-                               :aria-valuetext="`${Number(cardWidthIn).toFixed(2)} inches`"
+                               :aria-valuetext="`${Number(cardWidthMm).toFixed(1)} millimetres`"
                                class="range range-xs w-full" />
                     </label>
                     <label class="block" for="card-demo-height">
                         <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
                             <span>Card height</span>
-                            <output for="card-demo-height" x-text="`${Number(cardHeightIn).toFixed(2)} in`">3.50 in</output>
+                            <output for="card-demo-height" x-text="`${Number(cardHeightMm).toFixed(1)} mm`">88.9 mm</output>
                         </span>
                         <input id="card-demo-height"
                                data-card-height-slider
                                type="range"
-                               min="2.5"
-                               max="3.5"
-                               step="0.05"
-                               :value="cardHeightIn"
+                               min="73.1"
+                               max="150"
+                               step="0.1"
+                               x-model.number="cardHeightMm"
                                @input="setCardHeight($event.target.value)"
-                               :aria-valuetext="`${Number(cardHeightIn).toFixed(2)} inches`"
+                               :aria-valuetext="`${Number(cardHeightMm).toFixed(1)} millimetres`"
                                class="range range-xs w-full" />
                     </label>
                     <label class="block" for="card-demo-scale">
@@ -247,10 +272,9 @@
                                data-card-scale-slider
                                type="range"
                                min="80"
-                               max="100"
+                               max="200"
                                step="1"
-                               :value="overallScale"
-                               @input="setOverallScale($event.target.value)"
+                               x-model.number="overallScale"
                                :aria-valuetext="`${Math.round(overallScale)} percent`"
                                class="range range-xs w-full" />
                     </label>
@@ -270,35 +294,10 @@
                                :aria-valuetext="`${Number(cardGapIn).toFixed(2)} inches`"
                                class="range range-xs w-full" />
                     </label>
+                    <p class="text-xs leading-relaxed opacity-60">Width and height are true print dimensions. The paired dimension adjusts only when needed to preserve the square artwork and the lower card area.</p>
                 </fieldset>
                 <fieldset class="mt-5 space-y-4 border-t border-base-content/10 pt-4">
                     <legend class="mb-3 text-xs font-bold uppercase tracking-[0.16em] opacity-60">Card content</legend>
-                    <label class="block" for="card-demo-flavor">
-                        <span class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em]">Flavor text</span>
-                        <textarea id="card-demo-flavor"
-                                  data-flavor-text-input
-                                  rows="3"
-                                  maxlength="500"
-                                  x-model="flavorText"
-                                  placeholder="Write the card's flavor text"
-                                  class="textarea textarea-sm w-full bg-base-100"></textarea>
-                    </label>
-                    <label class="block" for="card-demo-flavor-size">
-                        <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
-                            <span>Flavor size</span>
-                            <output for="card-demo-flavor-size" x-text="`${Math.round(flavorTextSize)} px`">12 px</output>
-                        </span>
-                        <input id="card-demo-flavor-size"
-                               data-flavor-size-slider
-                               type="range"
-                               min="8"
-                               max="28"
-                               step="1"
-                               :value="flavorTextSize"
-                               @input="setFlavorTextSize($event.target.value)"
-                               :aria-valuetext="`${Math.round(flavorTextSize)} pixels`"
-                               class="range range-xs w-full" />
-                    </label>
                     <label class="block" for="card-demo-indicator-text">
                         <span class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em]">Layer indicator text</span>
                         <input id="card-demo-indicator-text"
@@ -475,8 +474,8 @@
                 </fieldset>
                 <div data-sheet-summary
                      class="mt-5 rounded-xl bg-base-100 px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-[0.12em] shadow-inner"
-                     x-text="`${sheetCount} cards · ${sheetColumns} × ${sheetRows} · ${effectiveCardWidthIn.toFixed(2)} × ${effectiveCardHeightIn.toFixed(2)} in`">
-                    6 cards · 3 × 2 · 2.00 × 3.50 in
+                     x-text="`${sheetCount} cards · ${sheetColumns} × ${sheetRows} · ${Number(cardWidthMm).toFixed(1)} × ${Number(cardHeightMm).toFixed(1)} mm · ${Math.round(overallScale)}%`">
+                    6 cards · 3 × 2 · 50.8 × 88.9 mm · 100%
                 </div>
             </aside>
             <section data-print-sheet-stage

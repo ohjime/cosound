@@ -30,13 +30,15 @@ function colorNameForHue(value) {
     return "Pink";
 }
 
-const LETTER_WIDTH_IN = 8.5;
-const LETTER_HEIGHT_IN = 11;
-const SHEET_PADDING_IN = 0.25;
+const LETTER_WIDTH_MM = 215.9;
+const LETTER_HEIGHT_MM = 279.4;
+const SHEET_PADDING_MM = 6.35;
 const MAX_SHEET_CARDS = 12;
-const CARD_BASE_WIDTH_PX = 296;
-const CARD_BASE_HEIGHT_PX = 504;
-const CSS_PIXELS_PER_INCH = 96;
+const MIN_CARD_WIDTH_MM = 35;
+const MAX_CARD_WIDTH_MM = 100;
+const MIN_CARD_HEIGHT_MM = 73.1;
+const MAX_CARD_HEIGHT_MM = 150;
+const MIN_CARD_BODY_MM = 38.1;
 
 /** UI-only facsimile of the Explore card. It never creates or loads audio. */
 export function cardDemo(initialLayers = []) {
@@ -47,12 +49,10 @@ export function cardDemo(initialLayers = []) {
         mixSaved: false,
         cardHue: 128,
         ringHue: 128,
-        cardWidthIn: 2,
-        cardHeightIn: 3.5,
+        cardWidthMm: 50.8,
+        cardHeightMm: 88.9,
         overallScale: 100,
         cardGapIn: 0.25,
-        flavorText: "",
-        flavorTextSize: 12,
         indicatorText: "",
         indicatorTextSize: 14,
         indicatorCentered: false,
@@ -64,7 +64,7 @@ export function cardDemo(initialLayers = []) {
         uploadedArtworkUrl: "",
         uploadedArtworkName: "",
         artworkError: "",
-        showArtworkText: false,
+        showArtworkText: true,
         artworkTitle: "",
         artistName: "",
         artworkTextSize: 18,
@@ -100,23 +100,24 @@ export function cardDemo(initialLayers = []) {
             return this.cardColorName;
         },
         get scaleRatio() {
-            return clamp(this.overallScale, 80, 100) / 100;
+            return clamp(this.overallScale, 80, 200) / 100;
         },
-        get effectiveCardWidthIn() {
-            return roundTo(clamp(this.cardWidthIn, 1.5, 2) * this.scaleRatio);
+        get effectiveCardWidthMm() {
+            return roundTo(clamp(this.cardWidthMm, MIN_CARD_WIDTH_MM, MAX_CARD_WIDTH_MM) * this.scaleRatio);
         },
-        get effectiveCardHeightIn() {
-            return roundTo(clamp(this.cardHeightIn, 2.5, 3.5) * this.scaleRatio);
+        get effectiveCardHeightMm() {
+            return roundTo(clamp(this.cardHeightMm, MIN_CARD_HEIGHT_MM, MAX_CARD_HEIGHT_MM) * this.scaleRatio);
         },
         get sheetColumns() {
-            const availableWidth = LETTER_WIDTH_IN - SHEET_PADDING_IN * 2;
-            const gap = clamp(this.cardGapIn, 0, 1.25);
-            return Math.max(1, Math.floor((availableWidth + gap) / (this.effectiveCardWidthIn + gap)));
+            const availableWidth = LETTER_WIDTH_MM - SHEET_PADDING_MM * 2;
+            const gap = clamp(this.cardGapIn, 0, 1.25) * 25.4;
+            const columns = Math.floor((availableWidth + gap) / (this.effectiveCardWidthMm + gap));
+            return Math.min(MAX_SHEET_CARDS, Math.max(1, columns));
         },
         get sheetCapacityRows() {
-            const availableHeight = LETTER_HEIGHT_IN - SHEET_PADDING_IN * 2;
-            const gap = clamp(this.cardGapIn, 0, 1.25);
-            return Math.max(1, Math.floor((availableHeight + gap) / (this.effectiveCardHeightIn + gap)));
+            const availableHeight = LETTER_HEIGHT_MM - SHEET_PADDING_MM * 2;
+            const gap = clamp(this.cardGapIn, 0, 1.25) * 25.4;
+            return Math.max(0, Math.floor((availableHeight + gap) / (this.effectiveCardHeightMm + gap)));
         },
         get sheetCount() {
             const capacity = this.sheetColumns * this.sheetCapacityRows;
@@ -129,20 +130,15 @@ export function cardDemo(initialLayers = []) {
         get sheetCopies() {
             return Array.from({ length: this.sheetCount }, (_, index) => index + 1);
         },
-        get cardScaleX() {
-            return (this.effectiveCardWidthIn * CSS_PIXELS_PER_INCH) / CARD_BASE_WIDTH_PX;
-        },
-        get cardScaleY() {
-            return (this.effectiveCardHeightIn * CSS_PIXELS_PER_INCH) / CARD_BASE_HEIGHT_PX;
-        },
         get editorStyle() {
             return [
                 `--card-hue: ${clamp(this.cardHue, 0, 360)}`,
                 `--ring-hue: ${clamp(this.ringHue, 0, 360)}`,
-                `--effective-card-width: ${this.effectiveCardWidthIn}in`,
-                `--effective-card-height: ${this.effectiveCardHeightIn}in`,
-                `--card-scale-x: ${this.cardScaleX}`,
-                `--card-scale-y: ${this.cardScaleY}`,
+                `--card-width: ${clamp(this.cardWidthMm, MIN_CARD_WIDTH_MM, MAX_CARD_WIDTH_MM)}mm`,
+                `--card-height: ${clamp(this.cardHeightMm, MIN_CARD_HEIGHT_MM, MAX_CARD_HEIGHT_MM)}mm`,
+                `--effective-card-width: ${this.effectiveCardWidthMm}mm`,
+                `--effective-card-height: ${this.effectiveCardHeightMm}mm`,
+                `--card-scale: ${this.scaleRatio}`,
                 `--card-gap: ${clamp(this.cardGapIn, 0, 1.25)}in`,
                 `--sheet-columns: ${this.sheetColumns}`,
             ].join("; ");
@@ -155,19 +151,24 @@ export function cardDemo(initialLayers = []) {
             this.ringHue = clamp(value, 0, 360);
         },
         setCardWidth(value) {
-            this.cardWidthIn = clamp(value, 1.5, 2);
+            this.cardWidthMm = roundTo(clamp(value, MIN_CARD_WIDTH_MM, MAX_CARD_WIDTH_MM), 1);
+            const minimumHeight = this.cardWidthMm + MIN_CARD_BODY_MM;
+            if (this.cardHeightMm < minimumHeight) {
+                this.cardHeightMm = roundTo(clamp(minimumHeight, MIN_CARD_HEIGHT_MM, MAX_CARD_HEIGHT_MM), 1);
+            }
         },
         setCardHeight(value) {
-            this.cardHeightIn = clamp(value, 2.5, 3.5);
+            this.cardHeightMm = roundTo(clamp(value, MIN_CARD_HEIGHT_MM, MAX_CARD_HEIGHT_MM), 1);
+            const maximumWidth = this.cardHeightMm - MIN_CARD_BODY_MM;
+            if (this.cardWidthMm > maximumWidth) {
+                this.cardWidthMm = roundTo(clamp(maximumWidth, MIN_CARD_WIDTH_MM, MAX_CARD_WIDTH_MM), 1);
+            }
         },
         setOverallScale(value) {
-            this.overallScale = clamp(value, 80, 100);
+            this.overallScale = clamp(value, 80, 200);
         },
         setCardGap(value) {
             this.cardGapIn = clamp(value, 0, 1.25);
-        },
-        setFlavorTextSize(value) {
-            this.flavorTextSize = clamp(value, 8, 28);
         },
         setIndicatorTextSize(value) {
             this.indicatorTextSize = clamp(value, 8, 24);

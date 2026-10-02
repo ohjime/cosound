@@ -1,6 +1,5 @@
-{% load static %}
 <c-vars sounds />
-<div class="h-full w-full"
+<div class="w-[18.5rem]"
      data-card-demo
      data-light-mode="true"
      aria-hidden="true"
@@ -8,13 +7,13 @@
     <c-core-deck>
         <c-core-card showExit="false" bgColor="bg-[#1f3f23]" ringColor="ring-[#2d2d2d]">
             {% if sounds %}
-            <figure class="relative mt-7 aspect-square w-full shrink-0 overflow-visible rounded-t-md bg-base-300 ring-7 ring-neutral-content/70">
+            <figure class="relative mx-6 mt-7 overflow-visible rounded-t-md bg-base-300 ring-7 ring-neutral-content/70">
                 <div class="static aspect-square w-full overflow-hidden rounded-t-md">
                     <div data-card-demo-header
-                        class="absolute top-0 z-30 flex w-[calc(100%-2rem)] max-w-[9.375rem] -translate-y-1/2 overflow-hidden rounded-md bg-white ring-4 ring-neutral-content/70"
+                        class="absolute top-0 z-30 flex -translate-y-1/2 overflow-hidden rounded-md bg-white ring-4 ring-neutral-content/70"
                         :class="indicatorCentered ? 'left-1/2 -translate-x-1/2' : 'left-4'">
                         <div data-card-demo-indicator
-                            class="flex h-8 w-full items-center justify-center overflow-hidden bg-slate-700/75 px-2 text-center font-semibold text-white"
+                            class="flex h-8 w-[9.375rem] items-center justify-center overflow-hidden bg-slate-700/75 px-2 text-center font-semibold text-white"
                             :style="`font-size: ${indicatorTextSize}px`">
                             <span data-card-demo-indicator-text
                                 class="block min-w-0 w-full truncate"
@@ -22,10 +21,10 @@
                                 x-text="indicatorText"></span>
                         </div>
                     </div>
-                    <div data-card-demo-figure class="relative grid h-full w-full overflow-hidden rounded-t-md">
+                    <div data-card-demo-figure class="grid h-full w-full">
                         <div aria-hidden="true" class="col-start-1 row-start-1 aspect-square w-68 max-w-full"></div>
                         <div class="col-start-1 row-start-1 min-h-0 min-w-0">
-                            <div class="h-full w-full">
+                            <div class="relative h-full w-full">
                                 <template x-if="uploadedArtworkUrl">
                                     <img data-card-demo-uploaded-artwork
                                         :src="uploadedArtworkUrl"
@@ -50,43 +49,41 @@
                                         </div>
                                     </template>
                                 </div>
+                                <div x-show="showArtworkText"
+                                    style="display: none"
+                                    data-card-demo-artwork-text
+                                    class="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between bg-gradient-to-b from-black/65 via-transparent to-black/65 p-3 pt-8 font-serif italic text-white text-shadow-lg">
+                                    <p class="break-words pr-10 text-left leading-tight"
+                                        :style="`font-size: ${artworkTextSize}px`"
+                                        x-text="artworkTitle"></p>
+                                    <p class="max-w-full break-words self-end pb-1 pr-1 text-right opacity-90"
+                                        :style="`font-size: ${Math.max(8, artworkTextSize * 0.72)}px`"
+                                        x-text="artistName"></p>
+                                </div>
+                                <div x-show="showLikeButton"
+                                    style="display: none"
+                                    data-card-demo-like
+                                    class="absolute top-6.5 right-3 z-30 grid size-8 place-items-center rounded-full bg-black/30 text-white shadow-md backdrop-blur-sm">
+                                    <svg class="size-5 fill-transparent" xmlns="http://www.w3.org/2000/svg"
+                                        viewBox="0 0 24 24" stroke-width="2.2" stroke="currentColor"
+                                        aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                            d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z" />
+                                    </svg>
+                                </div>
                             </div>
-                        </div>
-                        <div x-show="showArtworkText && (artworkTitle || artistName)"
-                            style="display: none"
-                            data-card-demo-artwork-text
-                            class="pointer-events-none absolute inset-0 z-20 bg-gradient-to-b from-black/70 via-transparent to-black/70 font-serif italic text-white text-shadow-lg">
-                            <p data-card-demo-artwork-title
-                                class="absolute top-8 left-3 right-14 max-h-[45%] overflow-hidden break-words [overflow-wrap:anywhere] text-left leading-tight"
-                                :style="`font-size: ${artworkTextSize}px`"
-                                x-text="artworkTitle"></p>
-                            <p data-card-demo-artist-name
-                                class="absolute right-3 bottom-3 left-3 max-h-[30%] overflow-hidden break-words [overflow-wrap:anywhere] text-right leading-tight opacity-90"
-                                :style="`font-size: ${Math.max(8, artworkTextSize * 0.72)}px`"
-                                x-text="artistName"></p>
-                        </div>
-                        <div x-show="showLikeButton"
-                            style="display: none"
-                            data-card-demo-like
-                            class="absolute top-7 right-3 z-30 grid size-9 place-items-center rounded-full bg-black/60 text-white shadow-md ring-1 ring-white/70 backdrop-blur-sm">
-                            <svg class="size-5 fill-current" xmlns="http://www.w3.org/2000/svg"
-                                viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"
-                                aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round"
-                                    d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z" />
-                            </svg>
                         </div>
                     </div>
                 </div>
                 <button x-show="showLeftArrow" type="button" @click="move(-1)" aria-label="Previous carousel panel"
-                    class="absolute left-0 top-1/2 z-10 flex w-[30%] max-w-20 -translate-y-1/2 scale-x-75 scale-y-150 cursor-pointer items-center justify-center text-amber-600 stroke-white">
+                    class="absolute -left-11.5 top-1/2 z-10 flex w-20 -translate-y-1/2 scale-x-75 scale-y-150 cursor-pointer items-center justify-center text-amber-600 stroke-white">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-full w-full" viewBox="0 -960 960 960"
                         fill="currentColor">
                         <path d="M560-280 360-480l200-200v400Z" stroke-width="40" stroke-linejoin="round" />
                     </svg>
                 </button>
                 <button x-show="showRightArrow" type="button" @click="move(1)" :disabled="isLast" aria-label="Next carousel panel"
-                    class="absolute right-0 top-1/2 z-10 flex w-[30%] max-w-20 -translate-y-1/2 scale-x-75 scale-y-150 cursor-pointer items-center justify-center text-amber-600 stroke-white disabled:cursor-not-allowed disabled:text-neutral-600 disabled:stroke-neutral-500">
+                    class="absolute -right-11.5 top-1/2 z-10 flex w-20 -translate-y-1/2 scale-x-75 scale-y-150 cursor-pointer items-center justify-center text-amber-600 stroke-white disabled:cursor-not-allowed disabled:text-neutral-600 disabled:stroke-neutral-500">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-full w-full" viewBox="0 -960 960 960"
                         fill="currentColor">
                         <path d="M400-280v-400l200 200-200 200Z" stroke-width="40" stroke-linejoin="round" />
@@ -147,21 +144,18 @@
                     </button>
                 </div>
             </div>
-            <div data-card-demo-logo-box
-                class="relative mx-4 mb-4 min-h-0 flex-1 overflow-hidden rounded-xs rounded-b-2xl bg-white/65 text-black ring-5 ring-amber-600/60">
-                <div data-card-demo-logo-frame class="flex h-full w-full items-center justify-center overflow-hidden">
-                    <img data-card-demo-logo
-                        src="{% static 'core/img/logo.png' %}"
-                        alt="CoSound"
-                        width="633"
-                        height="394"
-                        class="block h-auto w-auto max-h-full max-w-full object-contain" />
+            <div data-card-demo-flavor-box
+                class="relative mx-4 mb-4 h-[9.25rem] shrink-0 overflow-hidden rounded-xs rounded-b-2xl bg-white/65 text-black ring-5 ring-amber-600/60">
+                <div class="h-full overflow-hidden px-4 py-2">
+                    <div data-card-demo-body class="h-full w-full overflow-hidden whitespace-pre-wrap break-words font-serif italic" aria-label="Flavor text area"
+                        :style="`font-size: ${flavorTextSize}px`"
+                        x-text="flavorText"></div>
                 </div>
             </div>
             <div data-card-demo-master-shell
-                class="absolute bottom-0 left-1/2 z-10 flex w-[calc(100%-2rem)] max-w-[13.25rem] -translate-x-1/2 justify-center overflow-hidden rounded-t-2xl bg-[#f3f4f6] ring-6 ring-[#2d2d2d]/60 drop-shadow-2xl">
+                class="absolute bottom-0 left-1/2 z-10 flex w-fit -translate-x-1/2 justify-center overflow-hidden rounded-t-2xl bg-[#f3f4f6] ring-6 ring-[#2d2d2d]/60 drop-shadow-2xl">
                 <div data-card-demo-master
-                    class="flex h-8 w-full items-center justify-center px-3"
+                    class="flex h-8 w-[13.25rem] items-center justify-center px-3"
                     style="color: #2d2d2d">
                     <span data-card-demo-master-text
                         class="block w-full truncate text-center text-xs font-bold uppercase tracking-[0.18em]"

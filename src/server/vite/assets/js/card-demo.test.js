@@ -49,6 +49,8 @@ test("the fixed-palette demo exposes a continuous card hue", () => {
 test("card content customization starts blank with conservative visual defaults", () => {
     const demo = cardDemo(layers());
 
+    assert.equal(demo.flavorText, "");
+    assert.equal(demo.flavorTextSize, 12);
     assert.equal(demo.indicatorText, "");
     assert.equal(demo.indicatorTextSize, 14);
     assert.equal(demo.indicatorCentered, false);
@@ -60,7 +62,7 @@ test("card content customization starts blank with conservative visual defaults"
     assert.equal(demo.uploadedArtworkUrl, "");
     assert.equal(demo.uploadedArtworkName, "");
     assert.equal(demo.artworkError, "");
-    assert.equal(demo.showArtworkText, true);
+    assert.equal(demo.showArtworkText, false);
     assert.equal(demo.artworkTitle, "");
     assert.equal(demo.artistName, "");
     assert.equal(demo.artworkTextSize, 18);
@@ -71,6 +73,11 @@ test("card content customization starts blank with conservative visual defaults"
 test("content sizes and the bottom-arrow value stay within their control ranges", () => {
     const demo = cardDemo(layers());
     const originalGains = demo.layers.map((layer) => layer.gain);
+
+    demo.setFlavorTextSize(-1);
+    assert.equal(demo.flavorTextSize, 8);
+    demo.setFlavorTextSize(200);
+    assert.equal(demo.flavorTextSize, 28);
 
     demo.setIndicatorTextSize(-1);
     assert.equal(demo.indicatorTextSize, 8);
@@ -158,25 +165,18 @@ test("card color is independent while ring and paper share one color", () => {
 test("the Letter sheet relays out cards as scale and gap change", () => {
     const demo = cardDemo(layers());
 
-    assert.equal(demo.effectiveCardWidthMm, 50.8);
-    assert.equal(demo.effectiveCardHeightMm, 88.9);
+    assert.equal(demo.effectiveCardWidthIn, 2);
+    assert.equal(demo.effectiveCardHeightIn, 3.5);
     assert.equal(demo.sheetColumns, 3);
     assert.equal(demo.sheetRows, 2);
     assert.equal(demo.sheetCount, 6);
 
     demo.setOverallScale(80);
-    assert.equal(demo.effectiveCardWidthMm, 40.64);
-    assert.equal(demo.effectiveCardHeightMm, 71.12);
+    assert.equal(demo.effectiveCardWidthIn, 1.6);
+    assert.equal(demo.effectiveCardHeightIn, 2.8);
     assert.equal(demo.sheetColumns, 4);
     assert.equal(demo.sheetRows, 3);
     assert.equal(demo.sheetCount, 12);
-
-    demo.setOverallScale(150);
-    assert.equal(demo.effectiveCardWidthMm, 76.2);
-    assert.equal(demo.effectiveCardHeightMm, 133.35);
-    assert.equal(demo.sheetColumns, 2);
-    assert.equal(demo.sheetRows, 1);
-    assert.equal(demo.sheetCount, 2);
 
     demo.setOverallScale(100);
     demo.setCardGap(1.25);
@@ -186,36 +186,20 @@ test("the Letter sheet relays out cards as scale and gap change", () => {
 });
 
 
-test("raw millimetre dimensions reserve the lower area separately from uniform scale", () => {
+test("business-card dimensions and layout controls stay within print bounds", () => {
     const demo = cardDemo(layers());
 
-    demo.setCardWidth(120);
-    assert.equal(demo.cardHeightMm, 138.1);
-    demo.setCardHeight(200);
-    assert.equal(demo.cardWidthMm, 100);
-    assert.equal(demo.cardHeightMm, 150);
-
-    demo.setOverallScale(250);
-    assert.equal(demo.overallScale, 200);
-    assert.equal(demo.effectiveCardWidthMm, 200);
-    assert.equal(demo.effectiveCardHeightMm, 300);
-    assert.equal(demo.sheetCount, 0);
-    assert.equal(demo.sheetRows, 0);
-
+    demo.setCardWidth(5);
+    demo.setCardHeight(5);
     demo.setOverallScale(40);
-    assert.equal(demo.overallScale, 80);
-
-    demo.setCardWidth(0);
-    demo.setCardHeight(0);
     demo.setCardGap(-1);
 
-    assert.equal(demo.cardWidthMm, 35);
-    assert.equal(demo.cardHeightMm, 73.1);
+    assert.equal(demo.cardWidthIn, 2);
+    assert.equal(demo.cardHeightIn, 3.5);
+    assert.equal(demo.overallScale, 80);
     assert.equal(demo.cardGapIn, 0);
-    assert.match(demo.editorStyle, /--card-width: 35mm/);
-    assert.match(demo.editorStyle, /--card-height: 73\.1mm/);
-    assert.match(demo.editorStyle, /--card-scale: 0\.8/);
-    assert.doesNotMatch(demo.editorStyle, /card-scale-[xy]/);
+    assert.match(demo.editorStyle, /--effective-card-width: 1\.6in/);
+    assert.match(demo.editorStyle, /--effective-card-height: 2\.8/);
 });
 
 

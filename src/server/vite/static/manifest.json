@@ -56,12 +56,12 @@
     "src": "assets/fonts/sofia/sofia-latin.woff2"
   },
   "assets/js/main.js": {
-    "file": "vite/test-D6EZ3kRR.js",
+    "file": "vite/test-Bojoy9kp.js",
     "name": "test",
     "src": "assets/js/main.js",
     "isEntry": true,
     "css": [
-      "vite/test-DdMceCTR.css"
+      "vite/test-CY-camY_.css"
     ],
     "assets": [
       "vite/caveat-latin-variable-CP6HlsNg.woff2",

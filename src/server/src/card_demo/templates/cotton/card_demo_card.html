@@ -1,5 +1,5 @@
 <c-vars sounds />
-<div class="w-[18.5rem]"
+<div class="h-full w-full"
      data-card-demo
      data-light-mode="true"
      aria-hidden="true"
@@ -7,29 +7,28 @@
     <c-core-deck>
         <c-core-card showExit="false" bgColor="bg-[#1f3f23]" ringColor="ring-[#2d2d2d]">
             {% if sounds %}
-            <figure class="relative mx-6 mt-7 overflow-visible rounded-t-md bg-base-300 ring-7 ring-neutral-content/70">
-                <div class="static aspect-square w-full overflow-hidden rounded-t-md">
+            <div data-card-demo-media class="relative shrink-0">
+                <figure data-card-demo-artwork-frame class="relative aspect-square w-full rounded-t-md bg-base-300 ring-7 ring-neutral-content/70">
                     <div data-card-demo-header
                         class="absolute top-0 z-30 flex -translate-y-1/2 overflow-hidden rounded-md bg-white ring-4 ring-neutral-content/70"
                         :class="indicatorCentered ? 'left-1/2 -translate-x-1/2' : 'left-4'">
                         <div data-card-demo-indicator
-                            class="flex h-8 w-[9.375rem] items-center justify-center overflow-hidden bg-slate-700/75 px-2 text-center font-semibold text-white"
-                            :style="`font-size: ${indicatorTextSize}px`">
+                            class="flex h-8 min-w-0 max-w-full items-center justify-center overflow-hidden bg-slate-700/75 px-2 text-center font-semibold text-white"
+                            :style="`font-size: ${indicatorTextSize}px; letter-spacing: ${indicatorTextSpacing}px`">
                             <span data-card-demo-indicator-text
-                                class="block min-w-0 w-full truncate"
+                                class="block min-w-0 max-w-full truncate"
                                 :title="indicatorText || null"
                                 x-text="indicatorText"></span>
                         </div>
                     </div>
-                    <div data-card-demo-figure class="grid h-full w-full">
-                        <div aria-hidden="true" class="col-start-1 row-start-1 aspect-square w-68 max-w-full"></div>
-                        <div class="col-start-1 row-start-1 min-h-0 min-w-0">
+                    <div data-card-demo-artwork-viewport class="absolute inset-0 overflow-hidden rounded-t-md">
+                        <div data-card-demo-figure class="h-full w-full">
                             <div class="relative h-full w-full">
                                 <template x-if="uploadedArtworkUrl">
                                     <img data-card-demo-uploaded-artwork
                                         :src="uploadedArtworkUrl"
                                         :alt="artworkTitle || uploadedArtworkName || 'Uploaded artwork'"
-                                        class="absolute inset-0 h-full w-full object-cover" />
+                                        class="absolute inset-0 h-full w-full object-cover object-center" />
                                 </template>
                                 <div x-show="!uploadedArtworkUrl"
                                     data-card-demo-carousel @scroll.debounce.5ms="updateActive($event.currentTarget)"
@@ -74,26 +73,26 @@
                             </div>
                         </div>
                     </div>
-                </div>
-                <button x-show="showLeftArrow" type="button" @click="move(-1)" aria-label="Previous carousel panel"
-                    class="absolute -left-11.5 top-1/2 z-10 flex w-20 -translate-y-1/2 scale-x-75 scale-y-150 cursor-pointer items-center justify-center text-amber-600 stroke-white">
+                    <button x-show="showLeftArrow" data-card-demo-side-arrow="left" type="button" @click="move(-1)" aria-label="Previous carousel panel"
+                    class="absolute top-1/2 z-10 flex aspect-square cursor-pointer items-center justify-center text-amber-600 stroke-white">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-full w-full" viewBox="0 -960 960 960"
                         fill="currentColor">
                         <path d="M560-280 360-480l200-200v400Z" stroke-width="40" stroke-linejoin="round" />
                     </svg>
-                </button>
-                <button x-show="showRightArrow" type="button" @click="move(1)" :disabled="isLast" aria-label="Next carousel panel"
-                    class="absolute -right-11.5 top-1/2 z-10 flex w-20 -translate-y-1/2 scale-x-75 scale-y-150 cursor-pointer items-center justify-center text-amber-600 stroke-white disabled:cursor-not-allowed disabled:text-neutral-600 disabled:stroke-neutral-500">
+                    </button>
+                    <button x-show="showRightArrow" data-card-demo-side-arrow="right" type="button" @click="move(1)" :disabled="isLast" aria-label="Next carousel panel"
+                    class="absolute top-1/2 z-10 flex aspect-square cursor-pointer items-center justify-center text-amber-600 stroke-white disabled:cursor-not-allowed disabled:text-neutral-600 disabled:stroke-neutral-500">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-full w-full" viewBox="0 -960 960 960"
                         fill="currentColor">
                         <path d="M400-280v-400l200 200-200 200Z" stroke-width="40" stroke-linejoin="round" />
                     </svg>
-                </button>
-            </figure>
-            <div class="z-20 flex w-full flex-row items-center justify-center gap-3 px-5.5">
+                    </button>
+                </figure>
+            </div>
+            <div data-card-demo-slider-row class="z-20 flex flex-row items-center justify-center">
                 <div class="tooltip tooltip-right z-30 shrink-0"
                     :data-tip="currentLayer?.mute ? 'Unmute this layer' : 'Mute this layer'">
-                    <button type="button" :aria-label="currentLayer?.mute ? 'Unmute this layer' : 'Mute this layer'"
+                    <button data-card-demo-slider-control type="button" :aria-label="currentLayer?.mute ? 'Unmute this layer' : 'Mute this layer'"
                         :aria-pressed="Boolean(currentLayer?.mute)"
                         class="btn btn-xs btn-circle border-none bg-neutral-content text-white focus:outline-none"
                         :class="isSilenced(currentLayer) ? '!bg-amber-500 !text-amber-900' : ''"
@@ -105,23 +104,23 @@
                         </svg>
                     </button>
                 </div>
-                <div class="w-full min-w-0 touch-none select-none" x-data="{ dragging: false }"
+                <div data-card-demo-slider-track-shell class="min-w-0 flex-1 touch-none select-none" x-data="{ dragging: false }"
                     @pointermove.window="if (dragging) setGainFromPointer($event, $refs.track)"
                     @pointerup.window="dragging = false" @pointercancel.window="dragging = false">
-                    <div x-ref="track" role="slider" tabindex="0" aria-label="Current layer volume" aria-valuemin="0"
+                    <div data-card-demo-volume-track x-ref="track" role="slider" tabindex="0" aria-label="Current layer volume" aria-valuemin="0"
                         aria-valuemax="100" :aria-valuenow="Math.round(currentLayer?.gain ?? 0)"
-                        class="relative my-6 h-2 w-full cursor-pointer rounded-full bg-amber-500 transition-[filter]"
+                        class="relative h-2 w-full cursor-pointer rounded-full bg-amber-500 transition-[filter]"
                         :class="isSilenced(currentLayer) ? 'grayscale' : ''"
                         @pointerdown="dragging = true; setGainFromPointer($event, $refs.track)"
                         @keydown.left.prevent="stepGain(-5)" @keydown.down.prevent="stepGain(-5)"
                         @keydown.right.prevent="stepGain(5)" @keydown.up.prevent="stepGain(5)">
                         <div x-show="showBottomArrow"
                             data-card-demo-bottom-arrow
-                            class="pointer-events-none absolute top-1/2 flex size-22 -translate-x-1/2 -translate-y-16 scale-x-125 scale-y-75 items-center justify-center transition-[filter,scale,opacity] duration-300"
+                            class="pointer-events-none absolute top-1/2 flex aspect-square items-center justify-center transition-[filter,opacity] duration-300"
                             :class="isSilenced(currentLayer) ? 'grayscale' : ''"
                             :style="`left: ${bottomArrowValue}%`">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"
-                                class="pointer-events-none rotate-90 text-amber-600 stroke-white drop-shadow-md"
+                                class="pointer-events-none h-full w-full rotate-90 text-amber-600 stroke-white drop-shadow-md"
                                 fill="currentColor">
                                 <path d="M400-280v-400l200 200-200 200Z" stroke-width="40" stroke-linejoin="round" />
                             </svg>
@@ -130,7 +129,7 @@
                 </div>
                 <div class="tooltip tooltip-left z-30 shrink-0"
                     :data-tip="currentLayer?.isolated ? 'Stop isolating this layer' : 'Isolate this layer'">
-                    <button type="button"
+                    <button data-card-demo-slider-control type="button"
                         :aria-label="currentLayer?.isolated ? 'Stop isolating this layer' : 'Isolate this layer'"
                         :aria-pressed="Boolean(currentLayer?.isolated)"
                         class="btn btn-xs btn-circle shrink-0 border-none bg-neutral-content text-white focus:outline-none"
@@ -145,11 +144,23 @@
                 </div>
             </div>
             <div data-card-demo-flavor-box
-                class="relative mx-4 mb-4 h-[9.25rem] shrink-0 overflow-hidden rounded-xs rounded-b-2xl bg-white/65 text-black ring-5 ring-amber-600/60">
-                <div class="h-full overflow-hidden px-4 py-2">
+                class="relative min-h-0 flex-1 overflow-hidden rounded-xs rounded-b-2xl bg-white/65 text-black ring-5 ring-amber-600/60">
+                <div class="relative h-full overflow-hidden px-4 py-2">
                     <div data-card-demo-body class="h-full w-full overflow-hidden whitespace-pre-wrap break-words font-serif italic" aria-label="Flavor text area"
                         :style="`font-size: ${flavorTextSize}px`"
                         x-text="flavorText"></div>
+                    <template x-if="flavorOverlayUrl">
+                        <div data-card-demo-flavor-overlay-shell class="pointer-events-none absolute inset-0 z-10">
+                            <img data-card-demo-flavor-overlay
+                                :src="flavorOverlayUrl"
+                                alt=""
+                                class="absolute inset-0 h-full w-full object-contain" />
+                            <div data-card-demo-flavor-overlay-tint
+                                aria-hidden="true"
+                                :style="flavorOverlayTintStyle"
+                                class="absolute inset-0"></div>
+                        </div>
+                    </template>
                 </div>
             </div>
             <div data-card-demo-master-shell
@@ -158,7 +169,8 @@
                     class="flex h-8 w-[13.25rem] items-center justify-center px-3"
                     style="color: #2d2d2d">
                     <span data-card-demo-master-text
-                        class="block w-full truncate text-center text-xs font-bold uppercase tracking-[0.18em]"
+                        class="block w-full truncate text-center font-bold uppercase"
+                        :style="`font-size: ${masterTextSize}px; letter-spacing: ${masterTextSpacing}px; font-stretch: normal`"
                         :title="masterText || null"
                         x-text="masterText"></span>
                 </div>

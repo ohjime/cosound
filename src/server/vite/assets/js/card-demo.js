@@ -34,9 +34,11 @@ const LETTER_WIDTH_IN = 8.5;
 const LETTER_HEIGHT_IN = 11;
 const SHEET_PADDING_IN = 0.25;
 const MAX_SHEET_CARDS = 12;
-const CARD_BASE_WIDTH_PX = 296;
-const CARD_BASE_HEIGHT_PX = 504;
-const CSS_PIXELS_PER_INCH = 96;
+const MIN_CARD_WIDTH_IN = 1.5;
+const MIN_CARD_HEIGHT_IN = 2.5;
+const MIN_CARD_CONTENT_ALLOWANCE_IN = 1.125;
+const MAX_CARD_WIDTH_IN = LETTER_WIDTH_IN;
+const MAX_CARD_HEIGHT_IN = LETTER_HEIGHT_IN;
 
 /** UI-only facsimile of the Explore card. It never creates or loads audio. */
 export function cardDemo(initialLayers = []) {
@@ -46,17 +48,28 @@ export function cardDemo(initialLayers = []) {
         paused: false,
         mixSaved: false,
         cardHue: 128,
+        cardBrightness: 18.4,
         ringHue: 128,
+        ringBrightness: 20,
         cardWidthIn: 2,
         cardHeightIn: 3.5,
         overallScale: 100,
         cardGapIn: 0.25,
         flavorText: "",
         flavorTextSize: 12,
+        flavorOverlayUrl: "",
+        flavorOverlayName: "",
+        flavorOverlayError: "",
+        flavorOverlayTintHue: 128,
+        flavorOverlayTintBrightness: 50,
+        flavorOverlayTintStrength: 0,
         indicatorText: "",
         indicatorTextSize: 14,
+        indicatorTextSpacing: 0,
         indicatorCentered: false,
         masterText: "COSOUND",
+        masterTextSize: 12,
+        masterTextSpacing: 2.2,
         showLeftArrow: true,
         showRightArrow: true,
         showBottomArrow: true,
@@ -96,25 +109,66 @@ export function cardDemo(initialLayers = []) {
         get ringColorName() {
             return colorNameForHue(this.ringHue);
         },
+        get flavorOverlayTintName() {
+            return colorNameForHue(this.flavorOverlayTintHue);
+        },
         get colorName() {
             return this.cardColorName;
         },
         get scaleRatio() {
             return clamp(this.overallScale, 80, 100) / 100;
         },
+        get minimumCardWidthIn() {
+            return roundTo(MIN_CARD_WIDTH_IN * this.scaleRatio, 2);
+        },
+        get maximumCardWidthIn() {
+            return MAX_CARD_WIDTH_IN;
+        },
+        get minimumCardHeightIn() {
+            return roundTo(Math.min(
+                MAX_CARD_HEIGHT_IN,
+                Math.max(
+                    MIN_CARD_HEIGHT_IN * this.scaleRatio,
+                    this.effectiveCardWidthIn + MIN_CARD_CONTENT_ALLOWANCE_IN,
+                ),
+            ), 2);
+        },
+        get maximumCardHeightIn() {
+            return MAX_CARD_HEIGHT_IN;
+        },
         get effectiveCardWidthIn() {
-            return roundTo(clamp(this.cardWidthIn, 1.5, 2) * this.scaleRatio);
+            return roundTo(clamp(
+                this.cardWidthIn * this.scaleRatio,
+                this.minimumCardWidthIn,
+                MAX_CARD_WIDTH_IN,
+            ), 2);
         },
         get effectiveCardHeightIn() {
-            return roundTo(clamp(this.cardHeightIn, 2.5, 3.5) * this.scaleRatio);
+            return roundTo(clamp(
+                this.cardHeightIn * this.scaleRatio,
+                this.minimumCardHeightIn,
+                MAX_CARD_HEIGHT_IN,
+            ), 2);
+        },
+        get sheetPaddingXIn() {
+            return roundTo(Math.min(
+                SHEET_PADDING_IN,
+                Math.max(0, (LETTER_WIDTH_IN - this.effectiveCardWidthIn) / 2),
+            ));
+        },
+        get sheetPaddingYIn() {
+            return roundTo(Math.min(
+                SHEET_PADDING_IN,
+                Math.max(0, (LETTER_HEIGHT_IN - this.effectiveCardHeightIn) / 2),
+            ));
         },
         get sheetColumns() {
-            const availableWidth = LETTER_WIDTH_IN - SHEET_PADDING_IN * 2;
+            const availableWidth = LETTER_WIDTH_IN - this.sheetPaddingXIn * 2;
             const gap = clamp(this.cardGapIn, 0, 1.25);
             return Math.max(1, Math.floor((availableWidth + gap) / (this.effectiveCardWidthIn + gap)));
         },
         get sheetCapacityRows() {
-            const availableHeight = LETTER_HEIGHT_IN - SHEET_PADDING_IN * 2;
+            const availableHeight = LETTER_HEIGHT_IN - this.sheetPaddingYIn * 2;
             const gap = clamp(this.cardGapIn, 0, 1.25);
             return Math.max(1, Math.floor((availableHeight + gap) / (this.effectiveCardHeightIn + gap)));
         },
@@ -129,36 +183,57 @@ export function cardDemo(initialLayers = []) {
         get sheetCopies() {
             return Array.from({ length: this.sheetCount }, (_, index) => index + 1);
         },
-        get cardScaleX() {
-            return (this.effectiveCardWidthIn * CSS_PIXELS_PER_INCH) / CARD_BASE_WIDTH_PX;
-        },
-        get cardScaleY() {
-            return (this.effectiveCardHeightIn * CSS_PIXELS_PER_INCH) / CARD_BASE_HEIGHT_PX;
-        },
         get editorStyle() {
             return [
                 `--card-hue: ${clamp(this.cardHue, 0, 360)}`,
+                `--card-brightness: ${clamp(this.cardBrightness)}%`,
                 `--ring-hue: ${clamp(this.ringHue, 0, 360)}`,
+                `--ring-brightness: ${clamp(this.ringBrightness)}%`,
                 `--effective-card-width: ${this.effectiveCardWidthIn}in`,
                 `--effective-card-height: ${this.effectiveCardHeightIn}in`,
-                `--card-scale-x: ${this.cardScaleX}`,
-                `--card-scale-y: ${this.cardScaleY}`,
+                `--sheet-padding-x: ${this.sheetPaddingXIn}in`,
+                `--sheet-padding-y: ${this.sheetPaddingYIn}in`,
                 `--card-gap: ${clamp(this.cardGapIn, 0, 1.25)}in`,
                 `--sheet-columns: ${this.sheetColumns}`,
+            ].join("; ");
+        },
+        get flavorOverlayTintStyle() {
+            if (!this.flavorOverlayUrl) return "";
+            const imageMask = `url(\"${this.flavorOverlayUrl}\")`;
+            return [
+                `background-color: hsl(${clamp(this.flavorOverlayTintHue, 0, 360)} 75% ${clamp(this.flavorOverlayTintBrightness)}%)`,
+                `opacity: ${clamp(this.flavorOverlayTintStrength) / 100}`,
+                `mask-image: ${imageMask}`,
+                "mask-mode: alpha",
+                "mask-position: center",
+                "mask-repeat: no-repeat",
+                "mask-size: contain",
+                `-webkit-mask-image: ${imageMask}`,
+                "-webkit-mask-position: center",
+                "-webkit-mask-repeat: no-repeat",
+                "-webkit-mask-size: contain",
             ].join("; ");
         },
 
         setCardHue(value) {
             this.cardHue = clamp(value, 0, 360);
         },
+        setCardBrightness(value) {
+            this.cardBrightness = clamp(value);
+        },
         setRingHue(value) {
             this.ringHue = clamp(value, 0, 360);
         },
+        setRingBrightness(value) {
+            this.ringBrightness = clamp(value);
+        },
         setCardWidth(value) {
-            this.cardWidthIn = clamp(value, 1.5, 2);
+            const physicalWidth = clamp(value, this.minimumCardWidthIn, this.maximumCardWidthIn);
+            this.cardWidthIn = roundTo(physicalWidth / this.scaleRatio);
         },
         setCardHeight(value) {
-            this.cardHeightIn = clamp(value, 2.5, 3.5);
+            const physicalHeight = clamp(value, this.minimumCardHeightIn, this.maximumCardHeightIn);
+            this.cardHeightIn = roundTo(physicalHeight / this.scaleRatio);
         },
         setOverallScale(value) {
             this.overallScale = clamp(value, 80, 100);
@@ -169,8 +244,59 @@ export function cardDemo(initialLayers = []) {
         setFlavorTextSize(value) {
             this.flavorTextSize = clamp(value, 8, 28);
         },
+        setFlavorOverlayTintHue(value) {
+            this.flavorOverlayTintHue = clamp(value, 0, 360);
+        },
+        setFlavorOverlayTintBrightness(value) {
+            this.flavorOverlayTintBrightness = clamp(value);
+        },
+        setFlavorOverlayTintStrength(value) {
+            this.flavorOverlayTintStrength = clamp(value);
+        },
+        loadFlavorOverlay(event) {
+            const file = event?.target?.files?.[0];
+            if (!file) return false;
+            const loaded = this.setFlavorOverlay(file);
+            if (event?.target) event.target.value = "";
+            return loaded;
+        },
+        setFlavorOverlay(file) {
+            if (!file.type?.startsWith("image/")) {
+                this.flavorOverlayError = "Choose an image file.";
+                return false;
+            }
+            if (file.size > 10 * 1024 * 1024) {
+                this.flavorOverlayError = "Choose an image smaller than 10 MB.";
+                return false;
+            }
+            const nextUrl = URL.createObjectURL(file);
+            if (this.flavorOverlayUrl.startsWith("blob:")) {
+                URL.revokeObjectURL(this.flavorOverlayUrl);
+            }
+            this.flavorOverlayUrl = nextUrl;
+            this.flavorOverlayName = file.name;
+            this.flavorOverlayError = "";
+            return true;
+        },
+        clearFlavorOverlay() {
+            if (this.flavorOverlayUrl.startsWith("blob:")) {
+                URL.revokeObjectURL(this.flavorOverlayUrl);
+            }
+            this.flavorOverlayUrl = "";
+            this.flavorOverlayName = "";
+            this.flavorOverlayError = "";
+        },
         setIndicatorTextSize(value) {
             this.indicatorTextSize = clamp(value, 8, 24);
+        },
+        setIndicatorTextSpacing(value) {
+            this.indicatorTextSpacing = clamp(value, -1, 8);
+        },
+        setMasterTextSize(value) {
+            this.masterTextSize = clamp(value, 8, 24);
+        },
+        setMasterTextSpacing(value) {
+            this.masterTextSpacing = clamp(value, -1, 8);
         },
         setBottomArrowValue(value) {
             this.bottomArrowValue = clamp(value);
@@ -213,6 +339,7 @@ export function cardDemo(initialLayers = []) {
         },
         destroy() {
             this.clearArtwork();
+            this.clearFlavorOverlay();
         },
 
         anyIsolated() {

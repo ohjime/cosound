@@ -16,37 +16,70 @@
         }
 
         [data-print-sheet] {
+            position: relative;
             box-sizing: border-box;
             display: grid;
-            grid-template-columns: repeat(var(--sheet-columns), var(--effective-card-width));
-            grid-auto-rows: var(--effective-card-height);
-            place-content: center;
+            place-items: center;
             width: 8.5in;
             height: 11in;
-            padding: var(--sheet-padding-y) var(--sheet-padding-x);
-            gap: var(--card-gap);
             overflow: hidden;
-            background-color: var(--page-surface);
+            background-color: white;
             box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 0.35);
+        }
+
+        [data-print-grid-island] {
+            box-sizing: border-box;
+            display: grid;
+            grid-template-columns: repeat(var(--sheet-columns), var(--printed-card-width));
+            grid-auto-rows: var(--printed-card-height);
+            gap: var(--card-gap);
+            width: max-content;
+            height: max-content;
+            padding: var(--island-padding-y) var(--island-padding-x);
+            background-color: var(--page-surface);
             print-color-adjust: exact;
             -webkit-print-color-adjust: exact;
         }
 
-        [data-print-card-slot] {
-            position: relative;
-            width: var(--effective-card-width);
-            height: var(--effective-card-height);
+        /* Screen-only measuring outline in real paper inches. It sits above
+           the whole page, centered on the middle top-row card, and never
+           scales. */
+        [data-print-guide] {
+            position: absolute;
+            z-index: 40;
+            top: var(--guide-center-y);
+            left: var(--guide-center-x);
+            box-sizing: border-box;
+            width: var(--guide-width);
+            height: var(--guide-height);
+            border: 2px dashed rgb(217 70 239);
+            transform: translate(-50%, -50%);
+            pointer-events: none;
         }
 
+        [data-print-card-slot] {
+            position: relative;
+            width: var(--printed-card-width);
+            height: var(--printed-card-height);
+        }
+
+        /* Same insets as the Explore and Library card (mx-6 mt-7 on the
+           artwork, mx-4 on the flavor box), so the side arrows keep their
+           breathing room against the card edge. Scale magnifies the whole
+           card instead of squeezing these. */
         [data-card-demo] {
-            --card-media-inset: clamp(0.65rem, 8cqw, 1rem);
-            --card-indicator-height: clamp(1.5rem, 16cqw, 1.75rem);
-            --card-side-arrow-size: clamp(2.1rem, 24cqw, 3rem);
-            --card-side-arrow-offset: clamp(1.05rem, 12cqw, 1.5rem);
+            --card-media-inset: 1.5rem;
+            --card-media-top: 1.75rem;
+            --card-flavor-inset: 1rem;
+            --card-indicator-height: 1.75rem;
+            --card-side-arrow-size: 5rem;
+            --card-side-arrow-offset: 2.875rem;
             width: var(--effective-card-width);
             height: var(--effective-card-height);
             max-width: none;
             container-type: inline-size;
+            transform: scale(var(--card-scale));
+            transform-origin: top left;
         }
 
         [data-card-demo] > div {
@@ -67,7 +100,7 @@
 
         [data-card-demo] [data-card-demo-media] {
             flex: none;
-            margin: var(--card-indicator-height) var(--card-media-inset) 0;
+            margin: var(--card-media-top) var(--card-media-inset) 0;
         }
 
         [data-card-demo] [data-card-demo-artwork-frame] {
@@ -114,26 +147,26 @@
         [data-card-demo] [data-card-demo-slider-row] {
             width: 100%;
             min-width: 0;
-            gap: clamp(0.25rem, 3.75cqw, 0.75rem);
-            padding-inline: clamp(0.5rem, 6.875cqw, 1.375rem);
+            gap: 0.75rem;
+            padding-inline: 1.375rem;
         }
 
         [data-card-demo] [data-card-demo-slider-control] {
-            width: clamp(0.875rem, 7.5cqw, 1.5rem);
-            height: clamp(0.875rem, 7.5cqw, 1.5rem);
-            min-width: 0;
-            min-height: 0;
+            width: 1.5rem;
+            height: 1.5rem;
+            min-width: 1.5rem;
+            min-height: 1.5rem;
             padding: 0;
         }
 
         [data-card-demo] [data-card-demo-slider-track-shell] {
-            padding: clamp(0.55rem, 7.5cqw, 1.5rem) clamp(0.3rem, 2.5cqw, 0.5rem);
+            padding: 1.5rem 0.5rem;
         }
 
         [data-card-demo] [data-card-demo-side-arrow] {
             width: var(--card-side-arrow-size);
             height: var(--card-side-arrow-size);
-            transform: translateY(-50%);
+            transform: translateY(-50%) scaleX(0.75) scaleY(1.5);
         }
 
         [data-card-demo] [data-card-demo-side-arrow="left"] {
@@ -145,9 +178,9 @@
         }
 
         [data-card-demo] [data-card-demo-bottom-arrow] {
-            width: clamp(2.1rem, 24cqw, 3rem);
-            height: clamp(2.1rem, 24cqw, 3rem);
-            transform: translate(-50%, -62.5%);
+            width: 5.5rem;
+            height: 5.5rem;
+            transform: translate(-50%, -4rem) scaleX(1.25) scaleY(0.75);
         }
 
         [data-card-demo] [data-card-demo-like] {
@@ -155,10 +188,15 @@
             height: clamp(1.25rem, 12cqw, 1.75rem);
         }
 
+        [data-card-demo] [data-card-demo-like-icon] {
+            width: 62.5%;
+            height: 62.5%;
+        }
+
         [data-card-demo] [data-card-demo-flavor-box] {
             min-height: 0;
             flex: 1 1 auto;
-            margin: 0 clamp(0.55rem, 7cqw, 1rem) 1rem;
+            margin: 0 var(--card-flavor-inset) 1rem;
         }
 
         .card-demo-hue-range {
@@ -227,7 +265,7 @@
                 margin: 0 !important;
                 padding: 0 !important;
                 overflow: visible !important;
-                background: var(--page-surface) !important;
+                background: white !important;
             }
 
             [data-card-demo-editor] {
@@ -246,6 +284,10 @@
 
             [data-print-sheet] {
                 box-shadow: none !important;
+            }
+
+            [data-print-guide] {
+                display: none !important;
             }
         }
     </style>
@@ -374,8 +416,8 @@
                         <input id="card-demo-scale"
                                data-card-scale-slider
                                type="range"
-                               min="80"
-                               max="100"
+                               min="50"
+                               max="200"
                                step="1"
                                :value="overallScale"
                                @input="setOverallScale($event.target.value)"
@@ -384,7 +426,7 @@
                     </label>
                     <label class="block" for="card-demo-gap">
                         <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
-                            <span>Card gap</span>
+                            <span>Card + outer gap</span>
                             <output for="card-demo-gap" x-text="`${Number(cardGapIn).toFixed(2)} in`">0.25 in</output>
                         </span>
                         <input id="card-demo-gap"
@@ -398,6 +440,71 @@
                                :aria-valuetext="`${Number(cardGapIn).toFixed(2)} inches`"
                                class="range range-xs w-full" />
                     </label>
+                </fieldset>
+                <fieldset class="mt-5 space-y-4 border-t border-base-content/10 pt-4">
+                    <legend class="mb-3 text-xs font-bold uppercase tracking-[0.16em] opacity-60">Print guide</legend>
+                    <label class="flex items-center justify-between gap-3 text-sm" for="card-demo-show-guide">
+                        <span>Show guide (never prints)</span>
+                        <input id="card-demo-show-guide"
+                               data-guide-toggle
+                               type="checkbox"
+                               x-model="showGuide"
+                               class="toggle toggle-sm" />
+                    </label>
+                    <div>
+                        <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
+                            <label for="card-demo-guide-width">Guide width</label>
+                            <span class="flex items-center gap-1">
+                                <input data-guide-width-input
+                                       type="number"
+                                       min="0.25"
+                                       max="11"
+                                       step="0.01"
+                                       :value="guideWidthIn.toFixed(2)"
+                                       @change="setGuideWidth($event.target.value); $event.target.value = guideWidthIn.toFixed(2)"
+                                       aria-label="Guide width in inches"
+                                       class="input input-xs w-20 text-right" />
+                                <span>in</span>
+                            </span>
+                        </span>
+                        <input id="card-demo-guide-width"
+                               data-guide-width-slider
+                               type="range"
+                               min="0.25"
+                               max="11"
+                               step="0.05"
+                               :value="guideWidthIn"
+                               @input="setGuideWidth($event.target.value)"
+                               :aria-valuetext="`${guideWidthIn.toFixed(2)} inches`"
+                               class="range range-xs w-full" />
+                    </div>
+                    <div>
+                        <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
+                            <label for="card-demo-guide-height">Guide height</label>
+                            <span class="flex items-center gap-1">
+                                <input data-guide-height-input
+                                       type="number"
+                                       min="0.25"
+                                       max="11"
+                                       step="0.01"
+                                       :value="guideHeightIn.toFixed(2)"
+                                       @change="setGuideHeight($event.target.value); $event.target.value = guideHeightIn.toFixed(2)"
+                                       aria-label="Guide height in inches"
+                                       class="input input-xs w-20 text-right" />
+                                <span>in</span>
+                            </span>
+                        </span>
+                        <input id="card-demo-guide-height"
+                               data-guide-height-slider
+                               type="range"
+                               min="0.25"
+                               max="11"
+                               step="0.05"
+                               :value="guideHeightIn"
+                               @input="setGuideHeight($event.target.value)"
+                               :aria-valuetext="`${guideHeightIn.toFixed(2)} inches`"
+                               class="range range-xs w-full" />
+                    </div>
                 </fieldset>
                 <fieldset class="mt-5 space-y-4 border-t border-base-content/10 pt-4">
                     <legend class="mb-3 text-xs font-bold uppercase tracking-[0.16em] opacity-60">Card content</legend>
@@ -729,8 +836,8 @@
                 </fieldset>
                 <div data-sheet-summary
                      class="mt-5 rounded-xl bg-base-100 px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-[0.12em] shadow-inner"
-                     x-text="`${sheetCount} ${sheetCount === 1 ? 'card' : 'cards'} · ${sheetColumns} × ${sheetRows} · ${effectiveCardWidthIn.toFixed(2)} × ${effectiveCardHeightIn.toFixed(2)} in`">
-                    6 cards · 3 × 2 · 2.00 × 3.50 in
+                     x-text="`${sheetCount} ${sheetCount === 1 ? 'card' : 'cards'} · ${sheetColumns} × ${sheetRows} · ${printedCardWidthIn.toFixed(2)} × ${printedCardHeightIn.toFixed(2)} in printed`">
+                    6 cards · 3 × 2 · 2.00 × 3.50 in printed
                 </div>
             </aside>
             <section data-print-sheet-stage
@@ -741,11 +848,14 @@
                     <span>8.5 × 11 in</span>
                 </div>
                 <div data-print-sheet aria-label="US Letter print sheet preview">
-                    <template x-for="copy in sheetCopies" :key="copy">
-                        <div data-print-card-slot>
-                            <c-card-demo-card :sounds="sounds" />
-                        </div>
-                    </template>
+                    <div data-print-grid-island>
+                        <template x-for="copy in sheetCopies" :key="copy">
+                            <div data-print-card-slot>
+                                <c-card-demo-card :sounds="sounds" />
+                            </div>
+                        </template>
+                    </div>
+                    <div x-show="showGuide" data-print-guide aria-hidden="true"></div>
                 </div>
             </section>
         </div>

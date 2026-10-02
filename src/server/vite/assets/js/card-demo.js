@@ -7,6 +7,11 @@ function roundTo(value, places = 4) {
     return Math.round((value + Number.EPSILON) * precision) / precision;
 }
 
+function floorTo(value, places) {
+    const precision = 10 ** places;
+    return Math.floor((value + Number.EPSILON) * precision) / precision;
+}
+
 function normalizeLayer(layer) {
     return {
         ...layer,
@@ -32,13 +37,14 @@ function colorNameForHue(value) {
 
 const LETTER_WIDTH_IN = 8.5;
 const LETTER_HEIGHT_IN = 11;
-const SHEET_PADDING_IN = 0.25;
 const MAX_SHEET_CARDS = 12;
 const MIN_CARD_WIDTH_IN = 1.5;
 const MIN_CARD_HEIGHT_IN = 2.5;
 const MIN_CARD_CONTENT_ALLOWANCE_IN = 1.125;
 const MAX_CARD_WIDTH_IN = LETTER_WIDTH_IN;
 const MAX_CARD_HEIGHT_IN = LETTER_HEIGHT_IN;
+const MIN_GUIDE_IN = 0.25;
+const MAX_GUIDE_IN = LETTER_HEIGHT_IN;
 
 /** UI-only facsimile of the Explore card. It never creates or loads audio. */
 export function cardDemo(initialLayers = []) {
@@ -55,6 +61,9 @@ export function cardDemo(initialLayers = []) {
         cardHeightIn: 3.5,
         overallScale: 100,
         cardGapIn: 0.25,
+        showGuide: true,
+        guideWidthIn: 2,
+        guideHeightIn: 3.5,
         flavorText: "",
         flavorTextSize: 12,
         flavorOverlayUrl: "",
@@ -116,61 +125,72 @@ export function cardDemo(initialLayers = []) {
             return this.cardColorName;
         },
         get scaleRatio() {
-            return clamp(this.overallScale, 80, 100) / 100;
+            return clamp(this.overallScale, 50, 200) / 100;
         },
+        // Width and height are the card's own layout size. Scale magnifies the
+        // finished card as a whole — artwork, arrows, text and padding alike —
+        // so only the printed footprint grows; the sliders never move.
         get minimumCardWidthIn() {
-            return roundTo(MIN_CARD_WIDTH_IN * this.scaleRatio, 2);
+            return Math.min(MIN_CARD_WIDTH_IN, this.maximumCardWidthIn);
         },
         get maximumCardWidthIn() {
-            return MAX_CARD_WIDTH_IN;
+            return floorTo(Math.min(MAX_CARD_WIDTH_IN, LETTER_WIDTH_IN / this.scaleRatio), 2);
         },
         get minimumCardHeightIn() {
             return roundTo(Math.min(
-                MAX_CARD_HEIGHT_IN,
+                this.maximumCardHeightIn,
                 Math.max(
-                    MIN_CARD_HEIGHT_IN * this.scaleRatio,
+                    MIN_CARD_HEIGHT_IN,
                     this.effectiveCardWidthIn + MIN_CARD_CONTENT_ALLOWANCE_IN,
                 ),
             ), 2);
         },
         get maximumCardHeightIn() {
-            return MAX_CARD_HEIGHT_IN;
+            return floorTo(Math.min(MAX_CARD_HEIGHT_IN, LETTER_HEIGHT_IN / this.scaleRatio), 2);
         },
         get effectiveCardWidthIn() {
             return roundTo(clamp(
-                this.cardWidthIn * this.scaleRatio,
+                this.cardWidthIn,
                 this.minimumCardWidthIn,
-                MAX_CARD_WIDTH_IN,
+                this.maximumCardWidthIn,
             ), 2);
         },
         get effectiveCardHeightIn() {
             return roundTo(clamp(
-                this.cardHeightIn * this.scaleRatio,
+                this.cardHeightIn,
                 this.minimumCardHeightIn,
-                MAX_CARD_HEIGHT_IN,
+                this.maximumCardHeightIn,
             ), 2);
         },
-        get sheetPaddingXIn() {
+        get printedCardWidthIn() {
+            return roundTo(Math.min(LETTER_WIDTH_IN, this.effectiveCardWidthIn * this.scaleRatio), 3);
+        },
+        get printedCardHeightIn() {
+            return roundTo(Math.min(LETTER_HEIGHT_IN, this.effectiveCardHeightIn * this.scaleRatio), 3);
+        },
+        get islandPaddingXIn() {
+            const gap = clamp(this.cardGapIn, 0, 1.25);
             return roundTo(Math.min(
-                SHEET_PADDING_IN,
-                Math.max(0, (LETTER_WIDTH_IN - this.effectiveCardWidthIn) / 2),
+                gap,
+                Math.max(0, (LETTER_WIDTH_IN - this.printedCardWidthIn) / 2),
             ));
         },
-        get sheetPaddingYIn() {
+        get islandPaddingYIn() {
+            const gap = clamp(this.cardGapIn, 0, 1.25);
             return roundTo(Math.min(
-                SHEET_PADDING_IN,
-                Math.max(0, (LETTER_HEIGHT_IN - this.effectiveCardHeightIn) / 2),
+                gap,
+                Math.max(0, (LETTER_HEIGHT_IN - this.printedCardHeightIn) / 2),
             ));
         },
         get sheetColumns() {
-            const availableWidth = LETTER_WIDTH_IN - this.sheetPaddingXIn * 2;
+            const availableWidth = LETTER_WIDTH_IN - this.islandPaddingXIn * 2;
             const gap = clamp(this.cardGapIn, 0, 1.25);
-            return Math.max(1, Math.floor((availableWidth + gap) / (this.effectiveCardWidthIn + gap)));
+            return Math.max(1, Math.floor((availableWidth + gap) / (this.printedCardWidthIn + gap)));
         },
         get sheetCapacityRows() {
-            const availableHeight = LETTER_HEIGHT_IN - this.sheetPaddingYIn * 2;
+            const availableHeight = LETTER_HEIGHT_IN - this.islandPaddingYIn * 2;
             const gap = clamp(this.cardGapIn, 0, 1.25);
-            return Math.max(1, Math.floor((availableHeight + gap) / (this.effectiveCardHeightIn + gap)));
+            return Math.max(1, Math.floor((availableHeight + gap) / (this.printedCardHeightIn + gap)));
         },
         get sheetCount() {
             const capacity = this.sheetColumns * this.sheetCapacityRows;
@@ -179,6 +199,30 @@ export function cardDemo(initialLayers = []) {
         },
         get sheetRows() {
             return Math.ceil(this.sheetCount / this.sheetColumns);
+        },
+        // The guide is measured in paper inches and centered on the middle
+        // card of the top row (left of center when the column count is even).
+        // Its size ignores scale and card size; only its center follows that
+        // card as the centered grid island relays out.
+        get guideColumn() {
+            return Math.floor((this.sheetColumns - 1) / 2);
+        },
+        get guideCenterXIn() {
+            const gap = clamp(this.cardGapIn, 0, 1.25);
+            const islandWidth = this.sheetColumns * this.printedCardWidthIn
+                + (this.sheetColumns - 1) * gap
+                + this.islandPaddingXIn * 2;
+            return roundTo((LETTER_WIDTH_IN - islandWidth) / 2
+                + this.islandPaddingXIn
+                + this.guideColumn * (this.printedCardWidthIn + gap)
+                + this.printedCardWidthIn / 2);
+        },
+        get guideCenterYIn() {
+            const gap = clamp(this.cardGapIn, 0, 1.25);
+            const islandHeight = this.sheetRows * this.printedCardHeightIn
+                + (this.sheetRows - 1) * gap
+                + this.islandPaddingYIn * 2;
+            return roundTo((LETTER_HEIGHT_IN - islandHeight) / 2 + this.islandPaddingYIn + this.printedCardHeightIn / 2);
         },
         get sheetCopies() {
             return Array.from({ length: this.sheetCount }, (_, index) => index + 1);
@@ -191,10 +235,17 @@ export function cardDemo(initialLayers = []) {
                 `--ring-brightness: ${clamp(this.ringBrightness)}%`,
                 `--effective-card-width: ${this.effectiveCardWidthIn}in`,
                 `--effective-card-height: ${this.effectiveCardHeightIn}in`,
-                `--sheet-padding-x: ${this.sheetPaddingXIn}in`,
-                `--sheet-padding-y: ${this.sheetPaddingYIn}in`,
+                `--printed-card-width: ${this.printedCardWidthIn}in`,
+                `--printed-card-height: ${this.printedCardHeightIn}in`,
+                `--card-scale: ${this.scaleRatio}`,
+                `--island-padding-x: ${this.islandPaddingXIn}in`,
+                `--island-padding-y: ${this.islandPaddingYIn}in`,
                 `--card-gap: ${clamp(this.cardGapIn, 0, 1.25)}in`,
                 `--sheet-columns: ${this.sheetColumns}`,
+                `--guide-width: ${this.guideWidthIn}in`,
+                `--guide-height: ${this.guideHeightIn}in`,
+                `--guide-center-x: ${this.guideCenterXIn}in`,
+                `--guide-center-y: ${this.guideCenterYIn}in`,
             ].join("; ");
         },
         get flavorOverlayTintStyle() {
@@ -228,18 +279,22 @@ export function cardDemo(initialLayers = []) {
             this.ringBrightness = clamp(value);
         },
         setCardWidth(value) {
-            const physicalWidth = clamp(value, this.minimumCardWidthIn, this.maximumCardWidthIn);
-            this.cardWidthIn = roundTo(physicalWidth / this.scaleRatio);
+            this.cardWidthIn = roundTo(clamp(value, this.minimumCardWidthIn, this.maximumCardWidthIn), 2);
         },
         setCardHeight(value) {
-            const physicalHeight = clamp(value, this.minimumCardHeightIn, this.maximumCardHeightIn);
-            this.cardHeightIn = roundTo(physicalHeight / this.scaleRatio);
+            this.cardHeightIn = roundTo(clamp(value, this.minimumCardHeightIn, this.maximumCardHeightIn), 2);
         },
         setOverallScale(value) {
-            this.overallScale = clamp(value, 80, 100);
+            this.overallScale = clamp(value, 50, 200);
         },
         setCardGap(value) {
             this.cardGapIn = clamp(value, 0, 1.25);
+        },
+        setGuideWidth(value) {
+            this.guideWidthIn = roundTo(clamp(value, MIN_GUIDE_IN, MAX_GUIDE_IN), 2);
+        },
+        setGuideHeight(value) {
+            this.guideHeightIn = roundTo(clamp(value, MIN_GUIDE_IN, MAX_GUIDE_IN), 2);
         },
         setFlavorTextSize(value) {
             this.flavorTextSize = clamp(value, 8, 28);

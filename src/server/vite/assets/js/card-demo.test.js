@@ -290,31 +290,33 @@ test("the Letter sheet relays out cards as scale and gap change", () => {
     assert.equal(demo.effectiveCardHeightIn, 3.5);
     assert.equal(demo.maximumCardWidthIn, 8.5);
     assert.equal(demo.maximumCardHeightIn, 11);
-    assert.equal(demo.sheetPaddingXIn, 0.25);
-    assert.equal(demo.sheetPaddingYIn, 0.25);
+    assert.equal(demo.islandPaddingXIn, 0.25);
+    assert.equal(demo.islandPaddingYIn, 0.25);
     assert.equal(demo.sheetColumns, 3);
     assert.equal(demo.sheetRows, 2);
     assert.equal(demo.sheetCount, 6);
 
     demo.setOverallScale(80);
-    assert.equal(demo.effectiveCardWidthIn, 1.6);
-    assert.equal(demo.effectiveCardHeightIn, 2.8);
-    assert.equal(demo.minimumCardWidthIn, 1.2);
+    assert.equal(demo.effectiveCardWidthIn, 2);
+    assert.equal(demo.effectiveCardHeightIn, 3.5);
+    assert.equal(demo.printedCardWidthIn, 1.6);
+    assert.equal(demo.printedCardHeightIn, 2.8);
+    assert.equal(demo.minimumCardWidthIn, 1.5);
     assert.equal(demo.maximumCardWidthIn, 8.5);
-    assert.equal(demo.minimumCardHeightIn, 2.73);
+    assert.equal(demo.minimumCardHeightIn, 3.13);
     assert.equal(demo.maximumCardHeightIn, 11);
-    assert.equal(demo.sheetPaddingXIn, 0.25);
-    assert.equal(demo.sheetPaddingYIn, 0.25);
+    assert.equal(demo.islandPaddingXIn, 0.25);
+    assert.equal(demo.islandPaddingYIn, 0.25);
     assert.equal(demo.sheetColumns, 4);
     assert.equal(demo.sheetRows, 3);
     assert.equal(demo.sheetCount, 12);
 
-    demo.setCardWidth(1.4);
-    demo.setCardHeight(2.6);
-    assert.equal(demo.effectiveCardWidthIn, 1.4);
-    assert.equal(demo.effectiveCardHeightIn, 2.6);
-    assert.equal(demo.cardWidthIn, 1.75);
-    assert.equal(demo.cardHeightIn, 3.25);
+    demo.setCardWidth(1.75);
+    demo.setCardHeight(3.25);
+    assert.equal(demo.effectiveCardWidthIn, 1.75);
+    assert.equal(demo.effectiveCardHeightIn, 3.25);
+    assert.equal(demo.printedCardWidthIn, 1.4);
+    assert.equal(demo.printedCardHeightIn, 2.6);
 
     demo.setOverallScale(100);
     demo.setCardWidth(2);
@@ -323,6 +325,52 @@ test("the Letter sheet relays out cards as scale and gap change", () => {
     assert.equal(demo.sheetColumns, 2);
     assert.equal(demo.sheetRows, 2);
     assert.equal(demo.sheetCount, 4);
+});
+
+
+test("overall scale covers 50 through 200 percent", () => {
+    const demo = cardDemo(layers());
+
+    demo.setOverallScale(50);
+    assert.equal(demo.overallScale, 50);
+    assert.equal(demo.scaleRatio, 0.5);
+    assert.equal(demo.effectiveCardWidthIn, 2);
+    assert.equal(demo.effectiveCardHeightIn, 3.5);
+    assert.equal(demo.printedCardWidthIn, 1);
+    assert.equal(demo.printedCardHeightIn, 1.75);
+    assert.match(demo.editorStyle, /--card-scale: 0\.5;/);
+
+    demo.setOverallScale(200);
+    assert.equal(demo.overallScale, 200);
+    assert.equal(demo.scaleRatio, 2);
+    assert.equal(demo.effectiveCardWidthIn, 2);
+    assert.equal(demo.effectiveCardHeightIn, 3.5);
+    assert.equal(demo.printedCardWidthIn, 4);
+    assert.equal(demo.printedCardHeightIn, 7);
+    assert.match(demo.editorStyle, /--card-scale: 2;/);
+    assert.match(demo.editorStyle, /--effective-card-width: 2in/);
+    assert.match(demo.editorStyle, /--printed-card-width: 4in/);
+
+    demo.setOverallScale(-999);
+    assert.equal(demo.overallScale, 50);
+    demo.setOverallScale(999);
+    assert.equal(demo.overallScale, 200);
+});
+
+
+test("the card gap is also the colored island's outer cutting space", () => {
+    const demo = cardDemo(layers());
+
+    demo.setCardGap(0.6);
+    assert.equal(demo.islandPaddingXIn, 0.6);
+    assert.equal(demo.islandPaddingYIn, 0.6);
+    assert.match(demo.editorStyle, /--island-padding-x: 0\.6in/);
+    assert.match(demo.editorStyle, /--island-padding-y: 0\.6in/);
+    assert.match(demo.editorStyle, /--card-gap: 0\.6in/);
+
+    demo.setCardGap(0);
+    assert.equal(demo.islandPaddingXIn, 0);
+    assert.equal(demo.islandPaddingYIn, 0);
 });
 
 
@@ -359,117 +407,180 @@ test("card dimensions remain within the printable Letter bounds", () => {
     assert.equal(demo.effectiveCardWidthIn, 8.5);
     assert.equal(demo.minimumCardHeightIn, 9.63);
     assert.equal(demo.effectiveCardHeightIn, 9.63);
-    assert.equal(demo.sheetPaddingXIn, 0);
-    assert.equal(demo.sheetPaddingYIn, 0.25);
+    assert.equal(demo.islandPaddingXIn, 0);
+    assert.equal(demo.islandPaddingYIn, 0.25);
 
     demo.setCardHeight(999);
     assert.equal(demo.effectiveCardWidthIn, 8.5);
     assert.equal(demo.effectiveCardHeightIn, 11);
-    assert.equal(demo.sheetPaddingXIn, 0);
-    assert.equal(demo.sheetPaddingYIn, 0);
+    assert.equal(demo.islandPaddingXIn, 0);
+    assert.equal(demo.islandPaddingYIn, 0);
     assert.match(demo.editorStyle, /--effective-card-width: 8\.5in/);
     assert.match(demo.editorStyle, /--effective-card-height: 11in/);
-    assert.match(demo.editorStyle, /--sheet-padding-x: 0in/);
-    assert.match(demo.editorStyle, /--sheet-padding-y: 0in/);
+    assert.match(demo.editorStyle, /--island-padding-x: 0in/);
+    assert.match(demo.editorStyle, /--island-padding-y: 0in/);
 
     demo.setCardWidth(4);
     assert.equal(demo.effectiveCardWidthIn, 4);
     assert.equal(demo.effectiveCardHeightIn, 11);
-    assert.equal(demo.sheetPaddingXIn, 0.25);
-    assert.equal(demo.sheetPaddingYIn, 0);
+    assert.equal(demo.islandPaddingXIn, 0.25);
+    assert.equal(demo.islandPaddingYIn, 0);
 
     demo.setCardHeight(6);
     assert.equal(demo.effectiveCardWidthIn, 4);
     assert.equal(demo.effectiveCardHeightIn, 6);
-    assert.equal(demo.sheetPaddingXIn, 0.25);
-    assert.equal(demo.sheetPaddingYIn, 0.25);
+    assert.equal(demo.islandPaddingXIn, 0.25);
+    assert.equal(demo.islandPaddingYIn, 0.25);
     assert.equal("cardScaleX" in demo, false);
     assert.equal("cardScaleY" in demo, false);
     assert.doesNotMatch(demo.editorStyle, /--card-scale-/);
 });
 
 
-test("sheet padding shrinks only along an axis occupied by an oversized card", () => {
+test("the colored island padding shrinks only along an axis occupied by an oversized card", () => {
     const demo = cardDemo(layers());
 
     demo.setCardWidth(8.25);
     assert.equal(demo.effectiveCardWidthIn, 8.25);
     assert.equal(demo.minimumCardHeightIn, 9.38);
     assert.equal(demo.effectiveCardHeightIn, 9.38);
-    assert.equal(demo.sheetPaddingXIn, 0.125);
-    assert.equal(demo.sheetPaddingYIn, 0.25);
+    assert.equal(demo.islandPaddingXIn, 0.125);
+    assert.equal(demo.islandPaddingYIn, 0.25);
 
     demo.setCardWidth(2);
     demo.setCardHeight(10.75);
     assert.equal(demo.effectiveCardWidthIn, 2);
     assert.equal(demo.effectiveCardHeightIn, 10.75);
-    assert.equal(demo.sheetPaddingXIn, 0.25);
-    assert.equal(demo.sheetPaddingYIn, 0.125);
+    assert.equal(demo.islandPaddingXIn, 0.25);
+    assert.equal(demo.islandPaddingYIn, 0.125);
 });
 
 
-test("the scaled base minimum and width allowance combine at 80 percent scale", () => {
+test("scale magnifies the card without moving its layout minimums", () => {
     const demo = cardDemo(layers());
 
     demo.setOverallScale(80);
-    assert.equal(demo.minimumCardWidthIn, 1.2);
-    assert.equal(demo.minimumCardHeightIn, 2.73);
+    assert.equal(demo.minimumCardWidthIn, 1.5);
+    assert.equal(demo.minimumCardHeightIn, 3.13);
 
     demo.setCardWidth(-999);
-    assert.equal(demo.effectiveCardWidthIn, 1.2);
-    assert.equal(demo.minimumCardHeightIn, 2.33);
-    assert.equal(demo.effectiveCardHeightIn, 2.8);
+    assert.equal(demo.effectiveCardWidthIn, 1.5);
+    assert.equal(demo.printedCardWidthIn, 1.2);
+    assert.equal(demo.minimumCardHeightIn, 2.63);
+    assert.equal(demo.effectiveCardHeightIn, 3.5);
 
     demo.setCardHeight(-999);
-    assert.equal(demo.effectiveCardWidthIn, 1.2);
-    assert.equal(demo.effectiveCardHeightIn, 2.33);
+    assert.equal(demo.effectiveCardWidthIn, 1.5);
+    assert.equal(demo.effectiveCardHeightIn, 2.63);
+    assert.equal(demo.printedCardHeightIn, 2.104);
 });
 
 
-test("the full printable area remains reachable at 80 percent scale", () => {
+test("the printed card never outgrows the Letter sheet at any scale", () => {
     const demo = cardDemo(layers());
 
-    demo.setOverallScale(80);
-    assert.equal(demo.maximumCardWidthIn, 8.5);
-    assert.equal(demo.maximumCardHeightIn, 11);
+    demo.setOverallScale(200);
+    assert.equal(demo.maximumCardWidthIn, 4.25);
+    assert.equal(demo.maximumCardHeightIn, 5.5);
 
     demo.setCardWidth(999);
-    assert.equal(demo.effectiveCardWidthIn, 8.5);
-    assert.equal(demo.minimumCardHeightIn, 9.63);
-    assert.equal(demo.effectiveCardHeightIn, 9.63);
-    assert.equal(demo.sheetPaddingXIn, 0);
-    assert.equal(demo.sheetPaddingYIn, 0.25);
+    assert.equal(demo.effectiveCardWidthIn, 4.25);
+    assert.equal(demo.printedCardWidthIn, 8.5);
+    assert.equal(demo.minimumCardHeightIn, 5.38);
+    assert.equal(demo.effectiveCardHeightIn, 5.38);
+    assert.equal(demo.printedCardHeightIn, 10.76);
+    assert.equal(demo.islandPaddingXIn, 0);
+    assert.equal(demo.islandPaddingYIn, 0.12);
 
     demo.setCardHeight(999);
-    assert.equal(demo.effectiveCardWidthIn, 8.5);
-    assert.equal(demo.effectiveCardHeightIn, 11);
-    assert.equal(demo.sheetPaddingXIn, 0);
-    assert.equal(demo.sheetPaddingYIn, 0);
-    assert.match(demo.editorStyle, /--effective-card-width: 8\.5in/);
-    assert.match(demo.editorStyle, /--effective-card-height: 11in/);
-    assert.match(demo.editorStyle, /--sheet-padding-x: 0in/);
-    assert.match(demo.editorStyle, /--sheet-padding-y: 0in/);
+    assert.equal(demo.effectiveCardHeightIn, 5.5);
+    assert.equal(demo.printedCardHeightIn, 11);
+    assert.equal(demo.islandPaddingXIn, 0);
+    assert.equal(demo.islandPaddingYIn, 0);
+    assert.match(demo.editorStyle, /--printed-card-width: 8\.5in/);
+    assert.match(demo.editorStyle, /--printed-card-height: 11in/);
+    assert.match(demo.editorStyle, /--island-padding-x: 0in/);
+    assert.match(demo.editorStyle, /--island-padding-y: 0in/);
 
     demo.setCardGap(999);
     assert.equal(demo.cardGapIn, 1.25);
     assert.equal(demo.sheetColumns, 1);
     assert.equal(demo.sheetRows, 1);
     assert.equal(demo.sheetCount, 1);
+
+    demo.setOverallScale(100);
+    assert.equal(demo.effectiveCardWidthIn, 4.25);
+    assert.equal(demo.printedCardWidthIn, 4.25);
+});
+
+
+test("the print guide keeps its paper size and stays centered on the middle top-row card", () => {
+    const demo = cardDemo(layers());
+
+    assert.equal(demo.showGuide, true);
+    assert.equal(demo.guideWidthIn, 2);
+    assert.equal(demo.guideHeightIn, 3.5);
+    assert.equal(demo.sheetColumns, 3);
+    assert.equal(demo.guideColumn, 1);
+    assert.equal(demo.guideCenterXIn, 4.25);
+    assert.equal(demo.guideCenterYIn, 3.625);
+    assert.match(demo.editorStyle, /--guide-width: 2in/);
+    assert.match(demo.editorStyle, /--guide-height: 3\.5in/);
+    assert.match(demo.editorStyle, /--guide-center-x: 4\.25in/);
+    assert.match(demo.editorStyle, /--guide-center-y: 3\.625in/);
+
+    demo.setGuideWidth(4);
+    demo.setGuideHeight(4);
+    demo.setOverallScale(200);
+    demo.setCardWidth(3);
+    demo.setCardHeight(5);
+    assert.equal(demo.guideWidthIn, 4);
+    assert.equal(demo.guideHeightIn, 4);
+    assert.equal(demo.sheetCount, 1);
+    assert.equal(demo.guideColumn, 0);
+    assert.equal(demo.guideCenterXIn, 4.25);
+    assert.equal(demo.guideCenterYIn, 5.5);
+
+    demo.setOverallScale(80);
+    demo.setCardWidth(2);
+    demo.setCardHeight(3.5);
+    assert.equal(demo.sheetColumns, 4);
+    assert.equal(demo.guideColumn, 1);
+    assert.equal(demo.guideCenterXIn, 3.325);
+    assert.equal(demo.guideWidthIn, 4);
+
+    demo.setOverallScale(100);
+    demo.setCardGap(0.5);
+    assert.equal(demo.sheetColumns, 3);
+    assert.equal(demo.sheetRows, 2);
+    assert.equal(demo.guideCenterXIn, 4.25);
+    assert.equal(demo.guideCenterYIn, 3.5);
+
+    demo.setGuideWidth(-999);
+    demo.setGuideHeight(999);
+    assert.equal(demo.guideWidthIn, 0.25);
+    assert.equal(demo.guideHeightIn, 11);
 });
 
 
 test("dimension endpoints stay aligned to the hundredth-inch slider step", () => {
     const demo = cardDemo(layers());
 
-    for (let scale = 80; scale <= 100; scale += 1) {
+    for (let scale = 50; scale <= 200; scale += 1) {
         demo.setOverallScale(scale);
-        assert.equal(demo.minimumCardWidthIn, Number(demo.minimumCardWidthIn.toFixed(2)));
-        assert.equal(demo.minimumCardHeightIn, Number(demo.minimumCardHeightIn.toFixed(2)));
+        for (const value of [
+            demo.minimumCardWidthIn,
+            demo.maximumCardWidthIn,
+            demo.minimumCardHeightIn,
+            demo.maximumCardHeightIn,
+        ]) {
+            assert.equal(value, Number(value.toFixed(2)));
+        }
 
         demo.setCardWidth(demo.maximumCardWidthIn);
         demo.setCardHeight(demo.maximumCardHeightIn);
-        assert.equal(demo.effectiveCardWidthIn, 8.5);
-        assert.equal(demo.effectiveCardHeightIn, 11);
+        assert.ok(demo.printedCardWidthIn <= 8.5);
+        assert.ok(demo.printedCardHeightIn <= 11);
     }
 });
 

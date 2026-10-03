@@ -3,7 +3,861 @@
     Card Demo
 {% endblock title %}
 {% block content %}
-    <main class="-mx-6 min-h-dvh grid place-items-center overflow-hidden bg-base-100 px-6 py-10">
-        <c-card-demo-card :sounds="sounds" />
+    <style>
+        [data-card-demo-page] {
+            --card-shell: hsl(var(--card-hue) 34% var(--card-brightness));
+            --ring-surface: hsl(var(--ring-hue) 18% var(--ring-brightness));
+            --page-surface: hsl(var(--ring-hue) 18% var(--ring-brightness));
+            --card-indicator: rgb(51 65 85 / 0.75);
+            --card-master-ring: rgb(45 45 45 / 0.68);
+            --artwork-start: hsl(128 42% 10%);
+            --artwork-middle: hsl(128 38% 25%);
+            --artwork-end: hsl(163 35% 15%);
+        }
+
+        [data-print-sheet] {
+            position: relative;
+            box-sizing: border-box;
+            display: grid;
+            place-items: center;
+            width: 8.5in;
+            height: 11in;
+            overflow: hidden;
+            background-color: white;
+            box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 0.35);
+        }
+
+        [data-print-grid-island] {
+            box-sizing: border-box;
+            display: grid;
+            grid-template-columns: repeat(var(--sheet-columns), var(--printed-card-width));
+            grid-auto-rows: var(--printed-card-height);
+            gap: var(--card-gap);
+            width: max-content;
+            height: max-content;
+            padding: var(--island-padding-y) var(--island-padding-x);
+            background-color: var(--page-surface);
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+        }
+
+        /* Screen-only measuring outline in real paper inches. It sits above
+           the whole page, centered on the middle top-row card, and never
+           scales. */
+        [data-print-guide] {
+            position: absolute;
+            z-index: 40;
+            top: var(--guide-center-y);
+            left: var(--guide-center-x);
+            box-sizing: border-box;
+            width: var(--guide-width);
+            height: var(--guide-height);
+            border: 2px dashed rgb(217 70 239);
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        [data-print-card-slot] {
+            position: relative;
+            width: var(--printed-card-width);
+            height: var(--printed-card-height);
+        }
+
+        /* Same insets as the Explore and Library card (mx-6 mt-7 on the
+           artwork, mx-4 on the flavor box), so the side arrows keep their
+           breathing room against the card edge. Scale magnifies the whole
+           card instead of squeezing these. */
+        [data-card-demo] {
+            --card-media-inset: 1.5rem;
+            --card-media-top: 1.75rem;
+            --card-flavor-inset: 1rem;
+            --card-indicator-height: 1.75rem;
+            --card-side-arrow-size: 5rem;
+            --card-side-arrow-offset: 2.875rem;
+            width: var(--effective-card-width);
+            height: var(--effective-card-height);
+            max-width: none;
+            container-type: inline-size;
+            transform: scale(var(--card-scale));
+            transform-origin: top left;
+        }
+
+        [data-card-demo] > div {
+            width: 100%;
+            height: 100%;
+            max-width: none;
+        }
+
+        [data-card-demo] [data-core-card] {
+            width: 100%;
+            height: 100%;
+            min-height: 0;
+            border-radius: 1.125rem;
+            background-color: var(--card-shell);
+            box-shadow: 0 0 0 8px var(--ring-surface);
+            --tw-ring-color: transparent;
+        }
+
+        [data-card-demo] [data-card-demo-media] {
+            flex: none;
+            margin: var(--card-media-top) var(--card-media-inset) 0;
+        }
+
+        [data-card-demo] [data-card-demo-artwork-frame] {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            overflow: visible;
+        }
+
+        [data-card-demo] [data-card-demo-artwork-viewport] {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+        }
+
+        [data-card-demo] [data-card-demo-header] {
+            width: fit-content;
+            max-width: calc(100% - 2rem);
+        }
+
+        [data-card-demo] [data-card-demo-indicator] {
+            width: fit-content;
+            max-width: 100%;
+            min-width: 0;
+            height: var(--card-indicator-height);
+            background-color: var(--card-indicator);
+        }
+
+        [data-card-demo] [data-card-demo-artwork] {
+            background-image: linear-gradient(135deg, var(--artwork-start), var(--artwork-middle), var(--artwork-end));
+        }
+
+        [data-card-demo] [data-card-demo-master-shell] {
+            bottom: 0;
+            max-width: calc(100% - 1rem);
+            --tw-ring-color: var(--card-master-ring);
+        }
+
+        [data-card-demo] [data-card-demo-master] {
+            width: min(13.25rem, calc(100cqw - 2.5rem));
+            height: clamp(1.5rem, 16cqw, 2rem);
+        }
+
+        [data-card-demo] [data-card-demo-slider-row] {
+            width: 100%;
+            min-width: 0;
+            gap: 0.75rem;
+            padding-inline: 1.375rem;
+        }
+
+        [data-card-demo] [data-card-demo-slider-control] {
+            width: 1.5rem;
+            height: 1.5rem;
+            min-width: 1.5rem;
+            min-height: 1.5rem;
+            padding: 0;
+        }
+
+        [data-card-demo] [data-card-demo-slider-track-shell] {
+            padding: 1.5rem 0.5rem;
+        }
+
+        [data-card-demo] [data-card-demo-side-arrow] {
+            width: var(--card-side-arrow-size);
+            height: var(--card-side-arrow-size);
+            transform: translateY(-50%) scaleX(0.75) scaleY(1.5);
+        }
+
+        [data-card-demo] [data-card-demo-side-arrow="left"] {
+            left: calc(-1 * var(--card-side-arrow-offset));
+        }
+
+        [data-card-demo] [data-card-demo-side-arrow="right"] {
+            right: calc(-1 * var(--card-side-arrow-offset));
+        }
+
+        [data-card-demo] [data-card-demo-bottom-arrow] {
+            width: 5.5rem;
+            height: 5.5rem;
+            transform: translate(-50%, -4rem) scaleX(1.25) scaleY(0.75);
+        }
+
+        [data-card-demo] [data-card-demo-like] {
+            width: clamp(1.25rem, 12cqw, 1.75rem);
+            height: clamp(1.25rem, 12cqw, 1.75rem);
+        }
+
+        [data-card-demo] [data-card-demo-like-icon] {
+            width: 62.5%;
+            height: 62.5%;
+        }
+
+        [data-card-demo] [data-card-demo-flavor-box] {
+            min-height: 0;
+            flex: 1 1 auto;
+            margin: 0 var(--card-flavor-inset) 1rem;
+        }
+
+        .card-demo-hue-range {
+            appearance: none;
+            height: 0.7rem;
+            cursor: pointer;
+            border: 1px solid color-mix(in oklab, currentColor 20%, transparent);
+            border-radius: 9999px;
+            background: linear-gradient(90deg,
+                    hsl(0 65% 52%),
+                    hsl(60 65% 52%),
+                    hsl(120 65% 44%),
+                    hsl(180 65% 44%),
+                    hsl(240 65% 55%),
+                    hsl(300 65% 52%),
+                    hsl(360 65% 52%));
+        }
+
+        .card-demo-hue-range::-webkit-slider-thumb {
+            appearance: none;
+            width: 1.2rem;
+            height: 1.2rem;
+            border: 3px solid white;
+            border-radius: 9999px;
+            background: hsl(var(--selected-hue) 55% 45%);
+            box-shadow: 0 1px 5px rgb(0 0 0 / 0.45);
+        }
+
+        .card-demo-hue-range::-moz-range-thumb {
+            width: 0.85rem;
+            height: 0.85rem;
+            border: 3px solid white;
+            border-radius: 9999px;
+            background: hsl(var(--selected-hue) 55% 45%);
+            box-shadow: 0 1px 5px rgb(0 0 0 / 0.45);
+        }
+
+        @page {
+            size: Letter portrait;
+            margin: 0;
+        }
+
+        @media print {
+            html,
+            body {
+                width: 8.5in;
+                height: 11in;
+                margin: 0 !important;
+                overflow: hidden;
+            }
+
+            body > section {
+                min-height: 11in !important;
+                padding: 0 !important;
+            }
+
+            #page-loader,
+            [data-card-demo-tools],
+            [data-print-sheet-caption] {
+                display: none !important;
+            }
+
+            [data-card-demo-page] {
+                width: 8.5in !important;
+                min-height: 11in !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: visible !important;
+                background: white !important;
+            }
+
+            [data-card-demo-editor] {
+                display: block !important;
+                width: 8.5in !important;
+            }
+
+            [data-print-sheet-stage] {
+                box-sizing: border-box !important;
+                width: 8.5in !important;
+                padding: 0 !important;
+                border: 0 !important;
+                border-radius: 0 !important;
+                background: transparent !important;
+            }
+
+            [data-print-sheet] {
+                box-shadow: none !important;
+            }
+
+            [data-print-guide] {
+                display: none !important;
+            }
+        }
+    </style>
+    <main x-data="cardDemo"
+          data-theme="dim"
+          :style="editorStyle"
+          data-card-demo-page
+          class="-mx-6 min-h-dvh overflow-x-auto bg-base-100 px-4 py-8 text-base-content transition-colors duration-300 sm:px-6">
+        <div data-card-demo-sounds hidden>{{ sounds|json_script:"card-demo-sounds" }}</div>
+        <div data-card-demo-editor
+             class="mx-auto flex w-max min-w-full flex-col items-center gap-8 xl:flex-row xl:items-start xl:justify-center">
+            <aside data-card-demo-tools
+                   class="z-50 max-h-[calc(100vh-4rem)] w-80 shrink-0 overflow-y-auto rounded-2xl border border-base-content/15 bg-base-200/95 p-4 shadow-xl backdrop-blur xl:sticky xl:top-8">
+                <div class="mb-4">
+                    <h1 class="text-lg font-bold">Print sheet</h1>
+                    <p class="mt-1 text-sm opacity-70">US Letter · portrait card sheet</p>
+                </div>
+                <fieldset class="mt-5 space-y-4">
+                    <legend class="mb-3 text-xs font-bold uppercase tracking-[0.16em] opacity-60">Colors</legend>
+                    <label class="block" for="card-demo-hue">
+                        <span class="mb-1.5 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
+                            <span>Card</span>
+                            <output for="card-demo-hue" x-text="`${cardColorName} · ${Math.round(cardHue)}°`">Green · 128°</output>
+                        </span>
+                        <input id="card-demo-hue"
+                               data-card-hue-slider
+                               type="range"
+                               min="0"
+                               max="360"
+                               step="1"
+                               :value="cardHue"
+                               @input="setCardHue($event.target.value)"
+                               :aria-valuetext="`${cardColorName}, ${Math.round(cardHue)} degrees`"
+                               :style="`--selected-hue: ${cardHue}`"
+                               class="card-demo-hue-range w-full" />
+                    </label>
+                    <label class="block" for="card-demo-card-brightness">
+                        <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
+                            <span>Card brightness</span>
+                            <output for="card-demo-card-brightness" x-text="`${Math.round(cardBrightness)}%`">18%</output>
+                        </span>
+                        <input id="card-demo-card-brightness"
+                               data-card-brightness-slider
+                               type="range"
+                               min="0"
+                               max="100"
+                               step="1"
+                               :value="cardBrightness"
+                               @input="setCardBrightness($event.target.value)"
+                               :aria-valuetext="`${Math.round(cardBrightness)} percent brightness`"
+                               class="range range-xs w-full" />
+                    </label>
+                    <label class="block" for="card-demo-ring-hue">
+                        <span class="mb-1.5 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
+                            <span>Ring + paper</span>
+                            <output for="card-demo-ring-hue" x-text="`${ringColorName} · ${Math.round(ringHue)}°`">Green · 128°</output>
+                        </span>
+                        <input id="card-demo-ring-hue"
+                               data-ring-paper-hue-slider
+                               type="range"
+                               min="0"
+                               max="360"
+                               step="1"
+                               :value="ringHue"
+                               @input="setRingHue($event.target.value)"
+                               :aria-valuetext="`${ringColorName}, ${Math.round(ringHue)} degrees`"
+                               :style="`--selected-hue: ${ringHue}`"
+                               class="card-demo-hue-range w-full" />
+                    </label>
+                    <label class="block" for="card-demo-ring-brightness">
+                        <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
+                            <span>Ring + paper brightness</span>
+                            <output for="card-demo-ring-brightness" x-text="`${Math.round(ringBrightness)}%`">20%</output>
+                        </span>
+                        <input id="card-demo-ring-brightness"
+                               data-ring-paper-brightness-slider
+                               type="range"
+                               min="0"
+                               max="100"
+                               step="1"
+                               :value="ringBrightness"
+                               @input="setRingBrightness($event.target.value)"
+                               :aria-valuetext="`${Math.round(ringBrightness)} percent brightness`"
+                               class="range range-xs w-full" />
+                    </label>
+                </fieldset>
+                <fieldset class="mt-5 space-y-4 border-t border-base-content/10 pt-4">
+                    <legend class="mb-3 text-xs font-bold uppercase tracking-[0.16em] opacity-60">Layout</legend>
+                    <label class="block" for="card-demo-width">
+                        <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
+                            <span>Card width</span>
+                            <output for="card-demo-width" x-text="`${effectiveCardWidthIn.toFixed(2)} in`">2.00 in</output>
+                        </span>
+                        <input id="card-demo-width"
+                               data-card-width-slider
+                               type="range"
+                               :min="minimumCardWidthIn"
+                               :max="maximumCardWidthIn"
+                               step="0.01"
+                               :value="effectiveCardWidthIn"
+                               @input="setCardWidth($event.target.value)"
+                               :aria-valuetext="`${effectiveCardWidthIn.toFixed(2)} inches`"
+                               class="range range-xs w-full" />
+                    </label>
+                    <label class="block" for="card-demo-height">
+                        <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
+                            <span>Card height</span>
+                            <output for="card-demo-height" x-text="`${effectiveCardHeightIn.toFixed(2)} in`">3.50 in</output>
+                        </span>
+                        <input id="card-demo-height"
+                               data-card-height-slider
+                               type="range"
+                               :min="minimumCardHeightIn"
+                               :max="maximumCardHeightIn"
+                               step="0.01"
+                               :value="effectiveCardHeightIn"
+                               @input="setCardHeight($event.target.value)"
+                               :aria-valuetext="`${effectiveCardHeightIn.toFixed(2)} inches`"
+                               class="range range-xs w-full" />
+                    </label>
+                    <label class="block" for="card-demo-scale">
+                        <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
+                            <span>Overall scale</span>
+                            <output for="card-demo-scale" x-text="`${Math.round(overallScale)}%`">100%</output>
+                        </span>
+                        <input id="card-demo-scale"
+                               data-card-scale-slider
+                               type="range"
+                               min="50"
+                               max="200"
+                               step="1"
+                               :value="overallScale"
+                               @input="setOverallScale($event.target.value)"
+                               :aria-valuetext="`${Math.round(overallScale)} percent`"
+                               class="range range-xs w-full" />
+                    </label>
+                    <label class="block" for="card-demo-gap">
+                        <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
+                            <span>Card + outer gap</span>
+                            <output for="card-demo-gap" x-text="`${Number(cardGapIn).toFixed(2)} in`">0.25 in</output>
+                        </span>
+                        <input id="card-demo-gap"
+                               data-card-gap-slider
+                               type="range"
+                               min="0"
+                               max="1.25"
+                               step="0.05"
+                               :value="cardGapIn"
+                               @input="setCardGap($event.target.value)"
+                               :aria-valuetext="`${Number(cardGapIn).toFixed(2)} inches`"
+                               class="range range-xs w-full" />
+                    </label>
+                </fieldset>
+                <fieldset class="mt-5 space-y-4 border-t border-base-content/10 pt-4">
+                    <legend class="mb-3 text-xs font-bold uppercase tracking-[0.16em] opacity-60">Print guide</legend>
+                    <label class="flex items-center justify-between gap-3 text-sm" for="card-demo-show-guide">
+                        <span>Show guide (never prints)</span>
+                        <input id="card-demo-show-guide"
+                               data-guide-toggle
+                               type="checkbox"
+                               x-model="showGuide"
+                               class="toggle toggle-sm" />
+                    </label>
+                    <div>
+                        <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
+                            <label for="card-demo-guide-width">Guide width</label>
+                            <span class="flex items-center gap-1">
+                                <input data-guide-width-input
+                                       type="number"
+                                       min="0.25"
+                                       max="11"
+                                       step="0.01"
+                                       :value="guideWidthIn.toFixed(2)"
+                                       @change="setGuideWidth($event.target.value); $event.target.value = guideWidthIn.toFixed(2)"
+                                       aria-label="Guide width in inches"
+                                       class="input input-xs w-20 text-right" />
+                                <span>in</span>
+                            </span>
+                        </span>
+                        <input id="card-demo-guide-width"
+                               data-guide-width-slider
+                               type="range"
+                               min="0.25"
+                               max="11"
+                               step="0.05"
+                               :value="guideWidthIn"
+                               @input="setGuideWidth($event.target.value)"
+                               :aria-valuetext="`${guideWidthIn.toFixed(2)} inches`"
+                               class="range range-xs w-full" />
+                    </div>
+                    <div>
+                        <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
+                            <label for="card-demo-guide-height">Guide height</label>
+                            <span class="flex items-center gap-1">
+                                <input data-guide-height-input
+                                       type="number"
+                                       min="0.25"
+                                       max="11"
+                                       step="0.01"
+                                       :value="guideHeightIn.toFixed(2)"
+                                       @change="setGuideHeight($event.target.value); $event.target.value = guideHeightIn.toFixed(2)"
+                                       aria-label="Guide height in inches"
+                                       class="input input-xs w-20 text-right" />
+                                <span>in</span>
+                            </span>
+                        </span>
+                        <input id="card-demo-guide-height"
+                               data-guide-height-slider
+                               type="range"
+                               min="0.25"
+                               max="11"
+                               step="0.05"
+                               :value="guideHeightIn"
+                               @input="setGuideHeight($event.target.value)"
+                               :aria-valuetext="`${guideHeightIn.toFixed(2)} inches`"
+                               class="range range-xs w-full" />
+                    </div>
+                </fieldset>
+                <fieldset class="mt-5 space-y-4 border-t border-base-content/10 pt-4">
+                    <legend class="mb-3 text-xs font-bold uppercase tracking-[0.16em] opacity-60">Card content</legend>
+                    <label class="block" for="card-demo-flavor">
+                        <span class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em]">Flavor text</span>
+                        <textarea id="card-demo-flavor"
+                                  data-flavor-text-input
+                                  rows="3"
+                                  maxlength="500"
+                                  x-model="flavorText"
+                                  placeholder="Write the card's flavor text"
+                                  class="textarea textarea-sm w-full bg-base-100"></textarea>
+                    </label>
+                    <label class="block" for="card-demo-flavor-size">
+                        <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
+                            <span>Flavor size</span>
+                            <output for="card-demo-flavor-size" x-text="`${Math.round(flavorTextSize)} px`">12 px</output>
+                        </span>
+                        <input id="card-demo-flavor-size"
+                               data-flavor-size-slider
+                               type="range"
+                               min="8"
+                               max="28"
+                               step="1"
+                               :value="flavorTextSize"
+                               @input="setFlavorTextSize($event.target.value)"
+                               :aria-valuetext="`${Math.round(flavorTextSize)} pixels`"
+                               class="range range-xs w-full" />
+                    </label>
+                    <label class="block" for="card-demo-flavor-overlay-upload">
+                        <span class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em]">Flavor overlay</span>
+                        <input id="card-demo-flavor-overlay-upload"
+                               data-flavor-overlay-upload
+                               type="file"
+                               accept="image/*,.svg"
+                               aria-describedby="card-demo-flavor-overlay-help"
+                               @change="loadFlavorOverlay($event)"
+                               class="file-input file-input-sm w-full bg-base-100" />
+                        <span id="card-demo-flavor-overlay-help" class="mt-1 block text-xs opacity-60">SVG, PNG, JPG, or other image up to 10 MB · fitted without stretching</span>
+                    </label>
+                    <div x-show="flavorOverlayUrl"
+                         style="display: none"
+                         data-flavor-overlay-status
+                         role="status"
+                         aria-live="polite"
+                         class="flex items-center justify-between gap-2 text-xs">
+                        <span class="min-w-0 truncate" x-text="flavorOverlayName"></span>
+                        <button type="button"
+                                aria-label="Clear flavor overlay"
+                                class="btn btn-ghost btn-xs shrink-0"
+                                @click="clearFlavorOverlay()">Clear</button>
+                    </div>
+                    <p x-show="flavorOverlayError"
+                       style="display: none"
+                       data-flavor-overlay-error
+                       role="alert"
+                       class="text-xs text-error"
+                       x-text="flavorOverlayError"></p>
+                    <label class="block" for="card-demo-flavor-overlay-tint-hue">
+                        <span class="mb-1.5 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
+                            <span>Overlay tint</span>
+                            <output for="card-demo-flavor-overlay-tint-hue" x-text="`${flavorOverlayTintName} · ${Math.round(flavorOverlayTintHue)}°`">Green · 128°</output>
+                        </span>
+                        <input id="card-demo-flavor-overlay-tint-hue"
+                               data-flavor-overlay-tint-hue-slider
+                               type="range"
+                               min="0"
+                               max="360"
+                               step="1"
+                               :value="flavorOverlayTintHue"
+                               @input="setFlavorOverlayTintHue($event.target.value)"
+                               :aria-valuetext="`${flavorOverlayTintName}, ${Math.round(flavorOverlayTintHue)} degrees`"
+                               :style="`--selected-hue: ${flavorOverlayTintHue}`"
+                               class="card-demo-hue-range w-full" />
+                    </label>
+                    <label class="block" for="card-demo-flavor-overlay-tint-brightness">
+                        <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
+                            <span>Tint brightness</span>
+                            <output for="card-demo-flavor-overlay-tint-brightness" x-text="`${Math.round(flavorOverlayTintBrightness)}%`">50%</output>
+                        </span>
+                        <input id="card-demo-flavor-overlay-tint-brightness"
+                               data-flavor-overlay-tint-brightness-slider
+                               type="range"
+                               min="0"
+                               max="100"
+                               step="1"
+                               :value="flavorOverlayTintBrightness"
+                               @input="setFlavorOverlayTintBrightness($event.target.value)"
+                               :aria-valuetext="`${Math.round(flavorOverlayTintBrightness)} percent brightness`"
+                               class="range range-xs w-full" />
+                    </label>
+                    <label class="block" for="card-demo-flavor-overlay-tint-strength">
+                        <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
+                            <span>Tint amount</span>
+                            <output for="card-demo-flavor-overlay-tint-strength" x-text="`${Math.round(flavorOverlayTintStrength)}%`">0%</output>
+                        </span>
+                        <input id="card-demo-flavor-overlay-tint-strength"
+                               data-flavor-overlay-tint-strength-slider
+                               type="range"
+                               min="0"
+                               max="100"
+                               step="1"
+                               :value="flavorOverlayTintStrength"
+                               @input="setFlavorOverlayTintStrength($event.target.value)"
+                               :aria-valuetext="`${Math.round(flavorOverlayTintStrength)} percent tint`"
+                               class="range range-xs w-full" />
+                    </label>
+                    <label class="block" for="card-demo-indicator-text">
+                        <span class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em]">Layer indicator text</span>
+                        <input id="card-demo-indicator-text"
+                               data-indicator-text-input
+                               type="text"
+                               maxlength="40"
+                               x-model="indicatorText"
+                               placeholder="Leave blank for no label"
+                               class="input input-sm w-full bg-base-100" />
+                    </label>
+                    <label class="block" for="card-demo-indicator-size">
+                        <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
+                            <span>Indicator size</span>
+                            <output for="card-demo-indicator-size" x-text="`${Math.round(indicatorTextSize)} px`">14 px</output>
+                        </span>
+                        <input id="card-demo-indicator-size"
+                               data-indicator-size-slider
+                               type="range"
+                               min="8"
+                               max="24"
+                               step="1"
+                               :value="indicatorTextSize"
+                               @input="setIndicatorTextSize($event.target.value)"
+                               :aria-valuetext="`${Math.round(indicatorTextSize)} pixels`"
+                               class="range range-xs w-full" />
+                    </label>
+                    <label class="block" for="card-demo-indicator-spacing">
+                        <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
+                            <span>Indicator letter spacing</span>
+                            <output for="card-demo-indicator-spacing" x-text="`${Number(indicatorTextSpacing).toFixed(1)} px`">0.0 px</output>
+                        </span>
+                        <input id="card-demo-indicator-spacing"
+                               data-indicator-spacing-slider
+                               type="range"
+                               min="-1"
+                               max="8"
+                               step="0.1"
+                               :value="indicatorTextSpacing"
+                               @input="setIndicatorTextSpacing($event.target.value)"
+                               :aria-valuetext="`${Number(indicatorTextSpacing).toFixed(1)} pixels letter spacing`"
+                               class="range range-xs w-full" />
+                    </label>
+                    <label class="block" for="card-demo-master-text">
+                        <span class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em]">Bottom mixer text</span>
+                        <input id="card-demo-master-text"
+                               data-master-text-input
+                               type="text"
+                               maxlength="36"
+                               x-model="masterText"
+                               placeholder="Bottom label"
+                               class="input input-sm w-full bg-base-100" />
+                    </label>
+                    <label class="block" for="card-demo-master-text-size">
+                        <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
+                            <span>Bottom text size</span>
+                            <output for="card-demo-master-text-size" x-text="`${Math.round(masterTextSize)} px`">12 px</output>
+                        </span>
+                        <input id="card-demo-master-text-size"
+                               data-master-text-size-slider
+                               type="range"
+                               min="8"
+                               max="24"
+                               step="1"
+                               :value="masterTextSize"
+                               @input="setMasterTextSize($event.target.value)"
+                               :aria-valuetext="`${Math.round(masterTextSize)} pixels`"
+                               class="range range-xs w-full" />
+                    </label>
+                    <label class="block" for="card-demo-master-text-spacing">
+                        <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
+                            <span>Bottom letter spacing</span>
+                            <output for="card-demo-master-text-spacing" x-text="`${Number(masterTextSpacing).toFixed(1)} px`">2.2 px</output>
+                        </span>
+                        <input id="card-demo-master-text-spacing"
+                               data-master-text-spacing-slider
+                               type="range"
+                               min="-1"
+                               max="8"
+                               step="0.1"
+                               :value="masterTextSpacing"
+                               @input="setMasterTextSpacing($event.target.value)"
+                               :aria-valuetext="`${Number(masterTextSpacing).toFixed(1)} pixels letter spacing`"
+                               class="range range-xs w-full" />
+                    </label>
+                    <label class="flex items-center justify-between gap-3 text-sm" for="card-demo-indicator-centered">
+                        <span>Center layer indicator</span>
+                        <input id="card-demo-indicator-centered"
+                               data-indicator-centered-toggle
+                               type="checkbox"
+                               x-model="indicatorCentered"
+                               class="toggle toggle-sm" />
+                    </label>
+                    <div>
+                        <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.12em]">Visible arrows</span>
+                        <div class="grid grid-cols-3 gap-2">
+                            <label class="flex flex-col items-center gap-1 rounded-lg bg-base-100 p-2 text-xs" for="card-demo-left-arrow">
+                                <span>Left</span>
+                                <input id="card-demo-left-arrow"
+                                       data-left-arrow-toggle
+                                       type="checkbox"
+                                       x-model="showLeftArrow"
+                                       class="toggle toggle-xs" />
+                            </label>
+                            <label class="flex flex-col items-center gap-1 rounded-lg bg-base-100 p-2 text-xs" for="card-demo-right-arrow">
+                                <span>Right</span>
+                                <input id="card-demo-right-arrow"
+                                       data-right-arrow-toggle
+                                       type="checkbox"
+                                       x-model="showRightArrow"
+                                       class="toggle toggle-xs" />
+                            </label>
+                            <label class="flex flex-col items-center gap-1 rounded-lg bg-base-100 p-2 text-xs" for="card-demo-bottom-arrow">
+                                <span>Bottom</span>
+                                <input id="card-demo-bottom-arrow"
+                                       data-bottom-arrow-toggle
+                                       type="checkbox"
+                                       x-model="showBottomArrow"
+                                       class="toggle toggle-xs" />
+                            </label>
+                        </div>
+                    </div>
+                    <label class="block" for="card-demo-bottom-arrow-value">
+                        <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
+                            <span>Bottom arrow position</span>
+                            <output for="card-demo-bottom-arrow-value" x-text="`${Math.round(bottomArrowValue)}%`">50%</output>
+                        </span>
+                        <input id="card-demo-bottom-arrow-value"
+                               data-bottom-arrow-slider
+                               type="range"
+                               min="0"
+                               max="100"
+                               step="1"
+                               :value="bottomArrowValue"
+                               @input="setBottomArrowValue($event.target.value)"
+                               :aria-valuetext="`${Math.round(bottomArrowValue)} percent from the left`"
+                               class="range range-xs w-full" />
+                    </label>
+                </fieldset>
+                <fieldset class="mt-5 space-y-4 border-t border-base-content/10 pt-4">
+                    <legend class="mb-3 text-xs font-bold uppercase tracking-[0.16em] opacity-60">Artwork</legend>
+                    <label class="block" for="card-demo-artwork-upload">
+                        <span class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em]">Upload picture</span>
+                        <input id="card-demo-artwork-upload"
+                               data-artwork-upload
+                               type="file"
+                               accept="image/*"
+                               aria-describedby="card-demo-artwork-help"
+                               @change="loadArtwork($event)"
+                               class="file-input file-input-sm w-full bg-base-100" />
+                        <span id="card-demo-artwork-help" class="mt-1 block text-xs opacity-60">Image files up to 10 MB · previewed only on this device</span>
+                    </label>
+                    <div x-show="uploadedArtworkUrl"
+                         style="display: none"
+                         data-artwork-upload-status
+                         role="status"
+                         aria-live="polite"
+                         class="flex items-center justify-between gap-2 text-xs">
+                        <span class="min-w-0 truncate" x-text="uploadedArtworkName"></span>
+                        <button type="button"
+                                aria-label="Clear uploaded artwork"
+                                class="btn btn-ghost btn-xs shrink-0"
+                                @click="clearArtwork()">Clear</button>
+                    </div>
+                    <p x-show="artworkError"
+                       style="display: none"
+                       data-artwork-error
+                       role="alert"
+                       class="text-xs text-error"
+                       x-text="artworkError"></p>
+                    <label class="flex items-center justify-between gap-3 text-sm" for="card-demo-show-artwork-text">
+                        <span>Show title and artist</span>
+                        <input id="card-demo-show-artwork-text"
+                               data-artwork-text-toggle
+                               type="checkbox"
+                               x-model="showArtworkText"
+                               class="toggle toggle-sm" />
+                    </label>
+                    <label class="block" for="card-demo-artwork-title">
+                        <span class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em]">Artwork title</span>
+                        <input id="card-demo-artwork-title"
+                               data-artwork-title-input
+                               type="text"
+                               maxlength="80"
+                               x-model="artworkTitle"
+                               placeholder="Title"
+                               class="input input-sm w-full bg-base-100" />
+                    </label>
+                    <label class="block" for="card-demo-artist-name">
+                        <span class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em]">Artist name</span>
+                        <input id="card-demo-artist-name"
+                               data-artist-name-input
+                               type="text"
+                               maxlength="80"
+                               x-model="artistName"
+                               placeholder="Artist"
+                               class="input input-sm w-full bg-base-100" />
+                    </label>
+                    <label class="block" for="card-demo-artwork-text-size">
+                        <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
+                            <span>Artwork text size</span>
+                            <output for="card-demo-artwork-text-size" x-text="`${Math.round(artworkTextSize)} px`">18 px</output>
+                        </span>
+                        <input id="card-demo-artwork-text-size"
+                               data-artwork-text-size-slider
+                               type="range"
+                               min="8"
+                               max="32"
+                               step="1"
+                               :value="artworkTextSize"
+                               @input="setArtworkTextSize($event.target.value)"
+                               :aria-valuetext="`${Math.round(artworkTextSize)} pixels`"
+                               class="range range-xs w-full" />
+                    </label>
+                    <label class="flex items-center justify-between gap-3 text-sm" for="card-demo-show-like">
+                        <span>Show like button</span>
+                        <input id="card-demo-show-like"
+                               data-like-button-toggle
+                               type="checkbox"
+                               x-model="showLikeButton"
+                               class="toggle toggle-sm" />
+                    </label>
+                </fieldset>
+                <div data-sheet-summary
+                     class="mt-5 rounded-xl bg-base-100 px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-[0.12em] shadow-inner"
+                     x-text="`${sheetCount} ${sheetCount === 1 ? 'card' : 'cards'} · ${sheetColumns} × ${sheetRows} · ${printedCardWidthIn.toFixed(2)} × ${printedCardHeightIn.toFixed(2)} in printed`">
+                    6 cards · 3 × 2 · 2.00 × 3.50 in printed
+                </div>
+            </aside>
+            <section data-print-sheet-stage
+                     class="shrink-0 rounded-2xl border border-base-content/10 bg-base-300/50 p-6 shadow-inner">
+                <div data-print-sheet-caption
+                     class="mb-4 flex items-center justify-between text-xs font-bold uppercase tracking-[0.14em] opacity-60">
+                    <span>Letter sheet preview</span>
+                    <span>8.5 × 11 in</span>
+                </div>
+                <div data-print-sheet aria-label="US Letter print sheet preview">
+                    <div data-print-grid-island>
+                        <template x-for="copy in sheetCopies" :key="copy">
+                            <div data-print-card-slot>
+                                <c-card-demo-card :sounds="sounds" />
+                            </div>
+                        </template>
+                    </div>
+                    <div x-show="showGuide" data-print-guide aria-hidden="true"></div>
+                </div>
+            </section>
+        </div>
     </main>
 {% endblock content %}

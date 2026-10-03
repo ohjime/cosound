@@ -18,7 +18,7 @@ def card_demo(request):
             "artwork_url": sound.art.url if sound.art else "",
             "flavor": sound.flavor or "This sound is part of the Co-Sound collection.",
             "tags": " / ".join(sound.tags.names()) or "Sound",
-            "gain": 70,
+            "gain": 50,
         }
         for sound in sounds
     ]

@@ -45,6 +45,133 @@ const MAX_CARD_WIDTH_IN = LETTER_WIDTH_IN;
 const MAX_CARD_HEIGHT_IN = LETTER_HEIGHT_IN;
 const MIN_GUIDE_IN = 0.25;
 const MAX_GUIDE_IN = LETTER_HEIGHT_IN;
+// The card's own corner, 1.125rem, in inches before scale.
+const CARD_RADIUS_IN = 0.1875;
+// Everything on a top-sheet card that belongs to the bottom sheet instead,
+// besides the artwork's frame ring: boxes cut along their ringed outline,
+// arrows along their stroked glyph.
+const TOP_CUTOUT_BOXES = [
+    "[data-card-demo-header]",
+    "[data-card-demo-slider-control]",
+    "[data-card-demo-volume-track]",
+    "[data-card-demo-master-shell]",
+].join(", ");
+const TOP_CUTOUT_ARROWS = "[data-card-demo-side-arrow] svg, [data-card-demo-bottom-arrow] svg";
+
+function svgNumber(value) {
+    return String(roundTo(value, 4));
+}
+
+function roundedRectPath({ x, y, width, height }, [topLeft, topRight, bottomRight, bottomLeft]) {
+    const n = svgNumber;
+    return `M${n(x + topLeft)} ${n(y)}`
+        + `H${n(x + width - topRight)}A${n(topRight)} ${n(topRight)} 0 0 1 ${n(x + width)} ${n(y + topRight)}`
+        + `V${n(y + height - bottomRight)}A${n(bottomRight)} ${n(bottomRight)} 0 0 1 ${n(x + width - bottomRight)} ${n(y + height)}`
+        + `H${n(x + bottomLeft)}A${n(bottomLeft)} ${n(bottomLeft)} 0 0 1 ${n(x)} ${n(y + height - bottomLeft)}`
+        + `V${n(y + topLeft)}A${n(topLeft)} ${n(topLeft)} 0 0 1 ${n(x + topLeft)} ${n(y)}Z`;
+}
+
+function svgMaskUrl(width, height, body) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgNumber(width)} ${svgNumber(height)}" preserveAspectRatio="none">${body}</svg>`;
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+
+// Tailwind rings are zero-offset, zero-blur box shadows; the widest one is
+// how far the ring paints outside the element.
+function ringSpread(style) {
+    let flat = style.boxShadow || "";
+    while (/\([^()]*\)/.test(flat)) flat = flat.replace(/\([^()]*\)/g, "");
+    let spread = 0;
+    for (const shadow of flat.split(",")) {
+        if (/\binset\b/.test(shadow)) continue;
+        const [x, y, blur, size] = (shadow.match(/-?[\d.]+px/g) || []).map(parseFloat);
+        if (x === 0 && y === 0 && blur === 0 && size > 0) spread = Math.max(spread, size);
+    }
+    return spread;
+}
+
+function cornerRadii(style, box, spread = 0) {
+    const limit = Math.min(box.width, box.height) / 2;
+    return [
+        style.borderTopLeftRadius,
+        style.borderTopRightRadius,
+        style.borderBottomRightRadius,
+        style.borderBottomLeftRadius,
+    ].map((value = "0") => {
+        const radius = String(value).endsWith("%")
+            ? parseFloat(value) / 100 * Math.min(box.width, box.height)
+            : parseFloat(value) || 0;
+        return radius > 0 ? Math.min(radius, limit) + spread : 0;
+    });
+}
+
+function grow(box, spread) {
+    return {
+        x: box.x - spread,
+        y: box.y - spread,
+        width: box.width + spread * 2,
+        height: box.height + spread * 2,
+    };
+}
+
+// Traces the pieces of one top-sheet card that belong to the bottom sheet as
+// holes in a mask the size of the card: the artwork's frame ring, the layer
+// indicator, the arrows, the mixer row and the bottom mixer tab. Each hole is
+// the piece's full shape, ring included, so it notches into the artwork or
+// flavor box wherever the piece overlaps them on screen.
+function topCutoutMask(card) {
+    const styleOf = (element) => globalThis.getComputedStyle(element);
+    const bounds = card.getBoundingClientRect();
+    const scale = bounds.width / card.offsetWidth || 1;
+    const local = (element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+            x: (rect.left - bounds.left) / scale,
+            y: (rect.top - bounds.top) / scale,
+            width: rect.width / scale,
+            height: rect.height / scale,
+        };
+    };
+    const shown = (element) => element?.getClientRects().length > 0;
+    const shapes = [];
+    const frame = card.querySelector("[data-card-demo-artwork-frame]");
+    if (shown(frame)) {
+        const style = styleOf(frame);
+        const box = local(frame);
+        const spread = ringSpread(style);
+        shapes.push(`<path fill="black" d="${roundedRectPath(grow(box, spread), cornerRadii(style, box, spread))}"/>`);
+        shapes.push(`<path fill="white" d="${roundedRectPath(box, cornerRadii(style, box))}"/>`);
+    }
+    for (const piece of card.querySelectorAll(TOP_CUTOUT_BOXES)) {
+        if (!shown(piece)) continue;
+        const style = styleOf(piece);
+        const box = local(piece);
+        const spread = ringSpread(style);
+        shapes.push(`<path fill="black" d="${roundedRectPath(grow(box, spread), cornerRadii(style, box, spread))}"/>`);
+    }
+    for (const icon of card.querySelectorAll(TOP_CUTOUT_ARROWS)) {
+        const path = icon.querySelector("path");
+        if (!shown(icon) || !path) continue;
+        // The glyph box is already stretched by the arrow's own transform, so
+        // mapping the viewBox onto it unevenly reproduces the drawn arrow.
+        const box = local(icon);
+        const viewBox = (icon.getAttribute("viewBox") || "0 0 24 24").split(/[\s,]+/).map(Number);
+        const turn = parseFloat(styleOf(icon).rotate) || 0;
+        const centerX = viewBox[0] + viewBox[2] / 2;
+        const centerY = viewBox[1] + viewBox[3] / 2;
+        shapes.push(
+            `<svg x="${svgNumber(box.x)}" y="${svgNumber(box.y)}" width="${svgNumber(box.width)}" height="${svgNumber(box.height)}" viewBox="${viewBox.join(" ")}" preserveAspectRatio="none" overflow="visible">`
+            + `<path transform="rotate(${turn} ${centerX} ${centerY})" fill="black" stroke="black" stroke-width="${path.getAttribute("stroke-width") || 0}" stroke-linejoin="round" d="${path.getAttribute("d")}"/>`
+            + "</svg>",
+        );
+    }
+    const width = card.offsetWidth;
+    const height = card.offsetHeight;
+    return svgMaskUrl(width, height,
+        `<mask id="cutouts" maskUnits="userSpaceOnUse" x="0" y="0" width="${width}" height="${height}">`
+        + `<rect width="${width}" height="${height}" fill="white"/>${shapes.join("")}</mask>`
+        + `<rect width="${width}" height="${height}" mask="url(#cutouts)"/>`);
+}
 
 /** UI-only facsimile of the Explore card. It never creates or loads audio. */
 export function cardDemo(initialLayers = []) {
@@ -61,6 +188,8 @@ export function cardDemo(initialLayers = []) {
         cardHeightIn: 3.5,
         overallScale: 100,
         cardGapIn: 0.25,
+        splitLayers: false,
+        topCutoutMask: "",
         showGuide: true,
         guideWidthIn: 2,
         guideHeightIn: 3.5,
@@ -93,6 +222,8 @@ export function cardDemo(initialLayers = []) {
         showLikeButton: false,
 
         init() {
+            // Web fonts change the layer indicator's width once they land.
+            globalThis.document?.fonts?.ready.then(() => this.measureTopCutouts());
             const payload = this.$el?.querySelector("[data-card-demo-sounds] script");
             if (!payload) return;
             try {
@@ -207,25 +338,89 @@ export function cardDemo(initialLayers = []) {
         get guideColumn() {
             return Math.floor((this.sheetColumns - 1) / 2);
         },
-        get guideCenterXIn() {
+        get islandWidthIn() {
             const gap = clamp(this.cardGapIn, 0, 1.25);
-            const islandWidth = this.sheetColumns * this.printedCardWidthIn
+            return this.sheetColumns * this.printedCardWidthIn
                 + (this.sheetColumns - 1) * gap
                 + this.islandPaddingXIn * 2;
-            return roundTo((LETTER_WIDTH_IN - islandWidth) / 2
+        },
+        get islandHeightIn() {
+            const gap = clamp(this.cardGapIn, 0, 1.25);
+            return this.sheetRows * this.printedCardHeightIn
+                + (this.sheetRows - 1) * gap
+                + this.islandPaddingYIn * 2;
+        },
+        get guideCenterXIn() {
+            const gap = clamp(this.cardGapIn, 0, 1.25);
+            return roundTo((LETTER_WIDTH_IN - this.islandWidthIn) / 2
                 + this.islandPaddingXIn
                 + this.guideColumn * (this.printedCardWidthIn + gap)
                 + this.printedCardWidthIn / 2);
         },
         get guideCenterYIn() {
-            const gap = clamp(this.cardGapIn, 0, 1.25);
-            const islandHeight = this.sheetRows * this.printedCardHeightIn
-                + (this.sheetRows - 1) * gap
-                + this.islandPaddingYIn * 2;
-            return roundTo((LETTER_HEIGHT_IN - islandHeight) / 2 + this.islandPaddingYIn + this.printedCardHeightIn / 2);
+            return roundTo((LETTER_HEIGHT_IN - this.islandHeightIn) / 2 + this.islandPaddingYIn + this.printedCardHeightIn / 2);
         },
         get sheetCopies() {
             return Array.from({ length: this.sheetCount }, (_, index) => index + 1);
+        },
+        // Split printing lays the same sheet out twice. The top sheet is just
+        // the card bodies — card color, artwork with its text, and the whole
+        // flavor box — with transparent holes where everything else goes.
+        // The bottom sheet is the border color around and between the cards
+        // plus that everything else, with the card bodies left transparent.
+        get printSheets() {
+            if (!this.splitLayers) return [{ layer: "full", caption: "Letter sheet preview" }];
+            return [
+                { layer: "top", caption: "Sheet 1 · Top layer · cut out the holes" },
+                { layer: "bottom", caption: "Sheet 2 · Bottom layer" },
+            ];
+        },
+        // The bottom sheet's border color: the whole island minus each card's
+        // rounded body, in paper inches.
+        get bottomSheetMask() {
+            const gap = clamp(this.cardGapIn, 0, 1.25);
+            const width = this.printedCardWidthIn;
+            const height = this.printedCardHeightIn;
+            const radius = Math.min(CARD_RADIUS_IN * this.scaleRatio, width / 2, height / 2);
+            const bodies = this.sheetCopies.map((copy) => roundedRectPath({
+                x: this.islandPaddingXIn + ((copy - 1) % this.sheetColumns) * (width + gap),
+                y: this.islandPaddingYIn + Math.floor((copy - 1) / this.sheetColumns) * (height + gap),
+                width,
+                height,
+            }, [radius, radius, radius, radius]));
+            const island = `M0 0H${svgNumber(this.islandWidthIn)}V${svgNumber(this.islandHeightIn)}H0Z`;
+            return svgMaskUrl(this.islandWidthIn, this.islandHeightIn,
+                `<path fill-rule="evenodd" d="${island}${bodies.join("")}"/>`);
+        },
+        // Everything that moves or resizes a top-sheet cut-out. Reading it in
+        // an effect re-traces the holes whenever one of these changes.
+        get topCutoutLayout() {
+            return [
+                this.splitLayers,
+                this.effectiveCardWidthIn,
+                this.effectiveCardHeightIn,
+                this.indicatorText,
+                this.indicatorTextSize,
+                this.indicatorTextSpacing,
+                this.indicatorCentered,
+                this.showLeftArrow,
+                this.showRightArrow,
+                this.showBottomArrow,
+                this.bottomArrowValue,
+            ].join("|");
+        },
+        get printLayerStyle() {
+            if (!this.splitLayers) return "";
+            return [
+                `--bottom-sheet-mask: ${this.bottomSheetMask}`,
+                `--top-cutout-mask: ${this.topCutoutMask || "none"}`,
+            ].join("; ");
+        },
+        // Every card shares one layout, so tracing the first top-sheet card
+        // gives the holes for all of them.
+        measureTopCutouts(root = globalThis.document) {
+            const card = root?.querySelector('[data-print-layer="top"] [data-core-card]');
+            if (card) this.topCutoutMask = topCutoutMask(card);
         },
         get editorStyle() {
             return [

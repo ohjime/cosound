@@ -563,6 +563,125 @@ test("the print guide keeps its paper size and stays centered on the middle top-
 });
 
 
+test("split printing turns one sheet into a top and a bottom layer with the same layout", () => {
+    const demo = cardDemo(layers());
+
+    assert.equal(demo.splitLayers, false);
+    assert.deepEqual(demo.printSheets.map((sheet) => sheet.layer), ["full"]);
+
+    const layout = [demo.sheetCount, demo.sheetColumns, demo.sheetRows, demo.editorStyle];
+    demo.splitLayers = true;
+    assert.deepEqual(demo.printSheets.map((sheet) => sheet.layer), ["top", "bottom"]);
+    assert.deepEqual(
+        demo.printSheets.map((sheet) => sheet.caption),
+        ["Sheet 1 · Top layer · cut out the holes", "Sheet 2 · Bottom layer"],
+    );
+    assert.deepEqual([demo.sheetCount, demo.sheetColumns, demo.sheetRows, demo.editorStyle], layout);
+
+    demo.splitLayers = false;
+    assert.deepEqual(demo.printSheets.map((sheet) => sheet.layer), ["full"]);
+    assert.equal(demo.printLayerStyle, "");
+});
+
+
+function decodeMask(url) {
+    return decodeURIComponent(url.replace(/^url\("data:image\/svg\+xml,/, "").replace(/"\)$/, ""));
+}
+
+
+test("the bottom sheet's border color fills the island but leaves every card body bare", () => {
+    const demo = cardDemo(layers());
+    demo.splitLayers = true;
+
+    const svg = decodeMask(demo.bottomSheetMask);
+    assert.match(svg, /viewBox="0 0 7 7\.75"/);
+    assert.match(svg, /fill-rule="evenodd"/);
+    // The island outline, then one rounded body per card.
+    assert.equal(svg.match(/M/g).length, demo.sheetCount + 1);
+    assert.match(svg, /M0\.4375 0\.25H2\.0625A0\.1875 0\.1875/);
+    assert.match(demo.printLayerStyle, /--bottom-sheet-mask: url\("data:image\/svg\+xml,/);
+    assert.match(demo.printLayerStyle, /--top-cutout-mask: none/);
+
+    demo.setOverallScale(50);
+    demo.setCardGap(0);
+    assert.equal(demo.islandPaddingXIn, 0);
+    assert.match(decodeMask(demo.bottomSheetMask), /M0\.0938 0H0\.9063A0\.0938 0\.0938/);
+});
+
+
+function fakeElement(rect, { attributes = {}, children = {}, hidden = false } = {}) {
+    return {
+        offsetWidth: rect.width,
+        offsetHeight: rect.height,
+        getBoundingClientRect: () => ({ left: rect.x, top: rect.y, width: rect.width, height: rect.height }),
+        getClientRects: () => (hidden ? [] : [rect]),
+        getAttribute: (name) => attributes[name] ?? null,
+        querySelector: (selector) => children[selector]?.[0] ?? null,
+        querySelectorAll: (selector) => selector.split(", ").flatMap((part) => children[part] ?? []),
+    };
+}
+
+
+test("top-sheet holes trace each bottom-sheet piece in the card's own unscaled pixels", () => {
+    const glyph = (rect, turn) => {
+        const path = fakeElement(rect, { attributes: { d: "M400-280v-400l200 200-200 200Z", "stroke-width": "40" } });
+        const icon = fakeElement(rect, { attributes: { viewBox: "0 -960 960 960" }, children: { path: [path] } });
+        icon.style = { rotate: turn };
+        return icon;
+    };
+    // Laid out at 2x scale, 100px to the right of the viewport origin.
+    const frame = fakeElement({ x: 148, y: 56, width: 288, height: 288 });
+    frame.style = {
+        boxShadow: "rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.8 -0.02 -0.02 / 0.7) 0px 0px 0px 7px",
+        borderTopLeftRadius: "6px",
+        borderTopRightRadius: "6px",
+        borderBottomRightRadius: "0px",
+        borderBottomLeftRadius: "0px",
+    };
+    const track = fakeElement({ x: 232, y: 392, width: 120, height: 16 });
+    track.style = { boxShadow: "none", borderTopLeftRadius: "3.35544e+07px", borderTopRightRadius: "3.35544e+07px", borderBottomRightRadius: "3.35544e+07px", borderBottomLeftRadius: "3.35544e+07px" };
+    const hiddenControl = fakeElement({ x: 0, y: 0, width: 0, height: 0 }, { hidden: true });
+    hiddenControl.style = { boxShadow: "none" };
+    const bottomArrow = glyph({ x: 218, y: 300, width: 132, height: 80 }, "90deg");
+    const card = fakeElement({ x: 100, y: 0, width: 384, height: 672 }, {
+        children: {
+            "[data-card-demo-artwork-frame]": [frame],
+            "[data-card-demo-volume-track]": [track],
+            "[data-card-demo-slider-control]": [hiddenControl],
+            "[data-card-demo-bottom-arrow] svg": [bottomArrow],
+        },
+    });
+    card.offsetWidth = 192;
+    card.offsetHeight = 336;
+    const root = { querySelector: (selector) => (selector === '[data-print-layer="top"] [data-core-card]' ? card : null) };
+
+    const originalStyle = globalThis.getComputedStyle;
+    globalThis.getComputedStyle = (element) => element.style ?? {};
+    try {
+        const demo = cardDemo(layers());
+        demo.measureTopCutouts(root);
+        const svg = decodeMask(demo.topCutoutMask);
+
+        assert.match(svg, /viewBox="0 0 192 336"/);
+        // The frame's ring is cut 7px wide around the artwork, which stays.
+        assert.match(svg, /<path fill="black" d="M30 21H162A13 13 0 0 1 175 34V179A0 0 0 0 1 175 179H17A0 0 0 0 1 17 179V34A13 13 0 0 1 30 21Z"\/>/);
+        assert.match(svg, /<path fill="white" d="M30 28H162A6 6 0 0 1 168 34V172A0 0 0 0 1 168 172H24A0 0 0 0 1 24 172V34A6 6 0 0 1 30 28Z"\/>/);
+        // A pill keeps its round ends instead of the infinite Tailwind radius.
+        assert.match(svg, /M70 196H122A4 4 0 0 1 126 200V200A4 4 0 0 1 122 204H70A4 4 0 0 1 66 200V200A4 4 0 0 1 70 196Z/);
+        // Arrows keep their stretch and rotation.
+        assert.match(svg, /<svg x="59" y="150" width="66" height="40" viewBox="0 -960 960 960" preserveAspectRatio="none"/);
+        assert.match(svg, /transform="rotate\(90 480 -480\)"/);
+        assert.match(svg, /stroke-width="40"/);
+        assert.equal(svg.match(/fill="black"/g).length, 3);
+        assert.match(demo.printLayerStyle, /^$/);
+        demo.splitLayers = true;
+        assert.match(demo.printLayerStyle, /--top-cutout-mask: url\("data:image\/svg\+xml,/);
+    } finally {
+        globalThis.getComputedStyle = originalStyle;
+    }
+});
+
+
 test("dimension endpoints stay aligned to the hundredth-inch slider step", () => {
     const demo = cardDemo(layers());
 

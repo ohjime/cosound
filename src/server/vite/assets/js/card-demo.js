@@ -45,18 +45,11 @@ const MAX_CARD_WIDTH_IN = LETTER_WIDTH_IN;
 const MAX_CARD_HEIGHT_IN = LETTER_HEIGHT_IN;
 const MIN_GUIDE_IN = 0.25;
 const MAX_GUIDE_IN = LETTER_HEIGHT_IN;
-// The card's own corner, 1.125rem, in inches before scale.
-const CARD_RADIUS_IN = 0.1875;
-// Everything on a top-sheet card that belongs to the bottom sheet instead,
-// besides the artwork's frame ring: boxes cut along their ringed outline,
-// arrows along their stroked glyph.
-const TOP_CUTOUT_BOXES = [
-    "[data-card-demo-header]",
-    "[data-card-demo-slider-control]",
-    "[data-card-demo-volume-track]",
-    "[data-card-demo-master-shell]",
-].join(", ");
-const TOP_CUTOUT_ARROWS = "[data-card-demo-side-arrow] svg, [data-card-demo-bottom-arrow] svg";
+// On a holographic print these show the paper instead of ink: rings and
+// buttons cut whole, arrows along their white outline only.
+const HOLOGRAPHIC_RINGS = "[data-card-demo-artwork-frame], [data-card-demo-header]";
+const HOLOGRAPHIC_BUTTONS = "[data-card-demo-slider-control]";
+const HOLOGRAPHIC_ARROWS = "[data-card-demo-side-arrow] svg, [data-card-demo-bottom-arrow] svg";
 
 function svgNumber(value) {
     return String(roundTo(value, 4));
@@ -71,7 +64,7 @@ function roundedRectPath({ x, y, width, height }, [topLeft, topRight, bottomRigh
         + `V${n(y + topLeft)}A${n(topLeft)} ${n(topLeft)} 0 0 1 ${n(x + topLeft)} ${n(y)}Z`;
 }
 
-function svgMaskUrl(width, height, body) {
+function svgUrl(width, height, body) {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgNumber(width)} ${svgNumber(height)}" preserveAspectRatio="none">${body}</svg>`;
     return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
@@ -114,12 +107,13 @@ function grow(box, spread) {
     };
 }
 
-// Traces the pieces of one top-sheet card that belong to the bottom sheet as
-// holes in a mask the size of the card: the artwork's frame ring, the layer
-// indicator, the arrows, the mixer row and the bottom mixer tab. Each hole is
-// the piece's full shape, ring included, so it notches into the artwork or
-// flavor box wherever the piece overlaps them on screen.
-function topCutoutMask(card) {
+// Traces one rendered card's holographic pieces as holes in a mask the size
+// of the card: the artwork's and the layer indicator's rings (their insides
+// stay), the mixer buttons whole, and each arrow's white outline, which
+// leaves a smaller orange triangle inside it. Holes are painted in the
+// card's stacking order, so a ring sitting over the artwork notches into it
+// and an arrow sitting over a ring keeps its triangle.
+function holographicMask(card) {
     const styleOf = (element) => globalThis.getComputedStyle(element);
     const bounds = card.getBoundingClientRect();
     const scale = bounds.width / card.offsetWidth || 1;
@@ -134,22 +128,21 @@ function topCutoutMask(card) {
     };
     const shown = (element) => element?.getClientRects().length > 0;
     const shapes = [];
-    const frame = card.querySelector("[data-card-demo-artwork-frame]");
-    if (shown(frame)) {
-        const style = styleOf(frame);
-        const box = local(frame);
+    for (const ringed of card.querySelectorAll(HOLOGRAPHIC_RINGS)) {
+        if (!shown(ringed)) continue;
+        const style = styleOf(ringed);
+        const box = local(ringed);
         const spread = ringSpread(style);
         shapes.push(`<path fill="black" d="${roundedRectPath(grow(box, spread), cornerRadii(style, box, spread))}"/>`);
         shapes.push(`<path fill="white" d="${roundedRectPath(box, cornerRadii(style, box))}"/>`);
     }
-    for (const piece of card.querySelectorAll(TOP_CUTOUT_BOXES)) {
-        if (!shown(piece)) continue;
-        const style = styleOf(piece);
-        const box = local(piece);
-        const spread = ringSpread(style);
-        shapes.push(`<path fill="black" d="${roundedRectPath(grow(box, spread), cornerRadii(style, box, spread))}"/>`);
+    for (const button of card.querySelectorAll(HOLOGRAPHIC_BUTTONS)) {
+        if (!shown(button)) continue;
+        const style = styleOf(button);
+        const box = local(button);
+        shapes.push(`<path fill="black" d="${roundedRectPath(box, cornerRadii(style, box))}"/>`);
     }
-    for (const icon of card.querySelectorAll(TOP_CUTOUT_ARROWS)) {
+    for (const icon of card.querySelectorAll(HOLOGRAPHIC_ARROWS)) {
         const path = icon.querySelector("path");
         if (!shown(icon) || !path) continue;
         // The glyph box is already stretched by the arrow's own transform, so
@@ -159,18 +152,20 @@ function topCutoutMask(card) {
         const turn = parseFloat(styleOf(icon).rotate) || 0;
         const centerX = viewBox[0] + viewBox[2] / 2;
         const centerY = viewBox[1] + viewBox[3] / 2;
+        const glyph = `transform="rotate(${turn} ${centerX} ${centerY})" d="${path.getAttribute("d")}"`;
         shapes.push(
             `<svg x="${svgNumber(box.x)}" y="${svgNumber(box.y)}" width="${svgNumber(box.width)}" height="${svgNumber(box.height)}" viewBox="${viewBox.join(" ")}" preserveAspectRatio="none" overflow="visible">`
-            + `<path transform="rotate(${turn} ${centerX} ${centerY})" fill="black" stroke="black" stroke-width="${path.getAttribute("stroke-width") || 0}" stroke-linejoin="round" d="${path.getAttribute("d")}"/>`
+            + `<path ${glyph} fill="white"/>`
+            + `<path ${glyph} fill="none" stroke="black" stroke-width="${path.getAttribute("stroke-width") || 0}" stroke-linejoin="round"/>`
             + "</svg>",
         );
     }
     const width = card.offsetWidth;
     const height = card.offsetHeight;
-    return svgMaskUrl(width, height,
-        `<mask id="cutouts" maskUnits="userSpaceOnUse" x="0" y="0" width="${width}" height="${height}">`
+    return svgUrl(width, height,
+        `<mask id="holes" maskUnits="userSpaceOnUse" x="0" y="0" width="${width}" height="${height}">`
         + `<rect width="${width}" height="${height}" fill="white"/>${shapes.join("")}</mask>`
-        + `<rect width="${width}" height="${height}" mask="url(#cutouts)"/>`);
+        + `<rect width="${width}" height="${height}" mask="url(#holes)"/>`);
 }
 
 /** UI-only facsimile of the Explore card. It never creates or loads audio. */
@@ -184,15 +179,16 @@ export function cardDemo(initialLayers = []) {
         cardBrightness: 18.4,
         ringHue: 128,
         ringBrightness: 20,
-        cardWidthIn: 2,
-        cardHeightIn: 3.5,
-        overallScale: 100,
+        cardWidthIn: 3.17,
+        cardHeightIn: 5.07,
+        overallScale: 62,
         cardGapIn: 0.25,
-        splitLayers: false,
-        topCutoutMask: "",
+        holographic: false,
+        holographicCardMask: "",
+        showCutLines: true,
         showGuide: true,
-        guideWidthIn: 2,
-        guideHeightIn: 3.5,
+        guideWidthIn: 2.2,
+        guideHeightIn: 3.34,
         flavorText: "",
         flavorTextSize: 12,
         flavorOverlayUrl: "",
@@ -223,7 +219,7 @@ export function cardDemo(initialLayers = []) {
 
         init() {
             // Web fonts change the layer indicator's width once they land.
-            globalThis.document?.fonts?.ready.then(() => this.measureTopCutouts());
+            globalThis.document?.fonts?.ready.then(() => this.measureHolographic());
             const payload = this.$el?.querySelector("[data-card-demo-sounds] script");
             if (!payload) return;
             try {
@@ -363,40 +359,32 @@ export function cardDemo(initialLayers = []) {
         get sheetCopies() {
             return Array.from({ length: this.sheetCount }, (_, index) => index + 1);
         },
-        // Split printing lays the same sheet out twice. The top sheet is just
-        // the card bodies — card color, artwork with its text, and the whole
-        // flavor box — with transparent holes where everything else goes.
-        // The bottom sheet is the border color around and between the cards
-        // plus that everything else, with the card bodies left transparent.
-        get printSheets() {
-            if (!this.splitLayers) return [{ layer: "full", caption: "Letter sheet preview" }];
-            return [
-                { layer: "top", caption: "Sheet 1 · Top layer · cut out the holes" },
-                { layer: "bottom", caption: "Sheet 2 · Bottom layer" },
-            ];
-        },
-        // The bottom sheet's border color: the whole island minus each card's
-        // rounded body, in paper inches.
-        get bottomSheetMask() {
+        // Cut lines run down the middle of every gap and the same half gap
+        // outside the outer cards, so each card cuts out with an equal margin.
+        // They span the whole island so a trimmer can take them in one pass.
+        // This is only their shape; the sheet decides their color.
+        get cutLinesImage() {
             const gap = clamp(this.cardGapIn, 0, 1.25);
-            const width = this.printedCardWidthIn;
-            const height = this.printedCardHeightIn;
-            const radius = Math.min(CARD_RADIUS_IN * this.scaleRatio, width / 2, height / 2);
-            const bodies = this.sheetCopies.map((copy) => roundedRectPath({
-                x: this.islandPaddingXIn + ((copy - 1) % this.sheetColumns) * (width + gap),
-                y: this.islandPaddingYIn + Math.floor((copy - 1) / this.sheetColumns) * (height + gap),
-                width,
-                height,
-            }, [radius, radius, radius, radius]));
-            const island = `M0 0H${svgNumber(this.islandWidthIn)}V${svgNumber(this.islandHeightIn)}H0Z`;
-            return svgMaskUrl(this.islandWidthIn, this.islandHeightIn,
-                `<path fill-rule="evenodd" d="${island}${bodies.join("")}"/>`);
+            const width = this.islandWidthIn;
+            const height = this.islandHeightIn;
+            const across = (padding, size, count, limit) => Array.from(
+                { length: count + 1 },
+                (_, index) => Math.min(limit, Math.max(0, padding + index * (size + gap) - gap / 2)),
+            );
+            const columns = across(this.islandPaddingXIn, this.printedCardWidthIn, this.sheetColumns, width);
+            const rows = across(this.islandPaddingYIn, this.printedCardHeightIn, this.sheetRows, height);
+            const path = [
+                ...columns.map((x) => `M${svgNumber(x)} 0V${svgNumber(height)}`),
+                ...rows.map((y) => `M0 ${svgNumber(y)}H${svgNumber(width)}`),
+            ].join("");
+            return svgUrl(width, height,
+                `<path d="${path}" fill="none" stroke="black" stroke-width="0.015" stroke-dasharray="0.04 0.04"/>`);
         },
-        // Everything that moves or resizes a top-sheet cut-out. Reading it in
+        // Everything that moves or resizes a holographic hole. Reading it in
         // an effect re-traces the holes whenever one of these changes.
-        get topCutoutLayout() {
+        get holographicLayout() {
             return [
-                this.splitLayers,
+                this.holographic,
                 this.effectiveCardWidthIn,
                 this.effectiveCardHeightIn,
                 this.indicatorText,
@@ -409,18 +397,18 @@ export function cardDemo(initialLayers = []) {
                 this.bottomArrowValue,
             ].join("|");
         },
-        get printLayerStyle() {
-            if (!this.splitLayers) return "";
+        get printStyle() {
             return [
-                `--bottom-sheet-mask: ${this.bottomSheetMask}`,
-                `--top-cutout-mask: ${this.topCutoutMask || "none"}`,
+                `--cut-lines: ${this.showCutLines ? this.cutLinesImage : "none"}`,
+                `--holographic-mask: ${(this.holographic && this.holographicCardMask) || "none"}`,
             ].join("; ");
         },
-        // Every card shares one layout, so tracing the first top-sheet card
-        // gives the holes for all of them.
-        measureTopCutouts(root = globalThis.document) {
-            const card = root?.querySelector('[data-print-layer="top"] [data-core-card]');
-            if (card) this.topCutoutMask = topCutoutMask(card);
+        // Every card shares one layout, so tracing the first card gives the
+        // holes for all of them.
+        measureHolographic(root = globalThis.document) {
+            if (!this.holographic) return;
+            const card = root?.querySelector("[data-print-holographic] [data-core-card]");
+            if (card) this.holographicCardMask = holographicMask(card);
         },
         get editorStyle() {
             return [

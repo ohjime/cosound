@@ -199,91 +199,75 @@
             margin: 0 var(--card-flavor-inset) 1rem;
         }
 
-        /* Two-layer printing. Both sheets lay the cards out identically —
-           pieces are only hidden or masked, never removed — so every piece
-           prints in exactly the same spot on each sheet. Transparent areas
-           print nothing at all. */
+        /* Cut lines: dotted lines through the middle of every gap, drawn
+           over the island. The lines' shape masks a solid color, white on
+           the colored gaps of a normal sheet. */
+        [data-print-grid-island] {
+            position: relative;
+        }
 
-        /* Screen-only checkerboard, so transparent areas read as transparent
-           rather than white. */
-        [data-print-layer="top"],
-        [data-print-layer="bottom"] {
+        [data-print-cut-lines] [data-print-grid-island]::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background-color: var(--cut-line-color, white);
+            mask-image: var(--cut-lines, none);
+            mask-size: 100% 100%;
+            mask-repeat: no-repeat;
+            -webkit-mask-image: var(--cut-lines, none);
+            -webkit-mask-size: 100% 100%;
+            -webkit-mask-repeat: no-repeat;
+            pointer-events: none;
+        }
+
+        /* Holographic finish, for holographic paper: the card's light parts
+           print no ink so the paper shows through. The artwork ring, the
+           layer indicator's ring, the mixer buttons and each arrow's white
+           outline are masked out of the card; the indicator text and the
+           mixer tab's background are painted white, which prints no ink
+           either. Everything else prints as normal. */
+        [data-print-holographic] [data-core-card] {
+            box-shadow: none;
+            mask-image: var(--holographic-mask, none);
+            mask-size: 100% 100%;
+            mask-repeat: no-repeat;
+            -webkit-mask-image: var(--holographic-mask, none);
+            -webkit-mask-size: 100% 100%;
+            -webkit-mask-repeat: no-repeat;
+        }
+
+        /* The card rings and the gaps between cards are bare paper too, so
+           the cut lines take the ring color to stay visible on it. */
+        [data-print-holographic] [data-print-grid-island] {
+            --cut-line-color: var(--page-surface);
+            background-color: transparent;
+        }
+
+        [data-print-holographic] [data-card-demo-artwork-frame],
+        [data-print-holographic] [data-card-demo-header] {
+            --tw-ring-color: transparent;
+        }
+
+        [data-print-holographic] [data-card-demo-slider-control] {
+            visibility: hidden;
+        }
+
+        /* Bare paper reads as a checkerboard on screen; print turns these
+           back to plain white. */
+        [data-print-holographic],
+        [data-print-holographic] [data-card-demo-master-shell] {
+            background-color: white;
             background-image: conic-gradient(rgb(0 0 0 / 0.07) 25%, transparent 0 50%, rgb(0 0 0 / 0.07) 0 75%, transparent 0);
             background-size: 0.125in 0.125in;
         }
 
-        /* Top sheet: only the card bodies — card color, artwork with its
-           text, and the whole flavor box, ring included — with no border or
-           spacing color around them. Every bottom-sheet piece is a
-           transparent hole in its full on-card shape, notching into the
-           artwork or flavor box where it overlaps them. */
-        [data-print-layer="top"] [data-print-grid-island] {
-            background-color: transparent;
-        }
-
-        [data-print-layer="top"] [data-core-card] {
-            box-shadow: none;
-            mask-image: var(--top-cutout-mask, none);
-            mask-size: 100% 100%;
-            mask-repeat: no-repeat;
-            -webkit-mask-image: var(--top-cutout-mask, none);
-            -webkit-mask-size: 100% 100%;
-            -webkit-mask-repeat: no-repeat;
-        }
-
-        [data-print-layer="top"] [data-card-demo-artwork-frame] {
-            --tw-ring-color: transparent;
-        }
-
-        [data-print-layer="top"] [data-card-demo-header],
-        [data-print-layer="top"] [data-card-demo-side-arrow],
-        [data-print-layer="top"] [data-card-demo-slider-row],
-        [data-print-layer="top"] [data-card-demo-master-shell] {
-            visibility: hidden;
-        }
-
-        /* Bottom sheet: the border color around and between the cards, plus
-           everything that shows through the top sheet's holes — the layer
-           indicator, the artwork's frame ring, the arrows, the mixer row and
-           the bottom mixer tab. The card bodies stay transparent. */
-        [data-print-layer="bottom"] [data-print-grid-island] {
-            position: relative;
-            background-color: transparent;
-        }
-
-        [data-print-layer="bottom"] [data-print-grid-island]::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background-color: var(--page-surface);
-            mask-image: var(--bottom-sheet-mask, none);
-            mask-size: 100% 100%;
-            mask-repeat: no-repeat;
-            -webkit-mask-image: var(--bottom-sheet-mask, none);
-            -webkit-mask-size: 100% 100%;
-            -webkit-mask-repeat: no-repeat;
-        }
-
-        [data-print-layer="bottom"] [data-core-card],
-        [data-print-layer="bottom"] [data-card-demo-artwork-frame] {
-            background-color: transparent;
-        }
-
-        [data-print-layer="bottom"] [data-card-demo-artwork-viewport],
-        [data-print-layer="bottom"] [data-card-demo-flavor-box] {
-            visibility: hidden;
-        }
-
-        /* On screen these rings are see-through over the card color. With no
-           card body under them here they would print paler, so blend the
-           card color in first. */
-        [data-print-layer="bottom"] [data-card-demo-artwork-frame],
-        [data-print-layer="bottom"] [data-card-demo-header] {
-            --tw-ring-color: color-mix(in srgb, var(--color-neutral-content) 70%, var(--card-shell));
-        }
-
-        [data-print-layer="bottom"] [data-card-demo-master-shell] {
-            --tw-ring-color: color-mix(in srgb, rgb(45 45 45) 68%, var(--card-shell));
+        [data-print-holographic] [data-card-demo-indicator-text] {
+            color: transparent;
+            background-color: white;
+            background-image: conic-gradient(rgb(0 0 0 / 0.07) 25%, transparent 0 50%, rgb(0 0 0 / 0.07) 0 75%, transparent 0);
+            background-size: 0.125in 0.125in;
+            -webkit-background-clip: text;
+            background-clip: text;
         }
 
         .card-demo-hue-range {
@@ -335,12 +319,6 @@
                 overflow: hidden;
             }
 
-            /* A split print is two Letter pages tall. */
-            html:has([data-print-layer="bottom"]),
-            html:has([data-print-layer="bottom"]) body {
-                height: 22in;
-            }
-
             body > section {
                 min-height: 11in !important;
                 padding: 0 !important;
@@ -380,12 +358,13 @@
                 background-image: none !important;
             }
 
-            [data-print-sheet-stack] {
-                display: block !important;
+            [data-print-holographic] [data-card-demo-master-shell] {
+                background-image: none !important;
             }
 
-            [data-print-sheet-page] + [data-print-sheet-page] {
-                break-before: page;
+            [data-print-holographic] [data-card-demo-indicator-text] {
+                color: white !important;
+                background-image: none !important;
             }
 
             [data-print-guide] {
@@ -394,7 +373,7 @@
         }
     </style>
     <main x-data="cardDemo"
-          @beforeprint.window="measureTopCutouts()"
+          @beforeprint.window="measureHolographic()"
           data-theme="dim"
           :style="editorStyle"
           data-card-demo-page
@@ -482,7 +461,7 @@
                     <label class="block" for="card-demo-width">
                         <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
                             <span>Card width</span>
-                            <output for="card-demo-width" x-text="`${effectiveCardWidthIn.toFixed(2)} in`">2.00 in</output>
+                            <output for="card-demo-width" x-text="`${effectiveCardWidthIn.toFixed(2)} in`">3.17 in</output>
                         </span>
                         <input id="card-demo-width"
                                data-card-width-slider
@@ -498,7 +477,7 @@
                     <label class="block" for="card-demo-height">
                         <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
                             <span>Card height</span>
-                            <output for="card-demo-height" x-text="`${effectiveCardHeightIn.toFixed(2)} in`">3.50 in</output>
+                            <output for="card-demo-height" x-text="`${effectiveCardHeightIn.toFixed(2)} in`">5.07 in</output>
                         </span>
                         <input id="card-demo-height"
                                data-card-height-slider
@@ -514,7 +493,7 @@
                     <label class="block" for="card-demo-scale">
                         <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
                             <span>Overall scale</span>
-                            <output for="card-demo-scale" x-text="`${Math.round(overallScale)}%`">100%</output>
+                            <output for="card-demo-scale" x-text="`${Math.round(overallScale)}%`">62%</output>
                         </span>
                         <input id="card-demo-scale"
                                data-card-scale-slider
@@ -545,18 +524,30 @@
                     </label>
                 </fieldset>
                 <fieldset class="mt-5 space-y-3 border-t border-base-content/10 pt-4">
-                    <legend class="mb-3 text-xs font-bold uppercase tracking-[0.16em] opacity-60">Print layers</legend>
-                    <label class="flex items-center justify-between gap-3 text-sm" for="card-demo-split-layers">
-                        <span>Split into two layers</span>
-                        <input id="card-demo-split-layers"
-                               data-split-layers-toggle
+                    <legend class="mb-3 text-xs font-bold uppercase tracking-[0.16em] opacity-60">Print finish</legend>
+                    <label class="flex items-center justify-between gap-3 text-sm" for="card-demo-holographic">
+                        <span>Holographic</span>
+                        <input id="card-demo-holographic"
+                               data-holographic-toggle
                                type="checkbox"
-                               x-model="splitLayers"
-                               aria-describedby="card-demo-split-layers-help"
+                               x-model="holographic"
+                               aria-describedby="card-demo-holographic-help"
                                class="toggle toggle-sm" />
                     </label>
-                    <p id="card-demo-split-layers-help" class="text-xs opacity-60">
-                        Prints two pages in identical positions. Sheet 1 goes on top: just the card bodies (card color, artwork with its text, flavor box with its ring), no border; cut out the holes. Sheet 2 goes underneath: the border color around and between the cards, plus the indicator, artwork ring, arrows, and mixer controls that show through the holes. Checkered areas are transparent and print nothing.
+                    <p id="card-demo-holographic-help" class="text-xs opacity-60">
+                        For holographic paper. The card rings and gaps, the artwork ring, the indicator's ring and text, the arrow outlines, the mixer buttons, and the bottom tab's background print no ink, so the paper shows through. Cut lines print in the ring color. Checkered areas print nothing.
+                    </p>
+                    <label class="flex items-center justify-between gap-3 text-sm" for="card-demo-cut-lines">
+                        <span>Cut lines</span>
+                        <input id="card-demo-cut-lines"
+                               data-cut-lines-toggle
+                               type="checkbox"
+                               x-model="showCutLines"
+                               aria-describedby="card-demo-cut-lines-help"
+                               class="toggle toggle-sm" />
+                    </label>
+                    <p id="card-demo-cut-lines-help" class="text-xs opacity-60">
+                        Dotted lines through the middle of every gap, so each card cuts out with the same margin. Widen the gap for more.
                     </p>
                 </fieldset>
                 <fieldset class="mt-5 space-y-4 border-t border-base-content/10 pt-4">
@@ -954,36 +945,31 @@
                 </fieldset>
                 <div data-sheet-summary
                      class="mt-5 rounded-xl bg-base-100 px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-[0.12em] shadow-inner"
-                     x-text="`${sheetCount} ${sheetCount === 1 ? 'card' : 'cards'} · ${sheetColumns} × ${sheetRows} · ${printedCardWidthIn.toFixed(2)} × ${printedCardHeightIn.toFixed(2)} in printed${splitLayers ? ' · 2 layer sheets' : ''}`">
-                    6 cards · 3 × 2 · 2.00 × 3.50 in printed
+                     x-text="`${sheetCount} ${sheetCount === 1 ? 'card' : 'cards'} · ${sheetColumns} × ${sheetRows} · ${printedCardWidthIn.toFixed(2)} × ${printedCardHeightIn.toFixed(2)} in printed${holographic ? ' · holographic' : ''}`">
+                    9 cards · 3 × 3 · 1.97 × 3.14 in printed
                 </div>
             </aside>
             <section data-print-sheet-stage
-                     :style="printLayerStyle"
-                     x-effect="topCutoutLayout; $nextTick(() => measureTopCutouts())"
+                     :style="printStyle"
+                     x-effect="holographicLayout; $nextTick(() => measureHolographic())"
                      class="shrink-0 rounded-2xl border border-base-content/10 bg-base-300/50 p-6 shadow-inner">
-                <div data-print-sheet-stack class="flex flex-col gap-8">
-                    <template x-for="sheet in printSheets" :key="sheet.layer">
-                        <div data-print-sheet-page>
-                            <div data-print-sheet-caption
-                                 class="mb-4 flex items-center justify-between text-xs font-bold uppercase tracking-[0.14em] opacity-60">
-                                <span x-text="sheet.caption"></span>
-                                <span>8.5 × 11 in</span>
+                <div data-print-sheet-caption
+                     class="mb-4 flex items-center justify-between text-xs font-bold uppercase tracking-[0.14em] opacity-60">
+                    <span x-text="holographic ? 'Holographic sheet preview' : 'Letter sheet preview'">Letter sheet preview</span>
+                    <span>8.5 × 11 in</span>
+                </div>
+                <div data-print-sheet
+                     :data-print-holographic="holographic"
+                     :data-print-cut-lines="showCutLines"
+                     aria-label="US Letter print sheet preview">
+                    <div data-print-grid-island>
+                        <template x-for="copy in sheetCopies" :key="copy">
+                            <div data-print-card-slot>
+                                <c-card-demo-card :sounds="sounds" />
                             </div>
-                            <div data-print-sheet
-                                 :data-print-layer="sheet.layer"
-                                 :aria-label="`US Letter print sheet preview${splitLayers ? `, ${sheet.caption}` : ''}`">
-                                <div data-print-grid-island>
-                                    <template x-for="copy in sheetCopies" :key="copy">
-                                        <div data-print-card-slot>
-                                            <c-card-demo-card :sounds="sounds" />
-                                        </div>
-                                    </template>
-                                </div>
-                                <div x-show="showGuide" data-print-guide aria-hidden="true"></div>
-                            </div>
-                        </div>
-                    </template>
+                        </template>
+                    </div>
+                    <div x-show="showGuide" data-print-guide aria-hidden="true"></div>
                 </div>
             </section>
         </div>

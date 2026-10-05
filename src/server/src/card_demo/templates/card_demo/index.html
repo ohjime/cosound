@@ -171,6 +171,13 @@
             pointer-events: none;
         }
 
+        /* The broken heart's halves stand apart, so it runs wider to keep
+           each half near the whole heart's size, still well inside the
+           circle. */
+        [data-card-demo] [data-card-demo-slider-emoji="broken"] {
+            width: 74%;
+        }
+
         [data-card-demo] [data-card-demo-slider-track-shell] {
             padding: 1.5rem 0.5rem;
         }
@@ -970,6 +977,38 @@
                                :value="artworkTextSize"
                                @input="setArtworkTextSize($event.target.value)"
                                :aria-valuetext="`${Math.round(artworkTextSize)} pixels`"
+                               class="range range-xs w-full" />
+                    </label>
+                    <label class="block" for="card-demo-artwork-title-weight">
+                        <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
+                            <span>Title weight</span>
+                            <output for="card-demo-artwork-title-weight" x-text="`${weightName(artworkTitleWeight)} · ${artworkTitleWeight}`">Regular · 400</output>
+                        </span>
+                        <input id="card-demo-artwork-title-weight"
+                               data-artwork-title-weight-slider
+                               type="range"
+                               min="100"
+                               max="900"
+                               step="100"
+                               :value="artworkTitleWeight"
+                               @input="setArtworkTitleWeight($event.target.value)"
+                               :aria-valuetext="`${weightName(artworkTitleWeight)}, weight ${artworkTitleWeight}`"
+                               class="range range-xs w-full" />
+                    </label>
+                    <label class="block" for="card-demo-artist-name-weight">
+                        <span class="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
+                            <span>Artist weight</span>
+                            <output for="card-demo-artist-name-weight" x-text="`${weightName(artistNameWeight)} · ${artistNameWeight}`">Regular · 400</output>
+                        </span>
+                        <input id="card-demo-artist-name-weight"
+                               data-artist-name-weight-slider
+                               type="range"
+                               min="100"
+                               max="900"
+                               step="100"
+                               :value="artistNameWeight"
+                               @input="setArtistNameWeight($event.target.value)"
+                               :aria-valuetext="`${weightName(artistNameWeight)}, weight ${artistNameWeight}`"
                                class="range range-xs w-full" />
                     </label>
                     <label class="flex items-center justify-between gap-3 text-sm" for="card-demo-show-like">

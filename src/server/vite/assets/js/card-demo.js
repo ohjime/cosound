@@ -35,6 +35,23 @@ function colorNameForHue(value) {
     return "Pink";
 }
 
+const FONT_WEIGHT_NAMES = {
+    100: "Thin",
+    200: "Extra light",
+    300: "Light",
+    400: "Regular",
+    500: "Medium",
+    600: "Semibold",
+    700: "Bold",
+    800: "Extra bold",
+    900: "Black",
+};
+
+// Font weights in the CSS hundreds, 100 (thin) to 900 (black).
+function fontWeight(value) {
+    return clamp(Math.round((Number(value) || 400) / 100) * 100, 100, 900);
+}
+
 const LETTER_WIDTH_IN = 8.5;
 const LETTER_HEIGHT_IN = 11;
 const MAX_SHEET_CARDS = 12;
@@ -209,6 +226,8 @@ export function cardDemo(initialLayers = []) {
         artworkTitle: "",
         artistName: "",
         artworkTextSize: 18,
+        artworkTitleWeight: 400,
+        artistNameWeight: 400,
         showLikeButton: false,
 
         init() {
@@ -551,6 +570,15 @@ export function cardDemo(initialLayers = []) {
         },
         setArtworkTextSize(value) {
             this.artworkTextSize = clamp(value, 8, 32);
+        },
+        setArtworkTitleWeight(value) {
+            this.artworkTitleWeight = fontWeight(value);
+        },
+        setArtistNameWeight(value) {
+            this.artistNameWeight = fontWeight(value);
+        },
+        weightName(value) {
+            return FONT_WEIGHT_NAMES[fontWeight(value)];
         },
         loadArtwork(event) {
             const file = event?.target?.files?.[0];

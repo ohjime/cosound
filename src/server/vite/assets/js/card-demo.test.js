@@ -244,6 +244,30 @@ test("artwork uploads validate files and revoke every replaced object URL", () =
 });
 
 
+test("rainbow spreads the card colors evenly around the wheel in reading order", () => {
+    const demo = cardDemo(layers());
+
+    assert.equal(demo.rainbow, false);
+    assert.equal(demo.cardSlotStyle(1), "");
+
+    demo.rainbow = true;
+    assert.equal(demo.sheetCount, 9);
+    assert.deepEqual(demo.sheetCopies.map((copy) => demo.rainbowHue(copy)), [0, 40, 80, 120, 160, 200, 240, 280, 320]);
+    assert.equal(demo.cardSlotStyle(1), "--card-hue: 0");
+    assert.equal(demo.cardSlotStyle(4), "--card-hue: 120");
+    // The ring and paper color, and the editor's own card hue, stay put.
+    assert.match(demo.editorStyle, /--card-hue: 128;/);
+    assert.match(demo.editorStyle, /--ring-hue: 128;/);
+
+    // The spacing follows the sheet as it gains or loses cards.
+    demo.setOverallScale(100);
+    demo.setCardWidth(2);
+    demo.setCardHeight(3.5);
+    assert.equal(demo.sheetCount, 6);
+    assert.deepEqual(demo.sheetCopies.map((copy) => demo.rainbowHue(copy)), [0, 60, 120, 180, 240, 300]);
+});
+
+
 test("card color is independent while ring and paper share one color", () => {
     const demo = cardDemo(layers());
 
@@ -594,6 +618,11 @@ test("the print guide keeps its paper size and stays centered on the middle top-
 });
 
 
+function decodeSvg(url) {
+    return decodeURIComponent(url.replace(/^url\("data:image\/svg\+xml,/, "").replace(/"\)$/, ""));
+}
+
+
 test("holographic is an opt-in finish on the one sheet, with cut lines either way", () => {
     const demo = cardDemo(layers());
 
@@ -603,10 +632,15 @@ test("holographic is an opt-in finish on the one sheet, with cut lines either wa
     assert.match(demo.printStyle, /--holographic-mask: none/);
 
     const editorStyle = demo.editorStyle;
-    const cutLines = demo.cutLinesImage;
+    const cutLines = decodeSvg(demo.cutLinesImage);
     demo.holographic = true;
     assert.equal(demo.editorStyle, editorStyle);
-    assert.equal(demo.cutLinesImage, cutLines);
+    // Same lines, recolored from white to the ring color for bare gaps.
+    assert.equal(decodeSvg(demo.cutLinesImage).replace(/stroke="[^"]+"/, ""), cutLines.replace(/stroke="[^"]+"/, ""));
+    assert.match(decodeSvg(demo.cutLinesImage), /stroke="hsl\(128, 18%, 20%\)"/);
+    demo.setRingHue(215);
+    demo.setRingBrightness(70);
+    assert.match(decodeSvg(demo.cutLinesImage), /stroke="hsl\(215, 18%, 70%\)"/);
     assert.doesNotMatch(demo.printStyle, /--island-mask/);
     // No holes until a rendered card has been traced.
     assert.match(demo.printStyle, /--holographic-mask: none/);
@@ -616,19 +650,14 @@ test("holographic is an opt-in finish on the one sheet, with cut lines either wa
 });
 
 
-function decodeSvg(url) {
-    return decodeURIComponent(url.replace(/^url\("data:image\/svg\+xml,/, "").replace(/"\)$/, ""));
-}
-
-
 test("cut lines run down the middle of every gap so each card keeps the same margin", () => {
     const demo = baselineSheet();
 
     let svg = decodeSvg(demo.cutLinesImage);
     assert.match(svg, /viewBox="0 0 7 7\.75"/);
     assert.match(svg, /d="M0\.125 0V7\.75M2\.375 0V7\.75M4\.625 0V7\.75M6\.875 0V7\.75M0 0\.125H7M0 3\.875H7M0 7\.625H7"/);
-    // Only the lines' shape; the sheet colors them.
-    assert.match(svg, /stroke="black"/);
+    // White over a normal sheet's colored gaps.
+    assert.match(svg, /stroke="white"/);
     assert.match(svg, /stroke-dasharray="0\.04 0\.04"/);
 
     demo.setCardGap(0);
@@ -659,7 +688,7 @@ function fakeElement(rect, { attributes = {}, children = {}, hidden = false } = 
 }
 
 
-test("holographic holes trace rings, buttons, and arrow outlines in the card's own pixels", () => {
+test("holographic holes trace rings and arrow outlines in the card's own pixels", () => {
     const path = fakeElement({ x: 0, y: 0, width: 0, height: 0 }, { attributes: { d: "M400-280v-400l200 200-200 200Z", "stroke-width": "40" } });
     const bottomArrow = fakeElement({ x: 218, y: 300, width: 132, height: 80 }, {
         attributes: { viewBox: "0 -960 960 960" },
@@ -708,9 +737,9 @@ test("holographic holes trace rings, buttons, and arrow outlines in the card's o
         // The frame's 7px ring is cut around the artwork, which stays.
         assert.match(svg, /<path fill="black" d="M30 21H162A13 13 0 0 1 175 34V179A0 0 0 0 1 175 179H17A0 0 0 0 1 17 179V34A13 13 0 0 1 30 21Z"\/>/);
         assert.match(svg, /<path fill="white" d="M30 28H162A6 6 0 0 1 168 34V172A0 0 0 0 1 168 172H24A0 0 0 0 1 24 172V34A6 6 0 0 1 30 28Z"\/>/);
-        // A shown button is cut whole; a hidden one is skipped.
-        assert.match(svg, /<path fill="black" d="M52 195H52A12 12 0 0 1 64 207V207A12 12 0 0 1 52 219H52A12 12 0 0 1 40 207V207A12 12 0 0 1 52 195Z"\/>/);
-        assert.equal(svg.match(/fill="black"/g).length, 2);
+        // The heart buttons keep their printed hearts, so they are not cut.
+        assert.doesNotMatch(svg, /M52 195/);
+        assert.equal(svg.match(/fill="black"/g).length, 1);
         // The volume bar prints.
         assert.doesNotMatch(svg, /M70 196/);
         // An arrow keeps its triangle, then loses its outline.

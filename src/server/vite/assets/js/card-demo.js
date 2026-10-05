@@ -45,10 +45,9 @@ const MAX_CARD_WIDTH_IN = LETTER_WIDTH_IN;
 const MAX_CARD_HEIGHT_IN = LETTER_HEIGHT_IN;
 const MIN_GUIDE_IN = 0.25;
 const MAX_GUIDE_IN = LETTER_HEIGHT_IN;
-// On a holographic print these show the paper instead of ink: rings and
-// buttons cut whole, arrows along their white outline only.
+// On a holographic print these show the paper instead of ink: rings cut
+// whole, arrows along their white outline only.
 const HOLOGRAPHIC_RINGS = "[data-card-demo-artwork-frame], [data-card-demo-header]";
-const HOLOGRAPHIC_BUTTONS = "[data-card-demo-slider-control]";
 const HOLOGRAPHIC_ARROWS = "[data-card-demo-side-arrow] svg, [data-card-demo-bottom-arrow] svg";
 
 function svgNumber(value) {
@@ -109,8 +108,8 @@ function grow(box, spread) {
 
 // Traces one rendered card's holographic pieces as holes in a mask the size
 // of the card: the artwork's and the layer indicator's rings (their insides
-// stay), the mixer buttons whole, and each arrow's white outline, which
-// leaves a smaller orange triangle inside it. Holes are painted in the
+// stay) and each arrow's white outline, which leaves a smaller orange
+// triangle inside it. Holes are painted in the
 // card's stacking order, so a ring sitting over the artwork notches into it
 // and an arrow sitting over a ring keeps its triangle.
 function holographicMask(card) {
@@ -135,12 +134,6 @@ function holographicMask(card) {
         const spread = ringSpread(style);
         shapes.push(`<path fill="black" d="${roundedRectPath(grow(box, spread), cornerRadii(style, box, spread))}"/>`);
         shapes.push(`<path fill="white" d="${roundedRectPath(box, cornerRadii(style, box))}"/>`);
-    }
-    for (const button of card.querySelectorAll(HOLOGRAPHIC_BUTTONS)) {
-        if (!shown(button)) continue;
-        const style = styleOf(button);
-        const box = local(button);
-        shapes.push(`<path fill="black" d="${roundedRectPath(box, cornerRadii(style, box))}"/>`);
     }
     for (const icon of card.querySelectorAll(HOLOGRAPHIC_ARROWS)) {
         const path = icon.querySelector("path");
@@ -176,6 +169,7 @@ export function cardDemo(initialLayers = []) {
         paused: false,
         mixSaved: false,
         cardHue: 128,
+        rainbow: false,
         cardBrightness: 18.4,
         ringHue: 128,
         ringBrightness: 20,
@@ -359,10 +353,26 @@ export function cardDemo(initialLayers = []) {
         get sheetCopies() {
             return Array.from({ length: this.sheetCount }, (_, index) => index + 1);
         },
+        // Rainbow gives every card on the sheet its own hue, spaced evenly
+        // around the wheel from red, in reading order. Card brightness still
+        // applies to all of them; the ring and paper color stays as chosen.
+        rainbowHue(copy) {
+            return roundTo(((copy - 1) * 360) / this.sheetCount, 2);
+        },
+        cardSlotStyle(copy) {
+            return this.rainbow ? `--card-hue: ${this.rainbowHue(copy)}` : "";
+        },
         // Cut lines run down the middle of every gap and the same half gap
         // outside the outer cards, so each card cuts out with an equal margin.
         // They span the whole island so a trimmer can take them in one pass.
-        // This is only their shape; the sheet decides their color.
+        // They are drawn in their final color rather than masked, because PDF
+        // viewers disagree on masks and some flood the sheet with the color.
+        // White shows on a normal sheet's colored gaps; a holographic sheet's
+        // gaps are bare paper, so its lines take the ring color instead.
+        get cutLineColor() {
+            if (!this.holographic) return "white";
+            return `hsl(${clamp(this.ringHue, 0, 360)}, 18%, ${clamp(this.ringBrightness)}%)`;
+        },
         get cutLinesImage() {
             const gap = clamp(this.cardGapIn, 0, 1.25);
             const width = this.islandWidthIn;
@@ -378,7 +388,7 @@ export function cardDemo(initialLayers = []) {
                 ...rows.map((y) => `M0 ${svgNumber(y)}H${svgNumber(width)}`),
             ].join("");
             return svgUrl(width, height,
-                `<path d="${path}" fill="none" stroke="black" stroke-width="0.015" stroke-dasharray="0.04 0.04"/>`);
+                `<path d="${path}" fill="none" stroke="${this.cutLineColor}" stroke-width="0.015" stroke-dasharray="0.04 0.04"/>`);
         },
         // Everything that moves or resizes a holographic hole. Reading it in
         // an effect re-traces the holes whenever one of these changes.

@@ -244,6 +244,29 @@ test("artwork uploads validate files and revoke every replaced object URL", () =
 });
 
 
+test("the artwork title and artist each take a font weight from thin to black", () => {
+    const demo = cardDemo(layers());
+
+    assert.equal(demo.artworkTitleWeight, 400);
+    assert.equal(demo.artistNameWeight, 400);
+    assert.equal(demo.weightName(demo.artworkTitleWeight), "Regular");
+
+    demo.setArtworkTitleWeight(800);
+    demo.setArtistNameWeight("640");
+    assert.equal(demo.artworkTitleWeight, 800);
+    assert.equal(demo.artistNameWeight, 600);
+    assert.equal(demo.weightName(demo.artworkTitleWeight), "Extra bold");
+    assert.equal(demo.weightName(demo.artistNameWeight), "Semibold");
+
+    demo.setArtworkTitleWeight(5);
+    demo.setArtistNameWeight(5000);
+    assert.equal(demo.artworkTitleWeight, 100);
+    assert.equal(demo.artistNameWeight, 900);
+    assert.equal(demo.weightName(100), "Thin");
+    assert.equal(demo.weightName(900), "Black");
+});
+
+
 test("rainbow spreads the card colors evenly around the wheel in reading order", () => {
     const demo = cardDemo(layers());
 

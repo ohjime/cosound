@@ -5,7 +5,6 @@
 {% block content %}
     <style>
         [data-card-demo-page] {
-            --card-shell: hsl(var(--card-hue) 34% var(--card-brightness));
             --ring-surface: hsl(var(--ring-hue) 18% var(--ring-brightness));
             --page-surface: hsl(var(--ring-hue) 18% var(--ring-brightness));
             --card-indicator: rgb(51 65 85 / 0.75);
@@ -67,7 +66,10 @@
            artwork, mx-4 on the flavor box), so the side arrows keep their
            breathing room against the card edge. Scale magnifies the whole
            card instead of squeezing these. */
+        /* The card color resolves per card, so Rainbow can give each card
+           slot its own hue. */
         [data-card-demo] {
+            --card-shell: hsl(var(--card-hue) 34% var(--card-brightness));
             --card-media-inset: 1.5rem;
             --card-media-top: 1.75rem;
             --card-flavor-inset: 1rem;
@@ -159,6 +161,16 @@
             padding: 0;
         }
 
+        /* Heartbreak on the left button, heart on the right. Each drawing's
+           viewBox is trimmed to its own edges, so the button's centering
+           centers the art, with room around it inside the circle. */
+        [data-card-demo] [data-card-demo-slider-emoji] {
+            display: block;
+            width: 58%;
+            height: 58%;
+            pointer-events: none;
+        }
+
         [data-card-demo] [data-card-demo-slider-track-shell] {
             padding: 1.5rem 0.5rem;
         }
@@ -200,8 +212,7 @@
         }
 
         /* Cut lines: dotted lines through the middle of every gap, drawn
-           over the island. The lines' shape masks a solid color, white on
-           the colored gaps of a normal sheet. */
+           over the island as a plain image in their final color. */
         [data-print-grid-island] {
             position: relative;
         }
@@ -210,22 +221,21 @@
             content: "";
             position: absolute;
             inset: 0;
-            background-color: var(--cut-line-color, white);
-            mask-image: var(--cut-lines, none);
-            mask-size: 100% 100%;
-            mask-repeat: no-repeat;
-            -webkit-mask-image: var(--cut-lines, none);
-            -webkit-mask-size: 100% 100%;
-            -webkit-mask-repeat: no-repeat;
+            background-image: var(--cut-lines, none);
+            background-size: 100% 100%;
+            background-repeat: no-repeat;
             pointer-events: none;
         }
 
         /* Holographic finish, for holographic paper: the card's light parts
-           print no ink so the paper shows through. The artwork ring, the
-           layer indicator's ring, the mixer buttons and each arrow's white
-           outline are masked out of the card; the indicator text and the
-           mixer tab's background are painted white, which prints no ink
-           either. Everything else prints as normal. */
+           print no ink so the paper shows through. On screen the artwork
+           ring, the layer indicator's ring and each arrow's white outline
+           are masked out of the card, so they read as transparent. Print
+           paints them white instead (see the print rules below), which
+           prints no ink just the same. The indicator text and the
+           backgrounds of the mixer buttons and mixer tab are white in both,
+           under their printed emoji and text. Everything else prints as
+           normal. */
         [data-print-holographic] [data-core-card] {
             box-shadow: none;
             mask-image: var(--holographic-mask, none);
@@ -239,7 +249,6 @@
         /* The card rings and the gaps between cards are bare paper too, so
            the cut lines take the ring color to stay visible on it. */
         [data-print-holographic] [data-print-grid-island] {
-            --cut-line-color: var(--page-surface);
             background-color: transparent;
         }
 
@@ -248,13 +257,10 @@
             --tw-ring-color: transparent;
         }
 
-        [data-print-holographic] [data-card-demo-slider-control] {
-            visibility: hidden;
-        }
-
         /* Bare paper reads as a checkerboard on screen; print turns these
            back to plain white. */
         [data-print-holographic],
+        [data-print-holographic] [data-card-demo-slider-control],
         [data-print-holographic] [data-card-demo-master-shell] {
             background-color: white;
             background-image: conic-gradient(rgb(0 0 0 / 0.07) 25%, transparent 0 50%, rgb(0 0 0 / 0.07) 0 75%, transparent 0);
@@ -358,13 +364,29 @@
                 background-image: none !important;
             }
 
+            /* PDF viewers and printers disagree on masks, and some flood the
+               page with color, so print uses no masks: the holographic holes
+               are painted white, which prints no ink just the same. */
+            [data-print-holographic] [data-core-card] {
+                mask-image: none !important;
+                -webkit-mask-image: none !important;
+            }
+
+            [data-print-holographic] [data-card-demo-artwork-frame],
+            [data-print-holographic] [data-card-demo-header] {
+                --tw-ring-color: white !important;
+            }
+
+            [data-print-holographic] [data-card-demo-slider-control],
             [data-print-holographic] [data-card-demo-master-shell] {
                 background-image: none !important;
             }
 
             [data-print-holographic] [data-card-demo-indicator-text] {
                 color: white !important;
-                background-image: none !important;
+                background: none !important;
+                -webkit-background-clip: border-box !important;
+                background-clip: border-box !important;
             }
 
             [data-print-guide] {
@@ -373,7 +395,6 @@
         }
     </style>
     <main x-data="cardDemo"
-          @beforeprint.window="measureHolographic()"
           data-theme="dim"
           :style="editorStyle"
           data-card-demo-page
@@ -392,7 +413,7 @@
                     <label class="block" for="card-demo-hue">
                         <span class="mb-1.5 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.12em]">
                             <span>Card</span>
-                            <output for="card-demo-hue" x-text="`${cardColorName} · ${Math.round(cardHue)}°`">Green · 128°</output>
+                            <output for="card-demo-hue" x-text="rainbow ? 'Rainbow' : `${cardColorName} · ${Math.round(cardHue)}°`">Green · 128°</output>
                         </span>
                         <input id="card-demo-hue"
                                data-card-hue-slider
@@ -402,8 +423,10 @@
                                step="1"
                                :value="cardHue"
                                @input="setCardHue($event.target.value)"
+                               :disabled="rainbow"
                                :aria-valuetext="`${cardColorName}, ${Math.round(cardHue)} degrees`"
                                :style="`--selected-hue: ${cardHue}`"
+                               :class="rainbow ? 'cursor-not-allowed opacity-40' : ''"
                                class="card-demo-hue-range w-full" />
                     </label>
                     <label class="block" for="card-demo-card-brightness">
@@ -455,6 +478,21 @@
                                :aria-valuetext="`${Math.round(ringBrightness)} percent brightness`"
                                class="range range-xs w-full" />
                     </label>
+                </fieldset>
+                <fieldset class="mt-5 space-y-3 border-t border-base-content/10 pt-4">
+                    <legend class="mb-3 text-xs font-bold uppercase tracking-[0.16em] opacity-60">Rainbow</legend>
+                    <label class="flex items-center justify-between gap-3 text-sm" for="card-demo-rainbow">
+                        <span>Rainbow cards</span>
+                        <input id="card-demo-rainbow"
+                               data-rainbow-toggle
+                               type="checkbox"
+                               x-model="rainbow"
+                               aria-describedby="card-demo-rainbow-help"
+                               class="toggle toggle-sm" />
+                    </label>
+                    <p id="card-demo-rainbow-help" class="text-xs opacity-60">
+                        Gives every card its own color, spread evenly around the color wheel. Card brightness still applies; the card color slider is off while this is on.
+                    </p>
                 </fieldset>
                 <fieldset class="mt-5 space-y-4 border-t border-base-content/10 pt-4">
                     <legend class="mb-3 text-xs font-bold uppercase tracking-[0.16em] opacity-60">Layout</legend>
@@ -535,7 +573,7 @@
                                class="toggle toggle-sm" />
                     </label>
                     <p id="card-demo-holographic-help" class="text-xs opacity-60">
-                        For holographic paper. The card rings and gaps, the artwork ring, the indicator's ring and text, the arrow outlines, the mixer buttons, and the bottom tab's background print no ink, so the paper shows through. Cut lines print in the ring color. Checkered areas print nothing.
+                        For holographic paper. The card rings and gaps, the artwork ring, the indicator's ring and text, the arrow outlines, and the backgrounds of the heart buttons and bottom tab print no ink, so the paper shows through. Cut lines print in the ring color. Checkered areas print nothing.
                     </p>
                     <label class="flex items-center justify-between gap-3 text-sm" for="card-demo-cut-lines">
                         <span>Cut lines</span>
@@ -964,7 +1002,7 @@
                      aria-label="US Letter print sheet preview">
                     <div data-print-grid-island>
                         <template x-for="copy in sheetCopies" :key="copy">
-                            <div data-print-card-slot>
+                            <div data-print-card-slot :style="cardSlotStyle(copy)">
                                 <c-card-demo-card :sounds="sounds" />
                             </div>
                         </template>

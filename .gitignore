@@ -61,6 +61,8 @@ src/server/vite/static/
 **/.env*.bak
 .claude/settings.json
 src/player/conditioned/
+# Downloaded vote chimes, keyed by the server's content version
+src/player/vote_chimes/
 # Staging area for same-origin (TUS) uploads; created by settings.py
 src/server/media/
 .old.zip

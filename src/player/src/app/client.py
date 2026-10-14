@@ -6,8 +6,6 @@ import urllib.error
 import urllib.request
 from urllib.parse import urlsplit
 
-import wget
-
 ROOT_DIR = os.path.join(os.path.dirname(__file__), "..", "..")
 ASSETS_DIR = os.path.join(ROOT_DIR, "assets")
 CONFIG_PATH = os.path.join(ROOT_DIR, "cosound.json")
@@ -73,13 +71,43 @@ def get_player_info(api_key: str) -> dict:
 
 
 def get_sound(sound_id, remote_path) -> str:
-    # First check if sound_id exists locally:
+    """Return a locally cached sound, downloading it atomically if needed.
+
+    A failed or partial transfer must never be left where the next poll could
+    mistake it for a cached sound, so the body lands on a temporary file and is
+    renamed only once it is complete.  An empty file is treated as absent: a
+    zero-byte asset would otherwise be cached forever and never play.
+    """
     os.makedirs(ASSETS_DIR, exist_ok=True)
     local_path = os.path.join(ASSETS_DIR, str(sound_id))
-    # Otherwise download from remote url to local path
-    if not os.path.exists(local_path):
-        wget.download(remote_path, local_path)
-    return local_path
+    if os.path.isfile(local_path) and os.path.getsize(local_path) > 0:
+        return local_path
+
+    request = urllib.request.Request(remote_path)
+    temporary_path = None
+    try:
+        with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT) as response:
+            descriptor, temporary_path = tempfile.mkstemp(
+                prefix=f".{os.path.basename(local_path)}.", dir=ASSETS_DIR
+            )
+            downloaded = 0
+            with os.fdopen(descriptor, "wb") as destination:
+                while chunk := response.read(256 * 1024):
+                    downloaded += len(chunk)
+                    destination.write(chunk)
+                destination.flush()
+                os.fsync(destination.fileno())
+        if downloaded == 0:
+            raise ValueError(f"Sound {sound_id} download is empty")
+        os.replace(temporary_path, local_path)
+        temporary_path = None
+        return local_path
+    finally:
+        if temporary_path is not None:
+            try:
+                os.remove(temporary_path)
+            except FileNotFoundError:
+                pass
 
 
 def get_vote_chime(version: str, remote_path: str) -> str:

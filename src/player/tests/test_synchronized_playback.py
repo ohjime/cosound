@@ -1,13 +1,18 @@
 """Exercise independent audio devices without opening physical speakers."""
 
 import unittest
+from time import monotonic
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import numpy as np
 
 from app.devices import OutputDevice
-from app.player import SoundDevicePlayer
+from app.player import (
+    LOCAL_ENTRY_FADE_SECONDS,
+    RESUME_GAP_SECONDS,
+    SoundDevicePlayer,
+)
 from app.playback import CORRECTION_SLEW_SECONDS, MAX_CORRECTION, PlaybackPlan, loop_chunk
 
 
@@ -35,11 +40,17 @@ class SynchronizedPlaybackTests(unittest.TestCase):
         player.reverb.process = lambda send: np.zeros((len(send), 1), np.float32)
         return player
 
-    def install(self, player, descriptor=None, gain=1, data=None):
+    def install(self, player, descriptor=None, gain=1, data=None, settle=True):
         if data is None:
             data = np.ones((48000, 1), np.float32) * 0.5
         with patch("app.player.sf.read", return_value=(data, 48000)):
             player.schedule_cosound({"1": "one.wav"}, [{"sound_id": 1, "gain": gain}], descriptor or timeline())
+        if settle:
+            # Every track is new to a fresh process, so it would otherwise open
+            # under the local entry fade. These cases assert shared-timeline
+            # levels; `settle=False` covers the entry fade on its own below.
+            for track in player.active_tracks.values():
+                track["entry_fade"] = 0.0
 
     def render(self, player, server_time, frames=128, latency=0.04):
         stream_anchor, local_anchor = player._audio_clock_anchor
@@ -81,6 +92,59 @@ class SynchronizedPlaybackTests(unittest.TestCase):
         self.install(late, timeline("two", 1014, [{"sound_id": 1, "gain": 0.5}]), gain=0)
         np.testing.assert_array_equal(self.render(late, 1013), 0)
         self.assertAlmostEqual(float(self.render(late, 1018)[0]), 0.125, places=6)
+
+    def test_an_arrival_the_shared_fade_already_passed_still_enters_from_zero(self):
+        """A download outlasting the server fade must not land at full gain."""
+        player = self.player()
+        self.install(player, timeline(fade=8.0), settle=False)
+        self.assertAlmostEqual(float(self.render(player, 1030)[0]), 0.0, places=6)
+        # The loop is exactly one second, so whole-second steps leave its phase
+        # untouched and no buffer here sits inside a seek crossfade.
+        third = self.render(player, 1030 + LOCAL_ENTRY_FADE_SECONDS / 3)
+        np.testing.assert_allclose(third, 0.5 / 3, atol=1e-3)
+        settled = self.render(player, 1030 + LOCAL_ENTRY_FADE_SECONDS + 1)
+        np.testing.assert_allclose(settled, 0.5, atol=1e-6)
+
+    def test_joining_a_room_already_at_these_gains_swells_instead_of_snapping(self):
+        """Cold start: previous and target match and the deadline is long past."""
+        player = self.player()
+        settled_mix = timeline(previous=[{"sound_id": 1, "gain": 1}], fade=8.0)
+        self.install(player, settled_mix, settle=False)
+        self.assertAlmostEqual(float(self.render(player, 1200)[0]), 0.0, places=6)
+        half = self.render(player, 1200 + LOCAL_ENTRY_FADE_SECONDS / 2)
+        self.assertAlmostEqual(float(half[0]), 0.25, places=2)
+
+    def test_an_output_stream_returning_from_a_gap_swells_back(self):
+        player = self.player()
+        self.install(player, timeline(fade=0))
+        np.testing.assert_allclose(self.render(player, 1030), 0.5)
+        # Buffers stopped arriving: a sleep, a driver stall, a device change.
+        player._last_callback_at = monotonic() - RESUME_GAP_SECONDS - 0.5
+        self.assertAlmostEqual(float(self.render(player, 1040)[0]), 0.0, places=6)
+        half = self.render(player, 1040 + LOCAL_ENTRY_FADE_SECONDS / 2)
+        self.assertAlmostEqual(float(half[0]), 0.25, places=2)
+
+    def test_a_buffer_arriving_on_schedule_is_not_mistaken_for_a_gap(self):
+        player = self.player()
+        self.install(player, timeline(fade=0))
+        for moment in (1030, 1031, 1032):
+            np.testing.assert_allclose(self.render(player, moment), 0.5)
+
+    def test_entering_under_the_local_fade_does_not_cost_shared_loop_phase(self):
+        signal = np.sin(np.arange(48000) * 2 * np.pi * 71 / 48000).astype(np.float32)[:, None] * 0.1
+        settled, arriving = self.player(), self.player()
+        self.install(settled, timeline(fade=0), data=signal)
+        self.install(arriving, timeline(fade=0), data=signal, settle=False)
+        quiet = self.render(arriving, 1030, 480)
+        loud = self.render(settled, 1030, 480)
+        # The newcomer is still swelling, so it must be quieter — but it reads
+        # the loop from the same shared position, not from its own start.
+        self.assertLess(float(np.max(np.abs(quiet))), float(np.max(np.abs(loud))))
+        self.assertAlmostEqual(
+            settled.active_tracks["one.wav"]["sync_ptr"],
+            arriving.active_tracks["one.wav"]["sync_ptr"],
+            places=6,
+        )
 
     def test_initial_clock_lock_waits_without_advancing_local_audio(self):
         player = self.player()

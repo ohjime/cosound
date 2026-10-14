@@ -26,6 +26,16 @@ from app.chime import (
 )
 
 
+# A track the shared timeline considers long-settled is still brand new to this
+# process: joining a running room, or rejoining after a download, would other-
+# wise open at full gain mid-loop. Phase stays bound to the server epoch; only
+# the gain envelope is anchored locally, so a slow entry never costs sync.
+LOCAL_ENTRY_FADE_SECONDS = 15.0
+# Longer than any normal buffer interval, short enough that a real outage is
+# caught on the first buffer back.
+RESUME_GAP_SECONDS = 1.0
+
+
 def _levels_of(buffers, sample_rate):
     """Measure a prepared scale: (peak sample, loudest short-window RMS).
 
@@ -116,6 +126,7 @@ class SoundDevicePlayer(CommunalPlayer):
         self._scheduled_chimes = []
         self._dac_timing_available = False
         self._audio_clock_anchor = None
+        self._last_callback_at = None
         # One finished buffer per degree of the scale in app.chime, plus a
         # cursor into whichever degree each in-flight acknowledgement is using.
         self._default_vote_chime = vote_chime_scale(self.fs)
@@ -342,6 +353,14 @@ class SoundDevicePlayer(CommunalPlayer):
             prepared[path] = {
                 "data": data, "duration": duration, "sound_id": sound_id,
                 "azimuth": self._positions[int(sound_id) % len(self._positions)],
+                # Only a track that is actually arriving fades in; one loaded
+                # solely to reproduce a fade-out must keep descending. The
+                # anchor waits for the first audible buffer because the clock
+                # is often still unready while this installs.
+                "entry_fade": (
+                    LOCAL_ENTRY_FADE_SECONDS if plan.target.get(sound_id) else 0.0
+                ),
+                "entry_at": None,
             }
         with self.lock:
             if not self.clock.ready or not self._dac_timing_available:
@@ -398,6 +417,36 @@ class SoundDevicePlayer(CommunalPlayer):
         # deadline. No PortAudio API is called on the real-time audio thread.
         return clock.server_time(anchor[1] + dac - anchor[0])
 
+    def _local_entry_envelope(self, track, times, newest):
+        """Scale a locally arriving track from silence to its timeline gain.
+
+        The shared timeline can place a transition far enough in the past that
+        its own fade has already elapsed, which is exactly the case for a late
+        download, a player joining a running room, and a device returning from
+        sleep. Multiplying keeps the result monotonic from zero and leaves a
+        later server fade intact, and the factor is identically 1 once spent.
+        """
+        fade = track.get("entry_fade") or 0.0
+        if fade <= 0:
+            return 1.0
+        entry_at = track.get("entry_at")
+        if entry_at is None:
+            # The first audible buffer anchors it: a scheduled future revision
+            # must not spend its fade while still inaudible.
+            entry_at = max(times[0], newest.effective_at)
+            track["entry_at"] = entry_at
+        if times[-1] >= entry_at + fade:
+            track["entry_fade"] = 0.0
+        return np.clip((times - entry_at) / fade, 0.0, 1.0)
+
+    def _rearm_local_entry(self):
+        """Re-enter every track from silence after the output stream gapped."""
+        for track in self.active_tracks.values():
+            if track.get("sound_id") is None:
+                continue
+            track["entry_fade"] = LOCAL_ENTRY_FADE_SECONDS
+            track["entry_at"] = None
+
     def _synchronized_sources(self, frames, server_time):
         if server_time is None:
             return [], {}
@@ -413,6 +462,7 @@ class SoundDevicePlayer(CommunalPlayer):
             for plan in plans:
                 mask = times >= plan.effective_at
                 gain[mask] = plan.gains(sound_id, times[mask])
+            gain = gain * self._local_entry_envelope(track, times, plans[-1])
             # Loop origins stay fixed across gain changes, removals and rejoins.
             chunk = loop_chunk(track, frames, server_time, plans[-1].epoch, self.fs)
             signal = (chunk * gain[:, None]).astype(np.float32)
@@ -438,6 +488,15 @@ class SoundDevicePlayer(CommunalPlayer):
         """The real-time audio thread: gain-ramp tracks, then spatialise+reverb."""
         if status:
             self.last_status = status
+
+        # Buffers arrive every frames/fs seconds, so a gap this long is the
+        # stream having stopped — sleep, a driver stall, a device change. The
+        # loop phase is recovered from shared time either way; without this the
+        # room would snap back at full gain the instant the device returns.
+        arrived = monotonic()
+        previous = getattr(self, "_last_callback_at", None)
+        gapped = previous is not None and arrived - previous > RESUME_GAP_SECONDS
+        self._last_callback_at = arrived
 
         server_time = self._server_output_time(time)
 
@@ -470,6 +529,8 @@ class SoundDevicePlayer(CommunalPlayer):
             chime_peak = self._vote_chime_peak
             chime_loudness_level = self._vote_chime_loudness
             synchronized = bool(getattr(self, "_sync_plans", []))
+            if gapped:
+                self._rearm_local_entry()
             if synchronized:
                 sources, levels = self._synchronized_sources(frames, server_time)
             for path in ([] if synchronized else list(self.active_tracks.keys())):

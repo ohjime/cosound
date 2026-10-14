@@ -24,6 +24,13 @@ import sounddevice as sd
 MAX_PLAUSIBLE_CHANNELS = 8
 ASSUMED_CHANNELS = 2
 
+# ...but only where those plugin devices exist. The cap is a Linux workaround,
+# and applying it everywhere silently downgraded real multichannel hardware:
+# Core Audio lists only physical interfaces, so a MOTU UltraLite-mk5 reporting
+# 22 outputs *has* 22 outputs, and an 8.1 rig hanging off it was being rendered
+# as assumed stereo. Anywhere but the host APIs below, the count is the truth.
+SENTINEL_HOSTAPIS = ("alsa", "oss")
+
 
 @dataclass
 class OutputDevice:
@@ -99,15 +106,31 @@ def _guess_lfe_channels(name: str, channels: int) -> list[int]:
     return []
 
 
-def _plausible_channels(channels: int) -> tuple[int, bool]:
+def _uses_sentinel_counts(hostapi: str) -> bool:
+    """True where the host API's device list contains routing-max plugin entries.
+
+    JACK is deliberately excluded: it is a Linux host API, but its ports are
+    real and it reports them honestly.
+    """
+    lowered = hostapi.lower()
+    return any(name in lowered for name in SENTINEL_HOSTAPIS)
+
+
+def _plausible_channels(channels: int, hostapi: str) -> tuple[int, bool]:
     """Resolve a plugin sentinel count to a usable one; ``(channels, assumed)``.
 
-    PortAudio cannot tell us how many speakers are really behind a plugin
-    device, so an implausible count means "unknown", and the honest default is
-    stereo — what the overwhelming majority of default outputs actually are.
-    A real surround rig can still be selected explicitly (``--channels 6``, or
-    by naming the hardware device directly).
+    On ALSA/OSS, PortAudio cannot tell us how many speakers are really behind a
+    plugin device, so an implausible count means "unknown", and the honest
+    default is stereo — what the overwhelming majority of default outputs
+    actually are. A real surround rig can still be selected explicitly
+    (``--channels 6``, or by naming the hardware device directly).
+
+    Every other host API enumerates physical devices only, so its count is
+    taken as given however high — capping it there is what hid an 8.1 rig
+    behind a 22-channel Core Audio interface.
     """
+    if not _uses_sentinel_counts(hostapi):
+        return channels, False
     if channels <= MAX_PLAUSIBLE_CHANNELS:
         return channels, False
     return ASSUMED_CHANNELS, True
@@ -120,8 +143,9 @@ def detect_output(device=None) -> OutputDevice:
     default. Never raises for missing labels — only for an unmatched device.
     """
     index, info = _resolve_index(device)
+    hostapi = _hostapi_name(info)
     reported = int(info.get("max_output_channels", 0)) or 1
-    channels, assumed = _plausible_channels(reported)
+    channels, assumed = _plausible_channels(reported, hostapi)
     samplerate = int(info.get("default_samplerate", 0)) or 48000
     name = str(info.get("name", "Unknown"))
     return OutputDevice(
@@ -129,7 +153,7 @@ def detect_output(device=None) -> OutputDevice:
         name=name,
         channels=channels,
         samplerate=samplerate,
-        hostapi=_hostapi_name(info),
+        hostapi=hostapi,
         lfe_channels=_guess_lfe_channels(name, channels),
         raw=dict(info),
         channels_assumed=assumed,

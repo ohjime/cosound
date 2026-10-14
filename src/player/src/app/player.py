@@ -320,21 +320,22 @@ class SoundDevicePlayer(CommunalPlayer):
         """Prepare a server timeline off the audio thread, then install atomically."""
         plan = PlaybackPlan.parse(descriptor, layers)
         with self.lock:
-            if self._sync_plans and (
-                plan.revision == self._sync_plans[-1].revision
-                or plan.effective_at < self._sync_plans[-1].effective_at
-            ):
-                return
+            newest = self._sync_plans[-1] if self._sync_plans else None
+            if newest is not None and plan.effective_at < newest.effective_at:
+                return None
+            # An installed revision is reprocessed only to admit sounds that
+            # were unobtainable when it arrived; its timeline stays as it is.
+            readmitting = newest is not None and plan.revision == newest.revision
             existing = dict(self.active_tracks)
-        prepared = {}
+        prepared, skipped = {}, []
         for sound_id in plan.previous.keys() | plan.target.keys():
             if not (plan.previous.get(sound_id) or plan.target.get(sound_id)):
                 continue
             path = manifest.get(sound_id)
             if not path:
-                if not plan.target.get(sound_id):
-                    continue
-                raise ValueError(f"Missing synchronized sound {sound_id}")
+                if plan.target.get(sound_id):
+                    skipped.append(sound_id)
+                continue
             path = str(path)
             if path in existing and existing[path].get("sound_id") == sound_id:
                 prepared[path] = existing[path]
@@ -344,9 +345,9 @@ class SoundDevicePlayer(CommunalPlayer):
                 if not len(data) or not np.isfinite(data).all():
                     raise ValueError(f"Invalid synchronized sound {sound_id}")
             except Exception:
-                if not plan.target.get(sound_id):
-                    continue
-                raise
+                if plan.target.get(sound_id):
+                    skipped.append(sound_id)
+                continue
             duration = len(data) / sr
             if sr != self.fs:
                 data = resample_audio(data, sr, self.fs)
@@ -362,8 +363,24 @@ class SoundDevicePlayer(CommunalPlayer):
                 ),
                 "entry_at": None,
             }
+        if skipped and not any(
+            plan.target.get(track.get("sound_id")) for track in prepared.values()
+        ):
+            # Not one audible layer of this revision could be loaded, so there is
+            # nothing to transition to. Refuse rather than silence the room, and
+            # leave the playing timeline for the caller to retry.
+            raise ValueError(
+                f"No synchronized sound available for revision {plan.revision}: "
+                + ", ".join(sorted(skipped))
+            )
         with self.lock:
-            if not self.clock.ready or not self._dac_timing_available:
+            if readmitting:
+                # Only genuinely new paths; the timeline already governs the rest.
+                self.active_tracks.update(
+                    {path: track for path, track in prepared.items()
+                     if path not in self.active_tracks}
+                )
+            elif not self.clock.ready or not self._dac_timing_available:
                 # Nothing synchronized is audible yet. An unavailable clock
                 # or driver must not accumulate every revision and audio file.
                 self.active_tracks = prepared
@@ -372,6 +389,7 @@ class SoundDevicePlayer(CommunalPlayer):
                 self.active_tracks.update(prepared)
                 # Keep earlier queued deadlines until the callback passes them.
                 self._sync_plans.append(plan)
+        return skipped
 
     def get_sync_status(self):
         """Diagnostics describe the estimate, not measured acoustic accuracy."""

@@ -156,7 +156,7 @@ class ManifestRefreshTests(unittest.TestCase):
         condition_manifest.assert_not_called()
         self.assertEqual(manifest, {"1": "/conditioned/1.wav"})
 
-    def test_unresolved_layer_does_not_trigger_playback_transition(self):
+    def test_unresolved_layer_is_reported_without_touching_the_manifest(self):
         manifest = {"1": "/conditioned/1.wav"}
         layers = [{"sound_id": 2, "gain": 1.0}]
         player = FakePlayer()
@@ -166,15 +166,17 @@ class ManifestRefreshTests(unittest.TestCase):
             patch.object(tui, "get_sound") as get_sound,
             patch.object(tui, "condition_manifest") as condition_manifest,
         ):
-            with self.assertRaisesRegex(RuntimeError, r"sound ID\(s\): 2"):
-                tui._refresh_missing_manifest_entries(
-                    "player-key", manifest, layers, player.fs
-                )
-                tui._queue_manifest_layers(manifest, layers, player)
+            unavailable = tui._refresh_missing_manifest_entries(
+                "player-key", manifest, layers, player.fs
+            )
 
+        self.assertEqual(list(unavailable), ["2"])
+        self.assertIn("server manifest", unavailable["2"])
         get_sound.assert_not_called()
         condition_manifest.assert_not_called()
         self.assertEqual(manifest, {"1": "/conditioned/1.wav"})
+        # Whether an unresolved layer may still transition is the caller's
+        # decision, exercised against the app in test_sync_refresh.
         self.assertEqual(player.queued, [])
         self.assertEqual(player.dequeue_count, 0)
 

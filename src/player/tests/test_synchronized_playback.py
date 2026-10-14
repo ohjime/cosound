@@ -210,6 +210,47 @@ class SynchronizedPlaybackTests(unittest.TestCase):
         self.assertEqual(player._sync_plans[-1].revision, "one")
         self.assertEqual(set(player.active_tracks), {"one.wav"})
 
+    def test_a_sound_missing_at_install_joins_the_same_revision_later(self):
+        player = self.player()
+        self.install(player)
+        descriptor = timeline("two", 1020, previous=[{"sound_id": 1, "gain": 1}])
+        layers = [{"sound_id": 1, "gain": 1}, {"sound_id": 2, "gain": 1}]
+        loaded = (np.ones((48000, 1), np.float32) * 0.5, 48000)
+
+        with patch("app.player.sf.read", return_value=loaded):
+            skipped = player.schedule_cosound({"1": "one.wav"}, layers, descriptor)
+
+        # Sound 2 could not be prepared, so the layer beside it transitions
+        # alone rather than the whole revision being refused.
+        self.assertEqual(skipped, ["2"])
+        self.assertEqual(set(player.active_tracks), {"one.wav"})
+        self.assertEqual(len(player._sync_plans), 2)
+
+        with patch("app.player.sf.read", return_value=loaded):
+            readmitted = player.schedule_cosound(
+                {"1": "one.wav", "2": "two.wav"}, layers, descriptor
+            )
+
+        self.assertEqual(readmitted, [])
+        self.assertEqual(set(player.active_tracks), {"one.wav", "two.wav"})
+        # Admitted into the installed revision, not queued as another one.
+        self.assertEqual(len(player._sync_plans), 2)
+        self.assertEqual(player._sync_plans[-1].revision, "two")
+        self.assertEqual(
+            player.active_tracks["two.wav"]["entry_fade"], LOCAL_ENTRY_FADE_SECONDS
+        )
+
+    def test_a_revision_with_nothing_loadable_leaves_the_mix_playing(self):
+        player = self.player()
+        self.install(player)
+        layers = [{"sound_id": 2, "gain": 1}]
+
+        with self.assertRaises(ValueError):
+            player.schedule_cosound({}, layers, timeline("two", 1020))
+
+        self.assertEqual(player._sync_plans[-1].revision, "one")
+        self.assertEqual(set(player.active_tracks), {"one.wav"})
+
     def test_old_snapshots_and_repeated_polls_do_not_restart_or_reload(self):
         player = self.player()
         self.install(player, timeline("latest", 1020))

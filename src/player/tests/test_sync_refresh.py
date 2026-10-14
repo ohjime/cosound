@@ -170,6 +170,46 @@ class SyncRefreshTests(unittest.TestCase):
         self.assertEqual(self.app.manifest["2"], "/conditioned/2.wav")
         self.assertEqual(len(self.player.scheduled), 1)
 
+    def test_one_unavailable_sound_does_not_cost_the_rest_their_transition(self):
+        info = snapshot("second")
+        info["layers"] = [{"sound_id": 2, "gain": 0.5}, {"sound_id": 3, "gain": 0.25}]
+        self.get_manifest.return_value = {"2": "remote-2", "3": "remote-3"}
+
+        def fetch(sound_id, _url):
+            if sound_id == "3":
+                raise OSError("connection reset")
+            return f"/downloaded/{sound_id}"
+
+        self.get_sound.side_effect = fetch
+        self.refresh(info)
+
+        self.assertEqual(self.player.current_plan.revision, "second")
+        manifest, _plan = self.player.scheduled[0]
+        self.assertEqual(manifest["2"], "/conditioned/2.wav")
+        self.assertNotIn("3", manifest)
+        self.assertEqual(self.app._pending_sound_ids, {"3"})
+        self.apply_state.assert_called_once_with(info, True)
+
+        # The same revision is re-attempted while anything it wants is pending,
+        # and the recovered sound joins it without a second history entry.
+        self.get_sound.side_effect = lambda sound_id, _url: f"/downloaded/{sound_id}"
+        self.refresh(info)
+
+        self.assertEqual(self.app.manifest["3"], "/conditioned/3.wav")
+        self.assertEqual(self.app._pending_sound_ids, set())
+        self.assertEqual(len(self.player.scheduled), 2)
+        self.assertEqual(self.player.scheduled[1][0]["3"], "/conditioned/3.wav")
+        self.assertEqual(self.apply_state.call_args[0][1], False)
+
+    def test_a_settled_revision_is_not_re_attempted_once_nothing_is_pending(self):
+        info = snapshot("second")
+
+        self.refresh(info)
+        self.refresh(info)
+
+        self.assertEqual(self.app._pending_sound_ids, set())
+        self.assertEqual(len(self.player.scheduled), 1)
+
     def test_unavailable_previous_asset_does_not_block_current_mix(self):
         info = snapshot("second", previous=[{"sound_id": 99, "gain": 0.75}])
         # The server no longer exposes this previous-only sound in its manifest.

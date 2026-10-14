@@ -55,7 +55,7 @@ def _refresh_missing_manifest_entries(
     layers: list,
     target_fs: int | None,
     *, strict: bool = False,
-) -> None:
+) -> dict:
     """Download and condition newly referenced sounds into ``manifest``.
 
     The startup manifest contains only the collection assigned at that moment.
@@ -63,6 +63,12 @@ def _refresh_missing_manifest_entries(
     so refresh the remote manifest only when a polled layer is not already in the
     local one.  Conditioning just the missing subset avoids reprocessing known
     sounds during the polling loop.
+
+    Returns ``{sound_id: reason}`` for whatever could not be prepared. A single
+    unobtainable sound used to abort the whole refresh before any transition
+    ran, which held playback on a stale revision while the programme moved on,
+    so each one is reported here and the caller decides what the rest of the
+    mix can still do.
     """
     missing_ids = tuple(
         dict.fromkeys(
@@ -72,49 +78,59 @@ def _refresh_missing_manifest_entries(
         )
     )
     if not missing_ids:
-        return
+        return {}
     if target_fs is None:
         raise RuntimeError("Player output sample rate is unavailable")
 
     remote_manifest = get_latest_manifest(api_key)
-    unavailable_ids = [
-        sound_id for sound_id in missing_ids if not remote_manifest.get(sound_id)
-    ]
-    if unavailable_ids:
-        joined_ids = ", ".join(unavailable_ids)
-        raise RuntimeError(
-            f"Server manifest does not include requested sound ID(s): {joined_ids}"
-        )
-
-    downloaded = {}
+    unavailable, downloaded = {}, {}
     for sound_id in missing_ids:
         remote_path = remote_manifest.get(sound_id)
+        if not remote_path:
+            unavailable[sound_id] = "not in the server manifest"
+            continue
         try:
             downloaded[sound_id] = get_sound(sound_id, remote_path)
         except Exception as error:
-            raise RuntimeError(
-                f"Could not download sound {sound_id}: {error}"
-            ) from error
+            unavailable[sound_id] = f"download failed: {error}"
 
-    try:
+    if downloaded:
         options = {"strict": True} if strict else {}
-        conditioned = condition_manifest(downloaded, CONDITIONED_DIR, target_fs, **options)
-    except Exception as error:
-        joined_ids = ", ".join(missing_ids)
-        raise RuntimeError(
-            f"Could not condition requested sound ID(s) {joined_ids}: {error}"
-        ) from error
+        ready, failed = _condition_each(downloaded, target_fs, options)
+        manifest.update(ready)
+        unavailable.update(failed)
+    return unavailable
 
-    unavailable_ids = [
-        sound_id for sound_id in missing_ids if not conditioned.get(sound_id)
-    ]
-    if unavailable_ids:
-        joined_ids = ", ".join(unavailable_ids)
-        raise RuntimeError(
-            f"Conditioning did not produce requested sound ID(s): {joined_ids}"
+
+def _condition_each(downloaded: dict, target_fs: int, options: dict) -> tuple:
+    """Condition in one pass, falling back to isolate a failure; (ready, failed).
+
+    The batch is tried first because conditioning a known-good set is the normal
+    case. Only when it raises is the work repeated one sound at a time, so a
+    single corrupt arrival cannot withhold the sounds beside it.
+    """
+    try:
+        conditioned = condition_manifest(
+            downloaded, CONDITIONED_DIR, target_fs, **options
         )
-
-    manifest.update(conditioned)
+    except Exception as error:
+        if len(downloaded) == 1:
+            sound_id = next(iter(downloaded))
+            return {}, {sound_id: f"conditioning failed: {error}"}
+        ready, failed = {}, {}
+        for sound_id, path in downloaded.items():
+            one_ready, one_failed = _condition_each({sound_id: path}, target_fs, options)
+            ready.update(one_ready)
+            failed.update(one_failed)
+        return ready, failed
+    return (
+        {sound_id: path for sound_id, path in conditioned.items() if path},
+        {
+            sound_id: "conditioning produced no audio"
+            for sound_id in downloaded
+            if not conditioned.get(sound_id)
+        },
+    )
 
 
 def _queue_manifest_layers(manifest: dict, layers: list, player) -> None:
@@ -581,6 +597,8 @@ class CosoundPlayerApp(App):
         self.player = player
         self.player_info: dict = {}
         self._cosound_signature = None
+        # Sounds the current revision wants but could not get yet.
+        self._pending_sound_ids = set()
         self._current_entry: CosoundEntry | None = None
         self._last_gains: dict[str, float] = {}
         self._vote_chime_version: str | None = None
@@ -742,32 +760,46 @@ class CosoundPlayerApp(App):
             self.log(f"Vote chime refresh failed: {error}")
         manifest = dict(self.manifest)
 
-        # Same cosound as last time: leave audio and the history list alone.
+        # Same cosound as last time: leave audio and the history list alone,
+        # unless a sound it wanted is still outstanding and worth re-attempting.
         changed = self._signature_of(info) != self._cosound_signature
-        if changed:
+        if changed or self._pending_sound_ids:
             layers = info.get("layers", [])
             timing = info.get("playback_sync")
             plan = PlaybackPlan.parse(timing, layers) if timing is not None else None
-            _refresh_missing_manifest_entries(
+            unavailable = _refresh_missing_manifest_entries(
                 self.api_key,
                 manifest,
                 layers,
                 CONDITION_SAMPLE_RATE,
                 strict=plan is not None,
             )
+            if unavailable:
+                reasons = ", ".join(
+                    f"{sound_id} ({reason})"
+                    for sound_id, reason in sorted(unavailable.items())
+                )
+                if not any(str(layer["sound_id"]) in manifest for layer in layers):
+                    # Nothing from this revision can be heard. Raising leaves the
+                    # signature unrecorded, which is what retries it, and leaves
+                    # the mix that is already playing alone.
+                    raise RuntimeError(f"Could not prepare sound(s) {reasons}")
+                self.log(f"Transitioning without sound(s) {reasons}")
 
             if plan is not None:
                 # A late join can reproduce a fade-out too when that asset is
                 # still available. Removed library assets must not prevent it
                 # joining the current, fully prepared target mix.
                 try:
-                    _refresh_missing_manifest_entries(
+                    outgoing = _refresh_missing_manifest_entries(
                         self.api_key, manifest, timing.get("previous_layers", []),
                         CONDITION_SAMPLE_RATE,
                         strict=True,
                     )
                 except Exception as error:
-                    self.log(f"Previous mix assets unavailable: {error}")
+                    outgoing = {"": str(error)}
+                if outgoing:
+                    self.log(f"Previous mix assets unavailable: {outgoing}")
 
             # Audio loading stays on this worker thread. Since this is the only
             # refresh worker, an older transition always finishes before the
@@ -775,8 +807,14 @@ class CosoundPlayerApp(App):
             self.manifest.update(manifest)
             if plan is None:
                 _queue_manifest_layers(self.manifest, layers, self.player)
+                skipped = ()
             else:
-                self.player.schedule_cosound(self.manifest, layers, timing)
+                skipped = self.player.schedule_cosound(
+                    self.manifest, layers, timing
+                ) or ()
+            # Retried on the next poll even though the signature is recorded,
+            # so a readmitted sound joins without replaying the history entry.
+            self._pending_sound_ids = set(unavailable) | set(skipped)
 
         # Textual waits for this UI callback to finish, so the worker cannot
         # begin a newer refresh until this state is visible.

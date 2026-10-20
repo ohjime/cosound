@@ -35,6 +35,23 @@ function colorNameForHue(value) {
     return "Pink";
 }
 
+const FONT_WEIGHT_NAMES = {
+    100: "Thin",
+    200: "Extra light",
+    300: "Light",
+    400: "Regular",
+    500: "Medium",
+    600: "Semibold",
+    700: "Bold",
+    800: "Extra bold",
+    900: "Black",
+};
+
+// Font weights in the CSS hundreds, 100 (thin) to 900 (black).
+function fontWeight(value) {
+    return clamp(Math.round((Number(value) || 400) / 100) * 100, 100, 900);
+}
+
 const LETTER_WIDTH_IN = 8.5;
 const LETTER_HEIGHT_IN = 11;
 const MAX_SHEET_CARDS = 12;
@@ -45,6 +62,121 @@ const MAX_CARD_WIDTH_IN = LETTER_WIDTH_IN;
 const MAX_CARD_HEIGHT_IN = LETTER_HEIGHT_IN;
 const MIN_GUIDE_IN = 0.25;
 const MAX_GUIDE_IN = LETTER_HEIGHT_IN;
+// On a holographic print these show the paper instead of ink: rings cut
+// whole, arrows along their white outline only.
+const HOLOGRAPHIC_RINGS = "[data-card-demo-artwork-frame], [data-card-demo-header]";
+const HOLOGRAPHIC_ARROWS = "[data-card-demo-side-arrow] svg, [data-card-demo-bottom-arrow] svg";
+
+function svgNumber(value) {
+    return String(roundTo(value, 4));
+}
+
+function roundedRectPath({ x, y, width, height }, [topLeft, topRight, bottomRight, bottomLeft]) {
+    const n = svgNumber;
+    return `M${n(x + topLeft)} ${n(y)}`
+        + `H${n(x + width - topRight)}A${n(topRight)} ${n(topRight)} 0 0 1 ${n(x + width)} ${n(y + topRight)}`
+        + `V${n(y + height - bottomRight)}A${n(bottomRight)} ${n(bottomRight)} 0 0 1 ${n(x + width - bottomRight)} ${n(y + height)}`
+        + `H${n(x + bottomLeft)}A${n(bottomLeft)} ${n(bottomLeft)} 0 0 1 ${n(x)} ${n(y + height - bottomLeft)}`
+        + `V${n(y + topLeft)}A${n(topLeft)} ${n(topLeft)} 0 0 1 ${n(x + topLeft)} ${n(y)}Z`;
+}
+
+function svgUrl(width, height, body) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgNumber(width)} ${svgNumber(height)}" preserveAspectRatio="none">${body}</svg>`;
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+
+// Tailwind rings are zero-offset, zero-blur box shadows; the widest one is
+// how far the ring paints outside the element.
+function ringSpread(style) {
+    let flat = style.boxShadow || "";
+    while (/\([^()]*\)/.test(flat)) flat = flat.replace(/\([^()]*\)/g, "");
+    let spread = 0;
+    for (const shadow of flat.split(",")) {
+        if (/\binset\b/.test(shadow)) continue;
+        const [x, y, blur, size] = (shadow.match(/-?[\d.]+px/g) || []).map(parseFloat);
+        if (x === 0 && y === 0 && blur === 0 && size > 0) spread = Math.max(spread, size);
+    }
+    return spread;
+}
+
+function cornerRadii(style, box, spread = 0) {
+    const limit = Math.min(box.width, box.height) / 2;
+    return [
+        style.borderTopLeftRadius,
+        style.borderTopRightRadius,
+        style.borderBottomRightRadius,
+        style.borderBottomLeftRadius,
+    ].map((value = "0") => {
+        const radius = String(value).endsWith("%")
+            ? parseFloat(value) / 100 * Math.min(box.width, box.height)
+            : parseFloat(value) || 0;
+        return radius > 0 ? Math.min(radius, limit) + spread : 0;
+    });
+}
+
+function grow(box, spread) {
+    return {
+        x: box.x - spread,
+        y: box.y - spread,
+        width: box.width + spread * 2,
+        height: box.height + spread * 2,
+    };
+}
+
+// Traces one rendered card's holographic pieces as holes in a mask the size
+// of the card: the artwork's and the layer indicator's rings (their insides
+// stay) and each arrow's white outline, which leaves a smaller orange
+// triangle inside it. Holes are painted in the
+// card's stacking order, so a ring sitting over the artwork notches into it
+// and an arrow sitting over a ring keeps its triangle.
+function holographicMask(card) {
+    const styleOf = (element) => globalThis.getComputedStyle(element);
+    const bounds = card.getBoundingClientRect();
+    const scale = bounds.width / card.offsetWidth || 1;
+    const local = (element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+            x: (rect.left - bounds.left) / scale,
+            y: (rect.top - bounds.top) / scale,
+            width: rect.width / scale,
+            height: rect.height / scale,
+        };
+    };
+    const shown = (element) => element?.getClientRects().length > 0;
+    const shapes = [];
+    for (const ringed of card.querySelectorAll(HOLOGRAPHIC_RINGS)) {
+        if (!shown(ringed)) continue;
+        const style = styleOf(ringed);
+        const box = local(ringed);
+        const spread = ringSpread(style);
+        shapes.push(`<path fill="black" d="${roundedRectPath(grow(box, spread), cornerRadii(style, box, spread))}"/>`);
+        shapes.push(`<path fill="white" d="${roundedRectPath(box, cornerRadii(style, box))}"/>`);
+    }
+    for (const icon of card.querySelectorAll(HOLOGRAPHIC_ARROWS)) {
+        const path = icon.querySelector("path");
+        if (!shown(icon) || !path) continue;
+        // The glyph box is already stretched by the arrow's own transform, so
+        // mapping the viewBox onto it unevenly reproduces the drawn arrow.
+        const box = local(icon);
+        const viewBox = (icon.getAttribute("viewBox") || "0 0 24 24").split(/[\s,]+/).map(Number);
+        const turn = parseFloat(styleOf(icon).rotate) || 0;
+        const centerX = viewBox[0] + viewBox[2] / 2;
+        const centerY = viewBox[1] + viewBox[3] / 2;
+        const glyph = `transform="rotate(${turn} ${centerX} ${centerY})" d="${path.getAttribute("d")}"`;
+        shapes.push(
+            `<svg x="${svgNumber(box.x)}" y="${svgNumber(box.y)}" width="${svgNumber(box.width)}" height="${svgNumber(box.height)}" viewBox="${viewBox.join(" ")}" preserveAspectRatio="none" overflow="visible">`
+            + `<path ${glyph} fill="white"/>`
+            + `<path ${glyph} fill="none" stroke="black" stroke-width="${path.getAttribute("stroke-width") || 0}" stroke-linejoin="round"/>`
+            + "</svg>",
+        );
+    }
+    const width = card.offsetWidth;
+    const height = card.offsetHeight;
+    return svgUrl(width, height,
+        `<mask id="holes" maskUnits="userSpaceOnUse" x="0" y="0" width="${width}" height="${height}">`
+        + `<rect width="${width}" height="${height}" fill="white"/>${shapes.join("")}</mask>`
+        + `<rect width="${width}" height="${height}" mask="url(#holes)"/>`);
+}
 
 /** UI-only facsimile of the Explore card. It never creates or loads audio. */
 export function cardDemo(initialLayers = []) {
@@ -54,16 +186,20 @@ export function cardDemo(initialLayers = []) {
         paused: false,
         mixSaved: false,
         cardHue: 128,
+        rainbow: false,
         cardBrightness: 18.4,
         ringHue: 128,
         ringBrightness: 20,
-        cardWidthIn: 2,
-        cardHeightIn: 3.5,
-        overallScale: 100,
+        cardWidthIn: 3.17,
+        cardHeightIn: 5.07,
+        overallScale: 62,
         cardGapIn: 0.25,
+        holographic: false,
+        holographicCardMask: "",
+        showCutLines: true,
         showGuide: true,
-        guideWidthIn: 2,
-        guideHeightIn: 3.5,
+        guideWidthIn: 2.2,
+        guideHeightIn: 3.34,
         flavorText: "",
         flavorTextSize: 12,
         flavorOverlayUrl: "",
@@ -90,9 +226,13 @@ export function cardDemo(initialLayers = []) {
         artworkTitle: "",
         artistName: "",
         artworkTextSize: 18,
+        artworkTitleWeight: 400,
+        artistNameWeight: 400,
         showLikeButton: false,
 
         init() {
+            // Web fonts change the layer indicator's width once they land.
+            globalThis.document?.fonts?.ready.then(() => this.measureHolographic());
             const payload = this.$el?.querySelector("[data-card-demo-sounds] script");
             if (!payload) return;
             try {
@@ -207,25 +347,97 @@ export function cardDemo(initialLayers = []) {
         get guideColumn() {
             return Math.floor((this.sheetColumns - 1) / 2);
         },
-        get guideCenterXIn() {
+        get islandWidthIn() {
             const gap = clamp(this.cardGapIn, 0, 1.25);
-            const islandWidth = this.sheetColumns * this.printedCardWidthIn
+            return this.sheetColumns * this.printedCardWidthIn
                 + (this.sheetColumns - 1) * gap
                 + this.islandPaddingXIn * 2;
-            return roundTo((LETTER_WIDTH_IN - islandWidth) / 2
+        },
+        get islandHeightIn() {
+            const gap = clamp(this.cardGapIn, 0, 1.25);
+            return this.sheetRows * this.printedCardHeightIn
+                + (this.sheetRows - 1) * gap
+                + this.islandPaddingYIn * 2;
+        },
+        get guideCenterXIn() {
+            const gap = clamp(this.cardGapIn, 0, 1.25);
+            return roundTo((LETTER_WIDTH_IN - this.islandWidthIn) / 2
                 + this.islandPaddingXIn
                 + this.guideColumn * (this.printedCardWidthIn + gap)
                 + this.printedCardWidthIn / 2);
         },
         get guideCenterYIn() {
-            const gap = clamp(this.cardGapIn, 0, 1.25);
-            const islandHeight = this.sheetRows * this.printedCardHeightIn
-                + (this.sheetRows - 1) * gap
-                + this.islandPaddingYIn * 2;
-            return roundTo((LETTER_HEIGHT_IN - islandHeight) / 2 + this.islandPaddingYIn + this.printedCardHeightIn / 2);
+            return roundTo((LETTER_HEIGHT_IN - this.islandHeightIn) / 2 + this.islandPaddingYIn + this.printedCardHeightIn / 2);
         },
         get sheetCopies() {
             return Array.from({ length: this.sheetCount }, (_, index) => index + 1);
+        },
+        // Rainbow gives every card on the sheet its own hue, spaced evenly
+        // around the wheel from red, in reading order. Card brightness still
+        // applies to all of them; the ring and paper color stays as chosen.
+        rainbowHue(copy) {
+            return roundTo(((copy - 1) * 360) / this.sheetCount, 2);
+        },
+        cardSlotStyle(copy) {
+            return this.rainbow ? `--card-hue: ${this.rainbowHue(copy)}` : "";
+        },
+        // Cut lines run down the middle of every gap and the same half gap
+        // outside the outer cards, so each card cuts out with an equal margin.
+        // They span the whole island so a trimmer can take them in one pass.
+        // They are drawn in their final color rather than masked, because PDF
+        // viewers disagree on masks and some flood the sheet with the color.
+        // White shows on a normal sheet's colored gaps; a holographic sheet's
+        // gaps are bare paper, so its lines take the ring color instead.
+        get cutLineColor() {
+            if (!this.holographic) return "white";
+            return `hsl(${clamp(this.ringHue, 0, 360)}, 18%, ${clamp(this.ringBrightness)}%)`;
+        },
+        get cutLinesImage() {
+            const gap = clamp(this.cardGapIn, 0, 1.25);
+            const width = this.islandWidthIn;
+            const height = this.islandHeightIn;
+            const across = (padding, size, count, limit) => Array.from(
+                { length: count + 1 },
+                (_, index) => Math.min(limit, Math.max(0, padding + index * (size + gap) - gap / 2)),
+            );
+            const columns = across(this.islandPaddingXIn, this.printedCardWidthIn, this.sheetColumns, width);
+            const rows = across(this.islandPaddingYIn, this.printedCardHeightIn, this.sheetRows, height);
+            const path = [
+                ...columns.map((x) => `M${svgNumber(x)} 0V${svgNumber(height)}`),
+                ...rows.map((y) => `M0 ${svgNumber(y)}H${svgNumber(width)}`),
+            ].join("");
+            return svgUrl(width, height,
+                `<path d="${path}" fill="none" stroke="${this.cutLineColor}" stroke-width="0.015" stroke-dasharray="0.04 0.04"/>`);
+        },
+        // Everything that moves or resizes a holographic hole. Reading it in
+        // an effect re-traces the holes whenever one of these changes.
+        get holographicLayout() {
+            return [
+                this.holographic,
+                this.effectiveCardWidthIn,
+                this.effectiveCardHeightIn,
+                this.indicatorText,
+                this.indicatorTextSize,
+                this.indicatorTextSpacing,
+                this.indicatorCentered,
+                this.showLeftArrow,
+                this.showRightArrow,
+                this.showBottomArrow,
+                this.bottomArrowValue,
+            ].join("|");
+        },
+        get printStyle() {
+            return [
+                `--cut-lines: ${this.showCutLines ? this.cutLinesImage : "none"}`,
+                `--holographic-mask: ${(this.holographic && this.holographicCardMask) || "none"}`,
+            ].join("; ");
+        },
+        // Every card shares one layout, so tracing the first card gives the
+        // holes for all of them.
+        measureHolographic(root = globalThis.document) {
+            if (!this.holographic) return;
+            const card = root?.querySelector("[data-print-holographic] [data-core-card]");
+            if (card) this.holographicCardMask = holographicMask(card);
         },
         get editorStyle() {
             return [
@@ -358,6 +570,15 @@ export function cardDemo(initialLayers = []) {
         },
         setArtworkTextSize(value) {
             this.artworkTextSize = clamp(value, 8, 32);
+        },
+        setArtworkTitleWeight(value) {
+            this.artworkTitleWeight = fontWeight(value);
+        },
+        setArtistNameWeight(value) {
+            this.artistNameWeight = fontWeight(value);
+        },
+        weightName(value) {
+            return FONT_WEIGHT_NAMES[fontWeight(value)];
         },
         loadArtwork(event) {
             const file = event?.target?.files?.[0];

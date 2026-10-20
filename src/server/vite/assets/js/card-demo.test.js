@@ -244,6 +244,53 @@ test("artwork uploads validate files and revoke every replaced object URL", () =
 });
 
 
+test("the artwork title and artist each take a font weight from thin to black", () => {
+    const demo = cardDemo(layers());
+
+    assert.equal(demo.artworkTitleWeight, 400);
+    assert.equal(demo.artistNameWeight, 400);
+    assert.equal(demo.weightName(demo.artworkTitleWeight), "Regular");
+
+    demo.setArtworkTitleWeight(800);
+    demo.setArtistNameWeight("640");
+    assert.equal(demo.artworkTitleWeight, 800);
+    assert.equal(demo.artistNameWeight, 600);
+    assert.equal(demo.weightName(demo.artworkTitleWeight), "Extra bold");
+    assert.equal(demo.weightName(demo.artistNameWeight), "Semibold");
+
+    demo.setArtworkTitleWeight(5);
+    demo.setArtistNameWeight(5000);
+    assert.equal(demo.artworkTitleWeight, 100);
+    assert.equal(demo.artistNameWeight, 900);
+    assert.equal(demo.weightName(100), "Thin");
+    assert.equal(demo.weightName(900), "Black");
+});
+
+
+test("rainbow spreads the card colors evenly around the wheel in reading order", () => {
+    const demo = cardDemo(layers());
+
+    assert.equal(demo.rainbow, false);
+    assert.equal(demo.cardSlotStyle(1), "");
+
+    demo.rainbow = true;
+    assert.equal(demo.sheetCount, 9);
+    assert.deepEqual(demo.sheetCopies.map((copy) => demo.rainbowHue(copy)), [0, 40, 80, 120, 160, 200, 240, 280, 320]);
+    assert.equal(demo.cardSlotStyle(1), "--card-hue: 0");
+    assert.equal(demo.cardSlotStyle(4), "--card-hue: 120");
+    // The ring and paper color, and the editor's own card hue, stay put.
+    assert.match(demo.editorStyle, /--card-hue: 128;/);
+    assert.match(demo.editorStyle, /--ring-hue: 128;/);
+
+    // The spacing follows the sheet as it gains or loses cards.
+    demo.setOverallScale(100);
+    demo.setCardWidth(2);
+    demo.setCardHeight(3.5);
+    assert.equal(demo.sheetCount, 6);
+    assert.deepEqual(demo.sheetCopies.map((copy) => demo.rainbowHue(copy)), [0, 60, 120, 180, 240, 300]);
+});
+
+
 test("card color is independent while ring and paper share one color", () => {
     const demo = cardDemo(layers());
 
@@ -283,8 +330,39 @@ test("the flavor overlay tint follows the uploaded image alpha and remains indep
 });
 
 
-test("the Letter sheet relays out cards as scale and gap change", () => {
+// The geometry tests below measure from a plain 2 × 3.5 in card at full
+// size with a matching guide, independent of the page's opening layout.
+function baselineSheet() {
     const demo = cardDemo(layers());
+    demo.setOverallScale(100);
+    demo.setCardWidth(2);
+    demo.setCardHeight(3.5);
+    demo.setGuideWidth(2);
+    demo.setGuideHeight(3.5);
+    return demo;
+}
+
+
+test("the sheet opens on a 3.17 × 5.07 in card at 62% with a 2.2 × 3.34 in guide", () => {
+    const demo = cardDemo(layers());
+
+    assert.equal(demo.effectiveCardWidthIn, 3.17);
+    assert.equal(demo.effectiveCardHeightIn, 5.07);
+    assert.equal(demo.overallScale, 62);
+    assert.equal(demo.guideWidthIn, 2.2);
+    assert.equal(demo.guideHeightIn, 3.34);
+    assert.equal(demo.printedCardWidthIn, 1.965);
+    assert.equal(demo.printedCardHeightIn, 3.143);
+    assert.equal(demo.sheetColumns, 3);
+    assert.equal(demo.sheetRows, 3);
+    assert.equal(demo.sheetCount, 9);
+    assert.match(demo.editorStyle, /--guide-width: 2\.2in/);
+    assert.match(demo.editorStyle, /--guide-height: 3\.34in/);
+});
+
+
+test("the Letter sheet relays out cards as scale and gap change", () => {
+    const demo = baselineSheet();
 
     assert.equal(demo.effectiveCardWidthIn, 2);
     assert.equal(demo.effectiveCardHeightIn, 3.5);
@@ -329,7 +407,7 @@ test("the Letter sheet relays out cards as scale and gap change", () => {
 
 
 test("overall scale covers 50 through 200 percent", () => {
-    const demo = cardDemo(layers());
+    const demo = baselineSheet();
 
     demo.setOverallScale(50);
     assert.equal(demo.overallScale, 50);
@@ -375,7 +453,7 @@ test("the card gap is also the colored island's outer cutting space", () => {
 
 
 test("width derives a reversible minimum height while preserving valid chosen heights", () => {
-    const demo = cardDemo(layers());
+    const demo = baselineSheet();
 
     assert.equal(demo.minimumCardHeightIn, 3.13);
     demo.setCardHeight(6);
@@ -401,7 +479,7 @@ test("width derives a reversible minimum height while preserving valid chosen he
 
 
 test("card dimensions remain within the printable Letter bounds", () => {
-    const demo = cardDemo(layers());
+    const demo = baselineSheet();
 
     demo.setCardWidth(999);
     assert.equal(demo.effectiveCardWidthIn, 8.5);
@@ -438,7 +516,7 @@ test("card dimensions remain within the printable Letter bounds", () => {
 
 
 test("the colored island padding shrinks only along an axis occupied by an oversized card", () => {
-    const demo = cardDemo(layers());
+    const demo = baselineSheet();
 
     demo.setCardWidth(8.25);
     assert.equal(demo.effectiveCardWidthIn, 8.25);
@@ -457,7 +535,7 @@ test("the colored island padding shrinks only along an axis occupied by an overs
 
 
 test("scale magnifies the card without moving its layout minimums", () => {
-    const demo = cardDemo(layers());
+    const demo = baselineSheet();
 
     demo.setOverallScale(80);
     assert.equal(demo.minimumCardWidthIn, 1.5);
@@ -515,7 +593,7 @@ test("the printed card never outgrows the Letter sheet at any scale", () => {
 
 
 test("the print guide keeps its paper size and stays centered on the middle top-row card", () => {
-    const demo = cardDemo(layers());
+    const demo = baselineSheet();
 
     assert.equal(demo.showGuide, true);
     assert.equal(demo.guideWidthIn, 2);
@@ -561,6 +639,143 @@ test("the print guide keeps its paper size and stays centered on the middle top-
     assert.equal(demo.guideWidthIn, 0.25);
     assert.equal(demo.guideHeightIn, 11);
 });
+
+
+function decodeSvg(url) {
+    return decodeURIComponent(url.replace(/^url\("data:image\/svg\+xml,/, "").replace(/"\)$/, ""));
+}
+
+
+test("holographic is an opt-in finish on the one sheet, with cut lines either way", () => {
+    const demo = cardDemo(layers());
+
+    assert.equal(demo.holographic, false);
+    assert.equal(demo.showCutLines, true);
+    assert.match(demo.printStyle, /--cut-lines: url\("data:image\/svg\+xml,/);
+    assert.match(demo.printStyle, /--holographic-mask: none/);
+
+    const editorStyle = demo.editorStyle;
+    const cutLines = decodeSvg(demo.cutLinesImage);
+    demo.holographic = true;
+    assert.equal(demo.editorStyle, editorStyle);
+    // Same lines, recolored from white to the ring color for bare gaps.
+    assert.equal(decodeSvg(demo.cutLinesImage).replace(/stroke="[^"]+"/, ""), cutLines.replace(/stroke="[^"]+"/, ""));
+    assert.match(decodeSvg(demo.cutLinesImage), /stroke="hsl\(128, 18%, 20%\)"/);
+    demo.setRingHue(215);
+    demo.setRingBrightness(70);
+    assert.match(decodeSvg(demo.cutLinesImage), /stroke="hsl\(215, 18%, 70%\)"/);
+    assert.doesNotMatch(demo.printStyle, /--island-mask/);
+    // No holes until a rendered card has been traced.
+    assert.match(demo.printStyle, /--holographic-mask: none/);
+
+    demo.showCutLines = false;
+    assert.match(demo.printStyle, /--cut-lines: none/);
+});
+
+
+test("cut lines run down the middle of every gap so each card keeps the same margin", () => {
+    const demo = baselineSheet();
+
+    let svg = decodeSvg(demo.cutLinesImage);
+    assert.match(svg, /viewBox="0 0 7 7\.75"/);
+    assert.match(svg, /d="M0\.125 0V7\.75M2\.375 0V7\.75M4\.625 0V7\.75M6\.875 0V7\.75M0 0\.125H7M0 3\.875H7M0 7\.625H7"/);
+    // White over a normal sheet's colored gaps.
+    assert.match(svg, /stroke="white"/);
+    assert.match(svg, /stroke-dasharray="0\.04 0\.04"/);
+
+    demo.setCardGap(0);
+    svg = decodeSvg(demo.cutLinesImage);
+    assert.equal(demo.sheetColumns, 4);
+    assert.match(svg, /viewBox="0 0 8 10\.5"/);
+    assert.match(svg, /d="M0 0V10\.5M2 0V10\.5M4 0V10\.5M6 0V10\.5M8 0V10\.5M0 0H8M0 3\.5H8M0 7H8M0 10\.5H8"/);
+
+    // A card too wide for its outer margin keeps its lines on the island.
+    demo.setCardGap(1.25);
+    demo.setCardWidth(8.5);
+    assert.equal(demo.islandPaddingXIn, 0);
+    svg = decodeSvg(demo.cutLinesImage);
+    assert.match(svg, /d="M0 0V[\d.]+M8\.5 0V/);
+});
+
+
+function fakeElement(rect, { attributes = {}, children = {}, hidden = false } = {}) {
+    return {
+        offsetWidth: rect.width,
+        offsetHeight: rect.height,
+        getBoundingClientRect: () => ({ left: rect.x, top: rect.y, width: rect.width, height: rect.height }),
+        getClientRects: () => (hidden ? [] : [rect]),
+        getAttribute: (name) => attributes[name] ?? null,
+        querySelector: (selector) => children[selector]?.[0] ?? null,
+        querySelectorAll: (selector) => selector.split(", ").flatMap((part) => children[part] ?? []),
+    };
+}
+
+
+test("holographic holes trace rings and arrow outlines in the card's own pixels", () => {
+    const path = fakeElement({ x: 0, y: 0, width: 0, height: 0 }, { attributes: { d: "M400-280v-400l200 200-200 200Z", "stroke-width": "40" } });
+    const bottomArrow = fakeElement({ x: 218, y: 300, width: 132, height: 80 }, {
+        attributes: { viewBox: "0 -960 960 960" },
+        children: { path: [path] },
+    });
+    bottomArrow.style = { rotate: "90deg" };
+    // Laid out at 2x scale, 100px to the right of the viewport origin.
+    const frame = fakeElement({ x: 148, y: 56, width: 288, height: 288 });
+    frame.style = {
+        boxShadow: "rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.8 -0.02 -0.02 / 0.7) 0px 0px 0px 7px",
+        borderTopLeftRadius: "6px",
+        borderTopRightRadius: "6px",
+        borderBottomRightRadius: "0px",
+        borderBottomLeftRadius: "0px",
+    };
+    const button = fakeElement({ x: 180, y: 390, width: 48, height: 48 });
+    button.style = { boxShadow: "none", borderTopLeftRadius: "50%", borderTopRightRadius: "50%", borderBottomRightRadius: "50%", borderBottomLeftRadius: "50%" };
+    const hiddenButton = fakeElement({ x: 0, y: 0, width: 0, height: 0 }, { hidden: true });
+    hiddenButton.style = { boxShadow: "none" };
+    const track = fakeElement({ x: 232, y: 392, width: 120, height: 16 });
+    track.style = { boxShadow: "none" };
+    const card = fakeElement({ x: 100, y: 0, width: 384, height: 672 }, {
+        children: {
+            "[data-card-demo-artwork-frame]": [frame],
+            "[data-card-demo-slider-control]": [button, hiddenButton],
+            "[data-card-demo-volume-track]": [track],
+            "[data-card-demo-bottom-arrow] svg": [bottomArrow],
+        },
+    });
+    card.offsetWidth = 192;
+    card.offsetHeight = 336;
+    const root = { querySelector: (selector) => (selector === "[data-print-holographic] [data-core-card]" ? card : null) };
+
+    const originalStyle = globalThis.getComputedStyle;
+    globalThis.getComputedStyle = (element) => element.style ?? {};
+    try {
+        const demo = cardDemo(layers());
+        demo.measureHolographic(root);
+        assert.equal(demo.holographicCardMask, "");
+
+        demo.holographic = true;
+        demo.measureHolographic(root);
+        const svg = decodeSvg(demo.holographicCardMask);
+
+        assert.match(svg, /viewBox="0 0 192 336"/);
+        // The frame's 7px ring is cut around the artwork, which stays.
+        assert.match(svg, /<path fill="black" d="M30 21H162A13 13 0 0 1 175 34V179A0 0 0 0 1 175 179H17A0 0 0 0 1 17 179V34A13 13 0 0 1 30 21Z"\/>/);
+        assert.match(svg, /<path fill="white" d="M30 28H162A6 6 0 0 1 168 34V172A0 0 0 0 1 168 172H24A0 0 0 0 1 24 172V34A6 6 0 0 1 30 28Z"\/>/);
+        // The heart buttons keep their printed hearts, so they are not cut.
+        assert.doesNotMatch(svg, /M52 195/);
+        assert.equal(svg.match(/fill="black"/g).length, 1);
+        // The volume bar prints.
+        assert.doesNotMatch(svg, /M70 196/);
+        // An arrow keeps its triangle, then loses its outline.
+        assert.match(svg, /<svg x="59" y="150" width="66" height="40" viewBox="0 -960 960 960" preserveAspectRatio="none"/);
+        const fill = svg.indexOf('<path transform="rotate(90 480 -480)" d="M400-280v-400l200 200-200 200Z" fill="white"/>');
+        const outline = svg.indexOf('<path transform="rotate(90 480 -480)" d="M400-280v-400l200 200-200 200Z" fill="none" stroke="black" stroke-width="40" stroke-linejoin="round"/>');
+        assert.ok(fill > -1 && outline > fill);
+        assert.match(demo.printStyle, /--holographic-mask: url\("data:image\/svg\+xml,/);
+    } finally {
+        globalThis.getComputedStyle = originalStyle;
+    }
+});
+
 
 
 test("dimension endpoints stay aligned to the hundredth-inch slider step", () => {
